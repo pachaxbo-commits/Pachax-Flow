@@ -1,0 +1,15 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+*.local
+.firebase/
+*.log
+firebase-debug.log
+firebase-debug-*.log
+.emulator-data/

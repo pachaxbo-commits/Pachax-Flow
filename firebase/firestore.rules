@@ -1,0 +1,460 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidString(val) {
+      return val is string && val != '' && !val.matches('^\\s*$');
+    }
+
+    function isValidFulfillment(data) {
+      return (
+        (data.fulfillmentType != 'delivery' || (
+          'customerName' in data && isValidString(data.customerName) &&
+          'customerPhone' in data && isValidString(data.customerPhone) &&
+          'deliveryAddress' in data && isValidString(data.deliveryAddress)
+        ))
+      ) && (
+        (data.orderSource != 'whatsapp' || (
+          'customerName' in data && isValidString(data.customerName) &&
+          'customerPhone' in data && isValidString(data.customerPhone)
+        ))
+      );
+    }
+
+    function memberPath(restaurantId) {
+      return /databases/$(database)/documents/restaurants/$(restaurantId)/members/$(request.auth.uid);
+    }
+
+    function hasMemberDoc(restaurantId) {
+      return isSignedIn() && exists(memberPath(restaurantId));
+    }
+
+    function memberData(restaurantId) {
+      return get(memberPath(restaurantId)).data;
+    }
+
+    function isActiveMember(restaurantId) {
+      return hasMemberDoc(restaurantId) && memberData(restaurantId).active == true;
+    }
+
+    function hasRole(restaurantId, roles) {
+      return isActiveMember(restaurantId) && memberData(restaurantId).role in roles;
+    }
+
+    function isValidDayId(dayId) {
+      return dayId.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    function dayPath(restaurantId, dayId) {
+      return /databases/$(database)/documents/restaurants/$(restaurantId)/days/$(dayId);
+    }
+
+    function isValidPayment(payment, total, paymentStatus) {
+      return payment is map
+        && payment.keys().hasOnly(['method', 'cashAmount', 'qrAmount', 'cashReceived', 'change'])
+        && payment.method in ['cash', 'qr', 'mixed']
+        && payment.cashAmount is number
+        && payment.qrAmount is number
+        && payment.cashReceived is number
+        && payment.change is number
+        && payment.cashAmount >= 0
+        && payment.qrAmount >= 0
+        && payment.cashReceived >= 0
+        && payment.change >= 0
+        && (
+          (paymentStatus == 'pending'
+            && payment.cashAmount == 0
+            && payment.qrAmount == 0
+            && payment.cashReceived == 0
+            && payment.change == 0)
+          || (paymentStatus == 'paid' && (
+            (payment.method == 'cash'
+              && payment.cashAmount == total
+              && payment.qrAmount == 0
+              && payment.cashReceived >= payment.cashAmount
+              && payment.change == payment.cashReceived - payment.cashAmount)
+            || (payment.method == 'qr'
+              && payment.cashAmount == 0
+              && payment.qrAmount == total
+              && payment.cashReceived == 0
+              && payment.change == 0)
+            || (payment.method == 'mixed'
+              && payment.cashAmount > 0
+              && payment.qrAmount > 0
+              && payment.cashAmount + payment.qrAmount == total
+              && payment.cashReceived >= payment.cashAmount
+              && payment.change == payment.cashReceived - payment.cashAmount)
+          ))
+        );
+    }
+
+    function isValidOrderItems(items) {
+      return items is list && items.size() > 0;
+    }
+
+    function isValidOrderCreate(restaurantId, dayId, orderId) {
+      return request.resource.data.keys().hasAll([
+          'id',
+          'sequence',
+          'displayNumber',
+          'createdAt',
+          'status',
+          'items',
+          'total',
+          'payment',
+          'updatedAt',
+          'paymentStatus',
+          'paymentMethod',
+          'orderSource',
+          'fulfillmentType'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'id',
+          'sequence',
+          'displayNumber',
+          'createdAt',
+          'status',
+          'items',
+          'total',
+          'payment',
+          'updatedAt',
+          'paymentStatus',
+          'paymentMethod',
+          'expectedPaymentMethod',
+          'orderSource',
+          'fulfillmentType',
+          'orderType',
+          'tableInfo',
+          'customerName',
+          'customerPhone',
+          'deliveryAddress',
+          'createdBy',
+          'paidAt',
+          'paidBy'
+        ])
+        && request.resource.data.id == orderId
+        && request.resource.data.sequence is int
+        && request.resource.data.sequence > 0
+        && request.resource.data.displayNumber is string
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.status == 'pending'
+        && isValidOrderItems(request.resource.data.items)
+        && request.resource.data.total is number
+        && request.resource.data.total >= 0
+        && request.resource.data.paymentStatus in ['paid', 'pending']
+        && (request.resource.data.paymentMethod == null || request.resource.data.paymentMethod in ['cash', 'qr', 'mixed'])
+        && (request.resource.data.expectedPaymentMethod == null || request.resource.data.expectedPaymentMethod in ['cash', 'qr', 'mixed'])
+        && request.resource.data.orderSource in ['local', 'whatsapp']
+        && request.resource.data.fulfillmentType in ['table', 'pickup', 'delivery']
+        && (!('tableInfo' in request.resource.data) || request.resource.data.tableInfo is string)
+        && (!('customerName' in request.resource.data) || request.resource.data.customerName is string)
+        && (!('customerPhone' in request.resource.data) || request.resource.data.customerPhone is string)
+        && (!('deliveryAddress' in request.resource.data) || request.resource.data.deliveryAddress is string)
+        && (!('createdBy' in request.resource.data) || request.resource.data.createdBy is string)
+        && isValidPayment(request.resource.data.payment, request.resource.data.total, request.resource.data.paymentStatus)
+        && isValidFulfillment(request.resource.data)
+        && existsAfter(dayPath(restaurantId, dayId))
+        && getAfter(dayPath(restaurantId, dayId)).data.sequence == request.resource.data.sequence
+        && getAfter(dayPath(restaurantId, dayId)).data.dayKey == dayId
+        && getAfter(dayPath(restaurantId, dayId)).data.restaurantId == restaurantId
+        && (
+          (!exists(dayPath(restaurantId, dayId)) && request.resource.data.sequence == 1)
+          || (exists(dayPath(restaurantId, dayId))
+            && get(dayPath(restaurantId, dayId)).data.sequence is int
+            && request.resource.data.sequence == get(dayPath(restaurantId, dayId)).data.sequence + 1)
+        );
+    }
+
+    function isValidDayCreate(restaurantId, dayId) {
+      return request.resource.data.keys().hasOnly(['dayKey', 'restaurantId', 'sequence', 'updatedAt', 'createdAt'])
+        && request.resource.data.dayKey == dayId
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.sequence is int
+        && request.resource.data.sequence == 1
+        && request.resource.data.createdAt is timestamp;
+    }
+
+    function isValidDayUpdate(dayId) {
+      return request.resource.data.keys().hasOnly(['dayKey', 'restaurantId', 'sequence', 'updatedAt', 'createdAt'])
+        && resource.data.dayKey == dayId
+        && request.resource.data.dayKey == resource.data.dayKey
+        && request.resource.data.restaurantId == resource.data.restaurantId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.sequence is int
+        && request.resource.data.sequence == resource.data.sequence + 1;
+    }
+
+    function baseOrderFieldsUnchangedExceptStatus() {
+      return request.resource.data.id == resource.data.id
+        && request.resource.data.sequence == resource.data.sequence
+        && request.resource.data.displayNumber == resource.data.displayNumber
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.items == resource.data.items
+        && request.resource.data.total == resource.data.total
+        && request.resource.data.payment == resource.data.payment
+        && request.resource.data.paymentStatus == resource.data.paymentStatus
+        && request.resource.data.paymentMethod == resource.data.paymentMethod
+        && request.resource.data.get('expectedPaymentMethod', null) == resource.data.get('expectedPaymentMethod', null)
+        && request.resource.data.orderSource == resource.data.orderSource
+        && request.resource.data.fulfillmentType == resource.data.fulfillmentType
+        && request.resource.data.get('tableInfo', '') == resource.data.get('tableInfo', '')
+        && request.resource.data.get('customerName', '') == resource.data.get('customerName', '')
+        && request.resource.data.get('customerPhone', '') == resource.data.get('customerPhone', '')
+        && request.resource.data.get('deliveryAddress', '') == resource.data.get('deliveryAddress', '')
+        && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
+        && request.resource.data.get('paidAt', null) == resource.data.get('paidAt', null)
+        && request.resource.data.get('paidBy', null) == resource.data.get('paidBy', null);
+    }
+
+    function baseOrderFieldsUnchangedExceptPayment() {
+      return request.resource.data.id == resource.data.id
+        && request.resource.data.sequence == resource.data.sequence
+        && request.resource.data.displayNumber == resource.data.displayNumber
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.items == resource.data.items
+        && request.resource.data.total == resource.data.total
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.orderSource == resource.data.orderSource
+        && request.resource.data.fulfillmentType == resource.data.fulfillmentType
+        && request.resource.data.get('tableInfo', '') == resource.data.get('tableInfo', '')
+        && request.resource.data.get('customerName', '') == resource.data.get('customerName', '')
+        && request.resource.data.get('customerPhone', '') == resource.data.get('customerPhone', '')
+        && request.resource.data.get('deliveryAddress', '') == resource.data.get('deliveryAddress', '')
+        && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
+        && request.resource.data.get('readyAt', null) == resource.data.get('readyAt', null)
+        && request.resource.data.get('deliveredAt', null) == resource.data.get('deliveredAt', null)
+        && request.resource.data.get('cancelledAt', null) == resource.data.get('cancelledAt', null);
+    }
+
+    function baseOrderFieldsUnchangedExceptCancel() {
+      return request.resource.data.id == resource.data.id
+        && request.resource.data.sequence == resource.data.sequence
+        && request.resource.data.displayNumber == resource.data.displayNumber
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.items == resource.data.items
+        && request.resource.data.total == resource.data.total
+        && request.resource.data.payment == resource.data.payment
+        && request.resource.data.paymentStatus == resource.data.paymentStatus
+        && request.resource.data.paymentMethod == resource.data.paymentMethod
+        && request.resource.data.orderSource == resource.data.orderSource
+        && request.resource.data.fulfillmentType == resource.data.fulfillmentType
+        && request.resource.data.get('tableInfo', '') == resource.data.get('tableInfo', '')
+        && request.resource.data.get('customerName', '') == resource.data.get('customerName', '')
+        && request.resource.data.get('customerPhone', '') == resource.data.get('customerPhone', '')
+        && request.resource.data.get('deliveryAddress', '') == resource.data.get('deliveryAddress', '')
+        && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
+        && request.resource.data.get('readyAt', null) == resource.data.get('readyAt', null)
+        && request.resource.data.get('deliveredAt', null) == resource.data.get('deliveredAt', null);
+    }
+
+    function canAdvanceToPreparing(restaurantId) {
+      return hasRole(restaurantId, ['admin', 'cocina'])
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'preparing'
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'updatedAt']);
+    }
+
+    function canAdvanceToReady(restaurantId) {
+      return hasRole(restaurantId, ['admin', 'cocina'])
+        && resource.data.status == 'preparing'
+        && request.resource.data.status == 'ready'
+        && request.resource.data.readyAt is timestamp
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readyAt', 'updatedAt']);
+    }
+
+    function canAdvanceToReadyForPickup(restaurantId) {
+      return hasRole(restaurantId, ['admin', 'cocina'])
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'ready_for_pickup'
+        && request.resource.data.readyAt is timestamp
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readyAt', 'updatedAt']);
+    }
+
+    function canAdvanceToReadyForDispatch(restaurantId) {
+      return hasRole(restaurantId, ['admin', 'cocina'])
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'ready_for_dispatch'
+        && request.resource.data.readyAt is timestamp
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readyAt', 'updatedAt']);
+    }
+
+    function canAdvanceToOutForDelivery(restaurantId) {
+      return hasRole(restaurantId, ['admin', 'caja'])
+        && resource.data.status == 'ready_for_dispatch'
+        && request.resource.data.status == 'out_for_delivery'
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'updatedAt']);
+    }
+
+    function canAdvanceToDelivered(restaurantId) {
+      return hasRole(restaurantId, ['admin', 'caja', 'cocina'])
+        && resource.data.status in ['pending', 'preparing', 'ready', 'ready_for_pickup', 'ready_for_dispatch', 'out_for_delivery']
+        && request.resource.data.status == 'delivered'
+        && request.resource.data.deliveredAt is timestamp
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'deliveredAt', 'updatedAt']);
+    }
+
+    function canCancelOrder(restaurantId) {
+      return hasRole(restaurantId, ['admin', 'caja'])
+        && resource.data.status in ['pending', 'preparing', 'ready', 'ready_for_pickup', 'ready_for_dispatch', 'out_for_delivery']
+        && resource.data.paymentStatus == 'pending'
+        && request.resource.data.status == 'cancelled'
+        && request.resource.data.cancelledAt is timestamp
+        && request.resource.data.cancelledBy is string
+        && (
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'cancelledAt', 'cancelledBy', 'updatedAt'])
+          || request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'cancelledAt', 'cancelledBy', 'cancelledReason', 'updatedAt'])
+        );
+    }
+
+    function canConfirmPayment(restaurantId) {
+      return hasRole(restaurantId, ['admin', 'caja'])
+        && resource.data.paymentStatus == 'pending'
+        && request.resource.data.paymentStatus == 'paid'
+        && request.resource.data.paidAt is timestamp
+        && request.resource.data.paidBy is string
+        && isValidPayment(request.resource.data.payment, resource.data.total, 'paid')
+        && request.resource.data.paymentMethod in ['cash', 'qr', 'mixed']
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['paymentStatus', 'paymentMethod', 'payment', 'paidAt', 'paidBy', 'updatedAt']);
+    }
+
+    function isValidCategoryData() {
+      return request.resource.data.keys().hasOnly(['name', 'subtitle', 'emoji', 'sortOrder', 'isActive', 'isVisible', 'updatedAt', 'createdAt'])
+        && request.resource.data.name is string
+        && request.resource.data.emoji is string
+        && request.resource.data.sortOrder is int
+        && request.resource.data.isActive is bool
+        && request.resource.data.isVisible is bool;
+    }
+
+    function isValidProductData() {
+      return request.resource.data.keys().hasOnly([
+          'categoryId',
+          'name',
+          'description',
+          'price',
+          'image',
+          'badge',
+          'extras',
+          'options',
+          'availability',
+          'sortOrder',
+          'isActive',
+          'isVisible',
+          'updatedAt',
+          'createdAt'
+        ])
+        && request.resource.data.categoryId is string
+        && request.resource.data.name is string
+        && request.resource.data.description is string
+        && request.resource.data.price is number
+        && request.resource.data.image is string
+        && request.resource.data.availability in ['available', 'soldout']
+        && request.resource.data.sortOrder is int
+        && request.resource.data.isActive is bool
+        && request.resource.data.isVisible is bool
+        && request.resource.data.extras is list
+        && request.resource.data.options is list;
+    }
+
+    match /restaurants/{restaurantId}/members/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    match /restaurants/{restaurantId}/catalog/{catalogId}/categories/{categoryId} {
+      allow read: if isActiveMember(restaurantId);
+      allow create, update: if hasRole(restaurantId, ['admin']) && isValidCategoryData();
+      allow delete: if hasRole(restaurantId, ['admin']);
+    }
+
+    match /restaurants/{restaurantId}/catalog/{catalogId}/products/{productId} {
+      allow read: if isActiveMember(restaurantId);
+      allow create, update: if hasRole(restaurantId, ['admin']) && isValidProductData();
+      allow delete: if hasRole(restaurantId, ['admin']);
+    }
+
+    match /restaurants/{restaurantId}/days/{dayId} {
+      allow read: if isActiveMember(restaurantId) && isValidDayId(dayId);
+      allow create: if hasRole(restaurantId, ['admin', 'caja', 'pedidos']) && isValidDayId(dayId) && isValidDayCreate(restaurantId, dayId);
+      allow update: if hasRole(restaurantId, ['admin', 'caja', 'pedidos']) && isValidDayId(dayId) && isValidDayUpdate(dayId);
+      allow delete: if false;
+
+      match /orders/{orderId} {
+        allow read: if isActiveMember(restaurantId) && isValidDayId(dayId)
+          && (
+            !hasRole(restaurantId, ['pedidos'])
+            || resource == null
+            || resource.data.createdBy == request.auth.uid
+          );
+        allow create: if hasRole(restaurantId, ['admin', 'caja', 'pedidos'])
+          && isValidDayId(dayId)
+          && isValidOrderCreate(restaurantId, dayId, orderId)
+          && (
+            !hasRole(restaurantId, ['pedidos'])
+            || (
+              request.resource.data.orderSource == 'whatsapp'
+              && request.resource.data.fulfillmentType in ['pickup', 'delivery']
+              && request.resource.data.createdBy == request.auth.uid
+            )
+          );
+        allow update: if isValidDayId(dayId)
+          && (
+            (
+              baseOrderFieldsUnchangedExceptStatus()
+              && (
+                canAdvanceToPreparing(restaurantId)
+                || canAdvanceToReady(restaurantId)
+                || canAdvanceToReadyForPickup(restaurantId)
+                || canAdvanceToReadyForDispatch(restaurantId)
+                || canAdvanceToOutForDelivery(restaurantId)
+                || canAdvanceToDelivered(restaurantId)
+              )
+            )
+            || (
+              baseOrderFieldsUnchangedExceptPayment()
+              && canConfirmPayment(restaurantId)
+            )
+            || (
+              baseOrderFieldsUnchangedExceptCancel()
+              && canCancelOrder(restaurantId)
+            )
+            || (
+              hasRole(restaurantId, ['pedidos'])
+              && resource.data.createdBy == request.auth.uid
+              && resource.data.status == 'pending'
+              && request.resource.data.status == 'pending'
+              && request.resource.data.createdBy == resource.data.createdBy
+              && request.resource.data.orderSource == 'whatsapp'
+              && request.resource.data.fulfillmentType in ['pickup', 'delivery']
+              && request.resource.data.id == resource.data.id
+              && request.resource.data.sequence == resource.data.sequence
+              && request.resource.data.displayNumber == resource.data.displayNumber
+              && request.resource.data.createdAt == resource.data.createdAt
+              && (!('tableInfo' in request.resource.data) || request.resource.data.tableInfo == '')
+              && request.resource.data.total is number
+              && request.resource.data.total >= 0
+              && request.resource.data.paymentStatus in ['paid', 'pending']
+              && (request.resource.data.paymentMethod == null || request.resource.data.paymentMethod in ['cash', 'qr', 'mixed'])
+              && isValidPayment(request.resource.data.payment, request.resource.data.total, request.resource.data.paymentStatus)
+              && isValidFulfillment(request.resource.data)
+            )
+            || (
+              hasRole(restaurantId, ['admin', 'caja'])
+              && resource.data.status == 'pending'
+              && request.resource.data.id == resource.data.id
+              && request.resource.data.sequence == resource.data.sequence
+              && request.resource.data.displayNumber == resource.data.displayNumber
+              && request.resource.data.createdAt == resource.data.createdAt
+              && isValidFulfillment(request.resource.data)
+            )
+          );
+        allow delete: if false;
+      }
+    }
+  }
+}
