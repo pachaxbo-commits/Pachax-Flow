@@ -15,6 +15,23 @@ const filterOptions: Array<{ value: 'all' | OrderStatus; label: string }> = [
   { value: 'cancelled', label: 'Anulados' },
 ]
 
+function getTodayKey(now = new Date()) {
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function getLocalDateKey(dateInput: string | Date | undefined): string | null {
+  if (!dateInput) return null
+  const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
+  if (isNaN(d.getTime())) return null
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export function HistorialView({
   orders,
   onAdvanceStatus,
@@ -28,31 +45,57 @@ export function HistorialView({
   userName: string
   userRole: string
 }) {
-  if (userRole === 'pedidos') {
-    return (
-      <div className="rounded-[1.8rem] border border-orange-200 bg-orange-50/60 p-6 text-center text-sm font-semibold text-orange-950">
-        No tienes permisos para acceder a esta sección.
-      </div>
-    )
-  }
+  const dayOptions = useMemo(() => {
+    const options: string[] = []
+    const now = new Date()
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now)
+      d.setDate(now.getDate() - i)
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      options.push(`${year}-${month}-${day}`)
+    }
+    return options
+  }, [])
 
+  const [selectedDayKey, setSelectedDayKey] = useState<string>(dayOptions[0] ?? getTodayKey())
   const [filter, setFilter] = useState<'all' | OrderStatus>('all')
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null)
 
+  const selectedDayOrders = useMemo(() => {
+    return orders.filter((order) => {
+      const createdOnDay = getLocalDateKey(order.createdAt) === selectedDayKey
+      const paidOnDay = order.paymentStatus === 'paid' && (getLocalDateKey(order.paidAt) === selectedDayKey || (!order.paidAt && createdOnDay))
+      return createdOnDay || paidOnDay
+    })
+  }, [orders, selectedDayKey])
+
   const filteredOrders = useMemo(
-    () => (filter === 'all' ? orders : orders.filter((order) => order.status === filter)),
-    [filter, orders],
+    () => (filter === 'all' ? selectedDayOrders : selectedDayOrders.filter((order) => order.status === filter)),
+    [filter, selectedDayOrders],
   )
 
   const summary = useMemo(() => {
-    // EXCLUDE cancelled orders from stats & financials
-    const activeOrders = orders.filter((order) => order.status !== 'cancelled')
-    const paidOrders = activeOrders.filter((order) => order.paymentStatus === 'paid')
-    const pendingPaymentOrders = activeOrders.filter((order) => order.paymentStatus === 'pending')
-    const delivered = activeOrders.filter((order) => order.status === 'delivered')
-    const mostSoldMap = new Map<string, number>()
+    // Active orders created on the selected day
+    const activeCreatedOrders = orders.filter((order) => order.status !== 'cancelled' && getLocalDateKey(order.createdAt) === selectedDayKey)
+    
+    // Active orders paid on the selected day (for cash / QR balance)
+    const activePaidOrders = orders.filter((order) => {
+      if (order.status === 'cancelled') return false
+      if (order.paymentStatus !== 'paid') return false
+      const paidDay = getLocalDateKey(order.paidAt)
+      if (paidDay) {
+        return paidDay === selectedDayKey
+      }
+      return getLocalDateKey(order.createdAt) === selectedDayKey
+    })
 
-    activeOrders.forEach((order) => {
+    // Active pending payment orders at this moment (regardless of creation date)
+    const activePendingPaymentOrders = orders.filter((order) => order.status !== 'cancelled' && order.paymentStatus === 'pending')
+
+    const mostSoldMap = new Map<string, number>()
+    activeCreatedOrders.forEach((order) => {
       order.items.forEach((item) => {
         mostSoldMap.set(item.name, (mostSoldMap.get(item.name) ?? 0) + item.quantity)
       })
@@ -63,8 +106,8 @@ export function HistorialView({
       .slice(0, 5)
       .map(([name, quantity]) => ({ name, quantity }))
 
-    // Payment totals use ONLY paid orders for accurate financial reporting
-    const paymentTotals = paidOrders.reduce(
+    // Payment totals use only orders paid on the selected day
+    const paymentTotals = activePaidOrders.reduce(
       (accumulator, order) => {
         accumulator.cashSales += order.payment.cashAmount
         accumulator.qrSales += order.payment.qrAmount
@@ -84,27 +127,30 @@ export function HistorialView({
       },
     )
 
-    const paidSales = paidOrders.reduce((sum, order) => sum + order.total, 0)
-    const pendingPaymentTotal = pendingPaymentOrders.reduce((sum, order) => sum + order.total, 0)
+    const totalSales = activeCreatedOrders.reduce((sum, order) => sum + order.total, 0)
+    const paidSales = activePaidOrders.reduce((sum, order) => sum + order.total, 0)
+    const pendingPaymentTotal = activePendingPaymentOrders.reduce((sum, order) => sum + order.total, 0)
+
+    const deliveredCount = activeCreatedOrders.filter((order) => order.status === 'delivered').length
 
     return {
-      totalSales: activeOrders.reduce((sum, order) => sum + order.total, 0),
+      totalSales,
       paidSales,
       pendingPaymentTotal,
-      pendingPaymentCount: pendingPaymentOrders.length,
-      orderCount: activeOrders.length,
-      averageTicket: paidOrders.length ? paidSales / paidOrders.length : 0,
-      pending: activeOrders.filter((order) => order.status === 'pending').length,
-      preparing: activeOrders.filter((order) => order.status === 'preparing').length,
-      ready: activeOrders.filter((order) => order.status === 'ready').length,
-      delivered: delivered.length,
+      pendingPaymentCount: activePendingPaymentOrders.length,
+      orderCount: activeCreatedOrders.length,
+      averageTicket: activePaidOrders.length ? paidSales / activePaidOrders.length : 0,
+      pending: activeCreatedOrders.filter((order) => order.status === 'pending').length,
+      preparing: activeCreatedOrders.filter((order) => order.status === 'preparing').length,
+      ready: activeCreatedOrders.filter((order) => order.status === 'ready').length,
+      delivered: deliveredCount,
       paymentTotals,
       topProducts,
     }
-  }, [orders])
+  }, [orders, selectedDayKey])
 
   const exportCsv = () => {
-    const activeOrders = orders.filter((order) => order.status !== 'cancelled')
+    const csvOrders = selectedDayOrders.filter((order) => order.status !== 'cancelled')
     const summaryRows = [
       ['resumen', 'valor'],
       ['ventas_totales_registradas', summary.totalSales],
@@ -149,7 +195,7 @@ export function HistorialView({
       ],
     ]
 
-    const orderRows = activeOrders.map((order) => {
+    const orderRows = csvOrders.map((order) => {
       const isPaid = order.paymentStatus === 'paid'
       return [
         order.displayNumber,
@@ -203,7 +249,7 @@ export function HistorialView({
       .map((row) => row.map((cell) => `"${String(cell ?? '').replaceAll('"', '""')}"`).join(';'))
       .join('\n')
 
-    downloadTextFile(`comandero-${new Date().toISOString().slice(0, 10)}.csv`, csv)
+    downloadTextFile(`comandero-${selectedDayKey}.csv`, csv)
   }
 
   const handleCancelClick = async (orderId: string) => {
@@ -219,6 +265,14 @@ export function HistorialView({
     setBusyOrderId(null)
   }
 
+  if (userRole === 'pedidos') {
+    return (
+      <div className="rounded-[1.8rem] border border-orange-200 bg-orange-50/60 p-6 text-center text-sm font-semibold text-orange-950">
+        No tienes permisos para acceder a esta sección.
+      </div>
+    )
+  }
+
   return (
     <section className="space-y-5">
       <Panel className="border-white/80 bg-white/68 p-5">
@@ -229,6 +283,34 @@ export function HistorialView({
             <p className="mt-3 max-w-3xl text-sm leading-7 text-muted">
               Resumen operativo, cierre por metodos de pago y una vista clara para marcar entregas y anular comandas.
             </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {dayOptions.map((dayKey) => {
+              const date = new Date(dayKey + 'T00:00:00')
+              const formattedDate = date.toLocaleDateString('es-ES', {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+              })
+              const isSelected = selectedDayKey === dayKey
+              return (
+                <button
+                  key={dayKey}
+                  onClick={() => {
+                    setSelectedDayKey(dayKey)
+                    setFilter('all')
+                  }}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                    isSelected
+                      ? 'bg-accent text-white shadow-card'
+                      : 'bg-white/72 text-muted hover:bg-white hover:text-ink border border-line'
+                  }`}
+                >
+                  {dayKey === getTodayKey() ? 'Hoy' : formattedDate}
+                </button>
+              )
+            })}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-5">

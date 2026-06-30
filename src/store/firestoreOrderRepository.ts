@@ -403,23 +403,32 @@ export class FirestoreOrderRepository {
         }
       }
 
-      const daysToQuery = 7
-      const dayKeys: string[] = []
+      const daysToQueryAll = 7
+      const daysToQueryPending = 30
       const now = new Date()
-      for (let i = 0; i < daysToQuery; i++) {
+
+      const dayKeysWithFilter: Array<{ dayKey: string; onlyPending: boolean }> = []
+      for (let i = 0; i < daysToQueryPending; i++) {
         const d = new Date(now)
         d.setDate(now.getDate() - i)
         const year = d.getFullYear()
         const month = String(d.getMonth() + 1).padStart(2, '0')
         const day = String(d.getDate()).padStart(2, '0')
-        dayKeys.push(`${year}-${month}-${day}`)
+        const dayKey = `${year}-${month}-${day}`
+        
+        dayKeysWithFilter.push({
+          dayKey,
+          onlyPending: i >= daysToQueryAll,
+        })
       }
 
-      dayKeys.forEach((dayKey) => {
+      dayKeysWithFilter.forEach(({ dayKey, onlyPending }) => {
         const ordersRef = collection(firebase.db, 'restaurants', firebase.restaurantId, 'days', dayKey, 'orders')
         let ordersQuery
         if (role === 'pedidos' && currentUser) {
           ordersQuery = query(ordersRef, where('createdBy', '==', currentUser.uid))
+        } else if (onlyPending) {
+          ordersQuery = query(ordersRef, where('paymentStatus', '==', 'pending'))
         } else {
           ordersQuery = query(ordersRef, orderBy('sequence', 'desc'))
         }
