@@ -6,6 +6,7 @@ import type { Order, OrderStatus } from '../types'
 import { OrderTimer } from './OrderTimer'
 import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
+import { SourceBadge, FulfillmentBadge, PaymentBadge } from './ui/StatusPill'
 
 function emphasizeText(input: string) {
   return input.toUpperCase()
@@ -60,24 +61,30 @@ export function CocinaView({
       .reduce((highest, order) => Math.max(highest, order.sequence), 0)
 
     if (latestPending > lastPendingSequence.current) {
+      const prevSequence = lastPendingSequence.current
       lastPendingSequence.current = latestPending
 
       if (latestPending !== 0) {
         const matchingOrder = orders.find((order) => order.sequence === latestPending)
-        const message = `Nuevo pedido ${matchingOrder?.displayNumber ?? ''} recibido`
-        const showNoticeTimeout = window.setTimeout(() => setNotice(message), 0)
-        playKitchenNotification()
+        
+        // Only trigger alert if the order is genuinely new (created in the last 15 seconds)
+        // and it's not the initial mount loading older orders.
+        if (matchingOrder && prevSequence !== 0 && new Date().getTime() - new Date(matchingOrder.createdAt).getTime() < 15000) {
+          const message = `Nuevo pedido ${matchingOrder.displayNumber} recibido`
+          const showNoticeTimeout = window.setTimeout(() => setNotice(message), 0)
+          playKitchenNotification()
 
-        if (hideNoticeTimeout.current) {
-          window.clearTimeout(hideNoticeTimeout.current)
+          if (hideNoticeTimeout.current) {
+            window.clearTimeout(hideNoticeTimeout.current)
+          }
+
+          hideNoticeTimeout.current = window.setTimeout(() => {
+            setNotice(null)
+            hideNoticeTimeout.current = null
+          }, 3200)
+
+          return () => window.clearTimeout(showNoticeTimeout)
         }
-
-        hideNoticeTimeout.current = window.setTimeout(() => {
-          setNotice(null)
-          hideNoticeTimeout.current = null
-        }, 3200)
-
-        return () => window.clearTimeout(showNoticeTimeout)
       }
     }
 
@@ -121,9 +128,13 @@ export function CocinaView({
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
         {activeOrders.map((order) => {
           const isLegacy = order.status === 'preparing' || order.status === 'ready'
-          const bgBorderColor = isLegacy
-            ? 'border-warning/30 bg-amber-50/20'
-            : 'border-white/80 bg-white/70'
+          const isNew = new Date().getTime() - new Date(order.createdAt).getTime() < 60000
+
+          const bgBorderColor = isNew
+            ? 'border-emerald-300 bg-[#f4fbf7]/80 ring-2 ring-emerald-500/10 shadow-lg shadow-emerald-500/5'
+            : isLegacy
+              ? 'border-warning/30 bg-amber-50/20'
+              : 'border-white/80 bg-white/70'
 
           return (
             <article
@@ -133,8 +144,15 @@ export function CocinaView({
               {/* Header: Nro Pedido y Reloj */}
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-5xl font-black tracking-tight text-ink">
-                    {order.displayNumber}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="text-5xl font-black tracking-tight text-ink">
+                      {order.displayNumber}
+                    </div>
+                    {isNew ? (
+                      <span className="bg-[#10b981] text-white text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider animate-pulse">
+                        NUEVO
+                      </span>
+                    ) : null}
                   </div>
                   <div className="mt-2 text-xs text-muted">
                     Ingreso: {formatTime(order.createdAt)}
@@ -154,50 +172,17 @@ export function CocinaView({
 
               {/* Modalidad y Pago */}
               <div className="mt-4 flex flex-wrap gap-2">
-                {/* Source Badge */}
-                {order.orderSource === 'whatsapp' ? (
-                  <span className="inline-flex items-center rounded-xl bg-green-100 border border-green-200 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-green-800">
-                    WHATSAPP
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center rounded-xl bg-gray-100 border border-gray-200 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-gray-800">
-                    LOCAL
-                  </span>
-                )}
-
-                {/* Modalidad Badge */}
-                {order.fulfillmentType === 'delivery' ? (
-                  <span className="inline-flex items-center rounded-xl bg-orange-100 border border-orange-200 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-orange-800">
-                    DELIVERY
-                  </span>
-                ) : order.fulfillmentType === 'pickup' ? (
-                  <span className="inline-flex items-center rounded-xl bg-amber-100 border border-amber-200 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-amber-800">
-                    RETIRO
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center rounded-xl bg-indigo-100 border border-indigo-200 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-indigo-800">
-                    MESA {order.tableInfo || 'N/D'}
-                  </span>
-                )}
-
-                {/* Pago Badge */}
-                {order.paymentStatus === 'paid' ? (
-                  <span className="inline-flex items-center rounded-xl bg-emerald-100 border border-emerald-200 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-emerald-800">
-                    PAGADO · {String(order.paymentMethod || order.payment.method).toUpperCase()}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center rounded-xl bg-red-100 border border-red-200 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-red-800">
-                    PENDIENTE
-                  </span>
-                )}
+                <SourceBadge source={order.orderSource} />
+                <FulfillmentBadge type={order.fulfillmentType} tableInfo={order.tableInfo} />
+                <PaymentBadge paymentStatus={order.paymentStatus} paymentMethod={order.paymentMethod} />
               </div>
 
               {/* Customer info for delivery/whatsapp */}
-              {(order.customerName || order.customerPhone || order.deliveryAddress) ? (
+              {(order.customerName || order.customerPhone || (order.fulfillmentType === 'delivery' && order.deliveryAddress)) ? (
                 <div className="mt-3 rounded-[1.2rem] border border-line bg-canvas/30 px-3 py-2 text-xs text-ink space-y-1">
                   {order.customerName ? <div><span className="font-bold text-muted">Cliente:</span> {order.customerName}</div> : null}
                   {order.customerPhone ? <div><span className="font-bold text-muted">Teléfono:</span> {order.customerPhone}</div> : null}
-                  {order.deliveryAddress ? <div><span className="font-bold text-muted">Dirección:</span> {order.deliveryAddress}</div> : null}
+                  {(order.fulfillmentType === 'delivery' && order.deliveryAddress) ? <div><span className="font-bold text-muted">Dirección:</span> {order.deliveryAddress}</div> : null}
                 </div>
               ) : null}
 
@@ -244,7 +229,7 @@ export function CocinaView({
                 {(() => {
                   const buttonText =
                     order.fulfillmentType === 'table'
-                      ? 'ENTREGADO'
+                      ? 'SERVIR PEDIDO'
                       : order.fulfillmentType === 'pickup'
                         ? 'LISTO PARA RETIRAR'
                         : 'LISTO PARA DESPACHAR'
@@ -261,7 +246,7 @@ export function CocinaView({
                       fullWidth
                       size="lg"
                       tone="success"
-                      className="py-4 text-lg font-black tracking-wide shadow-md shadow-success/10 rounded-2xl"
+                      className="py-4 text-lg font-black tracking-wide shadow-md shadow-success/10 rounded-2xl min-h-[48px]"
                       disabled={busyOrderId === order.id}
                       onClick={async () => {
                         setBusyOrderId(order.id)

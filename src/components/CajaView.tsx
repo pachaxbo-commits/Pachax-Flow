@@ -11,12 +11,21 @@ import {
   DollarSign,
   Ban,
   FileEdit,
+  Store,
+  Utensils,
+  ShoppingBag,
+  Truck,
+  Coins,
+  QrCode,
+  Shuffle,
+  CheckCircle2,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { formatCurrency } from '../lib/format'
 import type { CartItem, CatalogCategory, PaymentMethod, PaymentSummary, Product, Order, OrderStatus, FulfillmentType } from '../types'
 import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
+import { StatusPill, SourceBadge, FulfillmentBadge, PaymentBadge } from './ui/StatusPill'
 
 function buildCartItem(product: Product): CartItem {
   return {
@@ -572,86 +581,54 @@ export function CajaView({
                 ) : (
                   filteredOrders.map((order) => {
                     const isPaid = order.paymentStatus === 'paid'
-                    const displayStatus =
-                      order.status === 'pending'
-                        ? 'Pendiente en Cocina'
-                        : order.status === 'ready_for_pickup'
-                          ? 'Listo para Retirar'
-                          : order.status === 'ready_for_dispatch'
-                            ? 'Listo para Despachar'
-                            : order.status === 'out_for_delivery'
-                              ? 'En Delivery'
-                              : order.status === 'delivered'
-                                ? 'Entregado'
-                                : order.status === 'cancelled'
-                                  ? 'Anulado'
-                                  : order.status
-
-                    const statusColor =
-                      order.status === 'pending'
-                        ? 'bg-amber-50 text-amber-800 border-amber-200'
-                        : order.status === 'ready_for_pickup'
-                          ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
-                          : order.status === 'ready_for_dispatch'
-                            ? 'bg-blue-50 text-blue-800 border-blue-200'
-                            : order.status === 'out_for_delivery'
-                              ? 'bg-orange-50 text-orange-850 border-orange-200'
-                              : order.status === 'delivered'
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                : 'bg-red-50 text-red-800 border-red-200'
 
                     return (
                       <div key={order.id} className="rounded-[1.6rem] border border-line bg-white p-5 shadow-card hover:shadow-lg transition-all duration-200 space-y-3.5">
-                        <div className="flex items-start justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xl font-black text-ink">{order.displayNumber}</span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${
-                              order.orderSource === 'whatsapp' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {order.orderSource === 'whatsapp' ? 'WhatsApp' : 'Local'}
-                            </span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${statusColor} border`}>
-                              {displayStatus}
-                            </span>
+                        <div className="flex items-start justify-between flex-wrap gap-3">
+                          <div className="flex items-center flex-wrap gap-2">
+                            <span className="text-2xl font-black text-ink">{order.displayNumber}</span>
+                            <SourceBadge source={order.orderSource} />
+                            <StatusPill status={order.status} />
                           </div>
-                          <span className="text-xs font-semibold text-muted">
+                          <span className="text-xs font-semibold text-muted bg-panel px-2.5 py-1 rounded-lg">
                             {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
 
                         {/* Customer & Fulfillment Info */}
-                        <div className="grid gap-2.5 sm:grid-cols-2 text-xs">
-                          <div>
-                            <span className="font-bold text-muted">Modalidad: </span>
-                            <span className="font-semibold text-ink">
-                              {order.fulfillmentType === 'table' ? `Mesa ${order.tableInfo || 'N/D'}` : order.fulfillmentType === 'pickup' ? 'Retiro' : 'Delivery'}
-                            </span>
-                          </div>
-                          {order.customerName ? (
-                            <div>
-                              <span className="font-bold text-muted">Cliente: </span>
-                              <span className="font-semibold text-ink">{order.customerName}</span>
-                            </div>
-                          ) : null}
-                          {order.customerPhone ? (
-                            <div>
-                              <span className="font-bold text-muted">Teléfono: </span>
-                              <span className="font-semibold text-ink">{order.customerPhone}</span>
-                            </div>
-                          ) : null}
-                          {order.deliveryAddress ? (
-                            <div className="sm:col-span-2">
-                              <span className="font-bold text-muted">Dirección: </span>
-                              <span className="font-semibold text-ink">{order.deliveryAddress}</span>
-                            </div>
-                          ) : null}
-                          {order.createdBy ? (
-                            <div className="sm:col-span-2">
-                              <span className="font-bold text-muted text-[10px] uppercase tracking-wider">Creado por: </span>
-                              <span className="font-semibold text-muted text-[10px]">{order.createdBy.replace('mock-', '')}</span>
-                            </div>
-                          ) : null}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <FulfillmentBadge type={order.fulfillmentType} tableInfo={order.tableInfo} />
+                          <PaymentBadge paymentStatus={order.paymentStatus} paymentMethod={order.paymentMethod} />
                         </div>
+
+                        {(order.customerName || order.customerPhone || order.deliveryAddress) ? (
+                          <div className="rounded-[1.2rem] border border-line bg-canvas/30 px-3.5 py-2.5 text-xs text-ink space-y-1.5">
+                            {order.customerName ? (
+                              <div>
+                                <span className="font-bold text-muted">Cliente: </span>
+                                <span className="font-semibold text-ink">{order.customerName}</span>
+                              </div>
+                            ) : null}
+                            {order.customerPhone ? (
+                              <div>
+                                <span className="font-bold text-muted">Teléfono: </span>
+                                <span className="font-semibold text-ink">{order.customerPhone}</span>
+                              </div>
+                            ) : null}
+                            {order.deliveryAddress ? (
+                              <div>
+                                <span className="font-bold text-muted">Dirección: </span>
+                                <span className="font-semibold text-ink">{order.deliveryAddress}</span>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        {order.createdBy ? (
+                          <div className="text-[10px] text-muted font-medium uppercase tracking-wider">
+                            Creado por: <span className="font-bold">{order.createdBy.replace('mock-', '')}</span>
+                          </div>
+                        ) : null}
 
                         {/* Order items summary */}
                         <div className="border-t border-dashed border-line pt-3 text-xs text-ink space-y-1.5">
@@ -665,22 +642,17 @@ export function CajaView({
 
                         {/* Total, Payment status & Actions */}
                         <div className="flex items-center justify-between flex-wrap gap-3 border-t border-line pt-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-black text-ink">Total: {formatCurrency(order.total)}</span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide ${
-                              isPaid ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200'
-                            }`}>
-                              {isPaid ? `PAGADO · ${String(order.paymentMethod || order.payment.method).toUpperCase()}` : 'PENDIENTE'}
-                            </span>
+                          <div>
+                            <span className="text-base font-black text-ink">Total: {formatCurrency(order.total)}</span>
                           </div>
 
                           {/* Order Actions */}
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             {/* Quick payment button */}
                             {userRole !== 'pedidos' && !isPaid && order.status !== 'cancelled' ? (
                               <button
                                 type="button"
-                                className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-black tracking-wide transition shadow-md shadow-emerald-500/10"
+                                className="flex items-center gap-1.5 bg-[#10b981] hover:bg-[#0d9488] text-white px-3 py-2 rounded-xl text-xs font-black tracking-wide transition shadow-md shadow-emerald-500/10 min-h-[40px]"
                                 onClick={() => {
                                   setPayingOrder(order)
                                   setFastPayMethod('cash')
@@ -688,7 +660,7 @@ export function CajaView({
                                   setFastCashSplit('')
                                 }}
                               >
-                                <DollarSign size={13} />
+                                <Coins size={14} />
                                 Cobrar
                               </button>
                             ) : null}
@@ -698,10 +670,10 @@ export function CajaView({
                              (userRole === 'pedidos' && order.createdBy === userId && order.status === 'pending') ? (
                               <button
                                 type="button"
-                                className="flex items-center gap-1 bg-accent hover:bg-accent/90 text-white px-3 py-1.5 rounded-xl text-xs font-black tracking-wide transition shadow-md shadow-accent/10"
+                                className="flex items-center gap-1.5 bg-[#6366f1] hover:bg-[#4f46e5] text-white px-3 py-2 rounded-xl text-xs font-black tracking-wide transition shadow-md shadow-indigo-500/10 min-h-[40px]"
                                 onClick={() => handleEditOrder(order)}
                               >
-                                <FileEdit size={13} />
+                                <FileEdit size={14} />
                                 Editar
                               </button>
                             ) : null}
@@ -710,9 +682,10 @@ export function CajaView({
                             {userRole !== 'pedidos' && order.status === 'ready_for_dispatch' ? (
                               <button
                                 type="button"
-                                className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-xl text-xs font-black tracking-wide transition shadow-sm"
+                                className="flex items-center gap-1.5 bg-[#ec4899] hover:bg-[#db2777] text-white px-3 py-2 rounded-xl text-xs font-black tracking-wide transition shadow-md shadow-pink-500/10 min-h-[40px]"
                                 onClick={() => onSetOrderStatus(order.id, 'out_for_delivery')}
                               >
+                                <Truck size={14} />
                                 Despachar
                               </button>
                             ) : null}
@@ -720,9 +693,10 @@ export function CajaView({
                             {userRole !== 'pedidos' && (order.status === 'ready_for_pickup' || order.status === 'out_for_delivery') ? (
                               <button
                                 type="button"
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-xl text-xs font-black tracking-wide transition shadow-sm"
+                                className="flex items-center gap-1.5 bg-[#2563eb] hover:bg-[#1d4ed8] text-white px-3 py-2 rounded-xl text-xs font-black tracking-wide transition shadow-md shadow-blue-500/10 min-h-[40px]"
                                 onClick={() => onSetOrderStatus(order.id, 'delivered')}
                               >
+                                <CheckCircle2 size={14} />
                                 Entregar
                               </button>
                             ) : null}
@@ -731,7 +705,7 @@ export function CajaView({
                              {userRole !== 'pedidos' && order.status !== 'cancelled' && order.status !== 'delivered' ? (
                                <button
                                  type="button"
-                                 className="flex items-center gap-1 bg-red-50 border border-red-200 hover:bg-red-100 text-red-800 px-3 py-1.5 rounded-xl text-xs font-black tracking-wide transition"
+                                 className="flex items-center gap-1.5 bg-red-50 border border-red-200 hover:bg-red-100 text-red-800 px-3 py-2 rounded-xl text-xs font-black tracking-wide transition min-h-[40px]"
                                  onClick={() => {
                                    if (order.paymentStatus === 'paid') {
                                      window.alert('Un pedido cobrado requiere devolución antes de poder anularse.')
@@ -739,9 +713,9 @@ export function CajaView({
                                    }
                                    setCancellingOrder(order)
                                    setCancelReason('')
-                                 }}
+                                  }}
                                >
-                                 <Ban size={13} />
+                                 <Ban size={14} />
                                  Anular
                                </button>
                              ) : null}
@@ -1052,17 +1026,22 @@ export function CajaView({
                   <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Origen</div>
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     {[
-                      { id: 'local', label: 'Local' },
-                      { id: 'whatsapp', label: 'WhatsApp' },
+                      { id: 'local', label: 'Local', icon: Store },
+                      { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquareText },
                     ].map((option) => {
                       const isActive = orderSource === option.id
+                      const Icon = option.icon
 
                       return (
                         <button
                           key={option.id}
                           type="button"
-                          className={`rounded-[0.9rem] border py-2 text-sm font-semibold transition ${
-                            isActive ? 'border-ink bg-ink text-white' : 'border-line bg-panel/80 text-ink hover:bg-panel'
+                          className={`rounded-[0.9rem] border py-2 text-sm font-semibold transition flex items-center justify-center gap-1.5 min-h-[44px] ${
+                            isActive
+                              ? option.id === 'local'
+                                ? 'border-[#3b82f6] bg-[#3b82f6] text-white shadow-sm'
+                                : 'border-[#10b981] bg-[#10b981] text-white shadow-sm'
+                              : 'border-line bg-panel/80 text-ink hover:bg-panel'
                           }`}
                           onClick={() => {
                             setOrderSource(option.id as 'local' | 'whatsapp')
@@ -1073,6 +1052,7 @@ export function CajaView({
                             }
                           }}
                         >
+                          <Icon size={16} />
                           {option.label}
                         </button>
                       )
@@ -1089,27 +1069,39 @@ export function CajaView({
                   const options: Array<{
                     id: FulfillmentType
                     label: string
+                    icon: typeof Utensils
                     disabled?: boolean
                   }> = [
-                    { id: 'table', label: 'Mesa', disabled: userRole === 'pedidos' || orderSource === 'whatsapp' },
-                    { id: 'pickup', label: 'Retiro' },
-                    { id: 'delivery', label: 'Despacho' },
+                    { id: 'table', label: 'Mesa', icon: Utensils, disabled: userRole === 'pedidos' || orderSource === 'whatsapp' },
+                    { id: 'pickup', label: 'Retiro', icon: ShoppingBag },
+                    { id: 'delivery', label: 'Despacho', icon: Truck },
                   ]
                   return options.map((option) => {
                     const isActive = fulfillmentType === option.id
+                    const Icon = option.icon
 
                     if (option.disabled) return null
+
+                    let activeStyles = 'border-ink bg-ink text-white shadow-sm'
+                    if (option.id === 'table') {
+                      activeStyles = 'border-[#6366f1] bg-[#6366f1] text-white shadow-sm'
+                    } else if (option.id === 'pickup') {
+                      activeStyles = 'border-[#d97706] bg-[#d97706] text-white shadow-sm'
+                    } else if (option.id === 'delivery') {
+                      activeStyles = 'border-[#ec4899] bg-[#ec4899] text-white shadow-sm'
+                    }
 
                     return (
                       <button
                         key={option.id}
                         type="button"
-                        className={`rounded-[0.9rem] border py-2 text-xs font-semibold transition ${
-                          isActive ? 'border-ink bg-ink text-white' : 'border-line bg-panel/80 text-ink hover:bg-panel'
+                        className={`rounded-[0.9rem] border py-2 text-xs font-semibold transition flex flex-col items-center justify-center gap-0.5 min-h-[44px] ${
+                          isActive ? activeStyles : 'border-line bg-panel/80 text-ink hover:bg-panel'
                         }`}
                         onClick={() => setFulfillmentType(option.id)}
                       >
-                        {option.label}
+                        <Icon size={14} />
+                        <span>{option.label}</span>
                       </button>
                     )
                   })
@@ -1130,27 +1122,56 @@ export function CajaView({
 
               {/* Customer Contact metadata fields */}
               {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') ? (
-                <div className="mb-3 rounded-[1.2rem] border border-line bg-white p-3 2xl:rounded-[1.4rem] space-y-2">
+                <div className="mb-3 rounded-[1.2rem] border border-line bg-white p-3 2xl:rounded-[1.4rem] space-y-2.5">
                   <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Datos de Contacto</div>
-                  <input
-                    className="w-full rounded-[0.9rem] border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent"
-                    placeholder="Nombre del Cliente"
-                    value={customerName}
-                    onChange={(event) => setCustomerName(event.target.value)}
-                  />
-                  <input
-                    className="w-full rounded-[0.9rem] border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent"
-                    placeholder="Teléfono"
-                    value={customerPhone}
-                    onChange={(event) => setCustomerPhone(event.target.value)}
-                  />
-                  {fulfillmentType === 'delivery' ? (
-                    <textarea
-                      className="w-full min-h-[50px] rounded-[0.9rem] border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent"
-                      placeholder="Dirección completa"
-                      value={deliveryAddress}
-                      onChange={(event) => setDeliveryAddress(event.target.value)}
+                  <div>
+                    <input
+                      className={`w-full rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
+                        (orderSource === 'whatsapp' || fulfillmentType === 'delivery') && customerName.trim() === ''
+                          ? 'border-red-300 focus:border-red-500'
+                          : 'border-line'
+                      }`}
+                      placeholder="Nombre del Cliente"
+                      value={customerName}
+                      onChange={(event) => setCustomerName(event.target.value)}
                     />
+                    {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') && customerName.trim() === '' ? (
+                      <span className="text-[10px] text-red-500 font-semibold mt-0.5 block px-1">Nombre es obligatorio</span>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <input
+                      className={`w-full rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
+                        (orderSource === 'whatsapp' || fulfillmentType === 'delivery') && customerPhone.trim() === ''
+                          ? 'border-red-300 focus:border-red-500'
+                          : 'border-line'
+                      }`}
+                      placeholder="Teléfono"
+                      value={customerPhone}
+                      onChange={(event) => setCustomerPhone(event.target.value)}
+                    />
+                    {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') && customerPhone.trim() === '' ? (
+                      <span className="text-[10px] text-red-500 font-semibold mt-0.5 block px-1">Teléfono es obligatorio</span>
+                    ) : null}
+                  </div>
+
+                  {fulfillmentType === 'delivery' ? (
+                    <div>
+                      <textarea
+                        className={`w-full min-h-[50px] rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
+                          fulfillmentType === 'delivery' && deliveryAddress.trim() === ''
+                            ? 'border-red-300 focus:border-red-500'
+                            : 'border-line'
+                        }`}
+                        placeholder="Dirección completa"
+                        value={deliveryAddress}
+                        onChange={(event) => setDeliveryAddress(event.target.value)}
+                      />
+                      {fulfillmentType === 'delivery' && deliveryAddress.trim() === '' ? (
+                        <span className="text-[10px] text-red-500 font-semibold mt-0.5 block px-1">Dirección es obligatoria</span>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
               ) : null}
@@ -1169,8 +1190,12 @@ export function CajaView({
                       <button
                         key={option.id}
                         type="button"
-                        className={`rounded-[0.9rem] border py-2 text-sm font-semibold transition ${
-                          isActive ? 'border-ink bg-ink text-white' : 'border-line bg-panel/80 text-ink hover:bg-panel'
+                        className={`rounded-[0.9rem] border py-2 text-sm font-semibold transition min-h-[44px] ${
+                          isActive
+                            ? option.id === 'paid'
+                              ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm'
+                              : 'border-[#ef4444] bg-[#ef4444] text-white shadow-sm'
+                            : 'border-line bg-panel/80 text-ink hover:bg-panel'
                         }`}
                         onClick={() => {
                           setPaymentStatus(option.id as 'paid' | 'pending')
@@ -1192,22 +1217,24 @@ export function CajaView({
                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Método de Pago</div>
                     <div className="mt-2 grid grid-cols-3 gap-2">
                       {[
-                        { id: 'cash', label: 'Efectivo' },
-                        { id: 'qr', label: 'QR' },
-                        { id: 'mixed', label: 'Mixto' },
+                        { id: 'cash', label: 'Efectivo', icon: Coins },
+                        { id: 'qr', label: 'QR', icon: QrCode },
+                        { id: 'mixed', label: 'Mixto', icon: Shuffle },
                       ].map((option) => {
                         const isActive = paymentMethod === option.id
+                        const Icon = option.icon
 
                         return (
                           <button
                             key={option.id}
                             type="button"
-                            className={`rounded-[0.8rem] border py-1.5 text-xs font-semibold transition ${
-                              isActive ? 'border-ink bg-ink text-white' : 'border-line bg-panel/80 text-ink hover:bg-panel'
+                            className={`rounded-[0.8rem] border py-1.5 text-xs font-semibold transition flex flex-col items-center justify-center gap-0.5 min-h-[44px] ${
+                              isActive ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm' : 'border-line bg-panel/80 text-ink hover:bg-panel'
                             }`}
                             onClick={() => setPaymentMethod(option.id as PaymentMethod)}
                           >
-                            {option.label}
+                            <Icon size={13} />
+                            <span>{option.label}</span>
                           </button>
                         )
                       })}
@@ -1218,12 +1245,19 @@ export function CajaView({
                         <label className="block">
                           <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted">Recibido</div>
                           <input
-                            className="w-full rounded-[0.8rem] border border-line bg-canvas/35 px-3 py-2 text-sm text-ink outline-none transition focus:border-accent"
+                            className={`w-full rounded-[0.8rem] border bg-canvas/35 px-3 py-2 text-sm text-ink outline-none transition focus:border-accent ${
+                              cashReceived < cartTotal ? 'border-red-300 focus:border-red-500' : 'border-line'
+                            }`}
                             inputMode="decimal"
                             placeholder="0"
                             value={cashReceivedInput}
                             onChange={(event) => setCashReceivedInput(event.target.value)}
                           />
+                          {cashReceived < cartTotal ? (
+                            <span className="text-[10px] text-red-500 font-semibold mt-1 block px-1">
+                              Pago insuficiente (Mínimo: {formatCurrency(cartTotal)})
+                            </span>
+                          ) : null}
                         </label>
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-muted">Cambio</span>
@@ -1238,7 +1272,9 @@ export function CajaView({
                           <label className="block">
                             <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted">Efectivo</div>
                             <input
-                              className="w-full rounded-[0.8rem] border border-line bg-canvas/35 px-2 py-1.5 text-xs text-ink outline-none transition focus:border-accent"
+                              className={`w-full rounded-[0.8rem] border bg-canvas/35 px-2 py-1.5 text-xs text-ink outline-none transition focus:border-accent ${
+                                cashAmount === 0 ? 'border-red-300 focus:border-red-500' : 'border-line'
+                              }`}
                               inputMode="decimal"
                               placeholder="0"
                               value={cashSplitInput}
@@ -1252,15 +1288,26 @@ export function CajaView({
                             </div>
                           </div>
                         </div>
+                        {cashAmount === 0 ? (
+                          <span className="text-[10px] text-red-500 font-semibold block px-1">Efectivo debe ser mayor a 0</span>
+                        ) : null}
+
                         <label className="block mt-2">
                           <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted">Efectivo Recibido</div>
                           <input
-                            className="w-full rounded-[0.8rem] border border-line bg-canvas/35 px-2 py-1.5 text-xs text-ink outline-none transition focus:border-accent"
+                            className={`w-full rounded-[0.8rem] border bg-canvas/35 px-2 py-1.5 text-xs text-ink outline-none transition focus:border-accent ${
+                              cashReceived < cashAmount ? 'border-red-300 focus:border-red-500' : 'border-line'
+                            }`}
                             inputMode="decimal"
                             placeholder="0"
                             value={cashReceivedInput}
                             onChange={(event) => setCashReceivedInput(event.target.value)}
                           />
+                          {cashReceived < cashAmount ? (
+                            <span className="text-[10px] text-red-500 font-semibold mt-1 block px-1">
+                              Efectivo insuficiente (Mínimo: {formatCurrency(cashAmount)})
+                            </span>
+                          ) : null}
                         </label>
                         <div className="flex items-center justify-between text-xs mt-1">
                           <span className="text-muted">Cambio</span>
@@ -1282,22 +1329,24 @@ export function CajaView({
                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Método Esperado</div>
                     <div className="mt-2 grid grid-cols-3 gap-2">
                       {[
-                        { id: 'cash', label: 'Efectivo' },
-                        { id: 'qr', label: 'QR' },
-                        { id: 'mixed', label: 'Mixto' },
+                        { id: 'cash', label: 'Efectivo', icon: Coins },
+                        { id: 'qr', label: 'QR', icon: QrCode },
+                        { id: 'mixed', label: 'Mixto', icon: Shuffle },
                       ].map((option) => {
                         const isActive = expectedPaymentMethod === option.id
+                        const Icon = option.icon
 
                         return (
                           <button
                             key={option.id}
                             type="button"
-                            className={`rounded-[0.8rem] border py-1.5 text-xs font-semibold transition ${
-                              isActive ? 'border-ink bg-ink text-white' : 'border-line bg-panel/80 text-ink hover:bg-panel'
+                            className={`rounded-[0.8rem] border py-1.5 text-xs font-semibold transition flex flex-col items-center justify-center gap-0.5 min-h-[44px] ${
+                              isActive ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm' : 'border-line bg-panel/80 text-ink hover:bg-panel'
                             }`}
                             onClick={() => setExpectedPaymentMethod(option.id as PaymentMethod)}
                           >
-                            {option.label}
+                            <Icon size={13} />
+                            <span>{option.label}</span>
                           </button>
                         )
                       })}

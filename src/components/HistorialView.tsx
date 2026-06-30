@@ -4,7 +4,7 @@ import { downloadTextFile, formatCurrency, formatDateTime, formatPaymentMethod, 
 import type { Order, OrderStatus } from '../types'
 import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
-import { StatusPill } from './ui/StatusPill'
+import { StatusPill, SourceBadge, FulfillmentBadge, PaymentBadge } from './ui/StatusPill'
 
 const filterOptions: Array<{ value: 'all' | OrderStatus; label: string }> = [
   { value: 'all', label: 'Todos' },
@@ -485,8 +485,9 @@ export function HistorialView({
                       </div>
                       <div>
                         <div className="text-sm font-semibold text-ink">{order.displayNumber}</div>
-                        <div className="text-xs text-muted">
-                          {order.orderType === 'delivery' ? 'Delivery' : `Mesa: ${order.tableInfo || 'N/D'}`}
+                        <div className="mt-1 flex flex-col gap-1.5">
+                          <SourceBadge source={order.orderSource} />
+                          <FulfillmentBadge type={order.fulfillmentType} tableInfo={order.tableInfo} />
                         </div>
                       </div>
                     </div>
@@ -515,22 +516,14 @@ export function HistorialView({
                   <td className="px-6 py-5 text-sm text-ink">
                     <div className="space-y-2">
                       <div className="font-bold">
-                        {order.paymentStatus === 'paid' ? (
-                          <span className="text-success uppercase text-xs px-2 py-1 bg-successSoft border border-[#cfe2d6] rounded-md">
-                            PAGADO · {order.paymentMethod ? formatPaymentMethod(order.paymentMethod) : 'EFECTIVO'}
-                          </span>
-                        ) : (
-                          <span className="text-danger uppercase text-xs px-2 py-1 bg-[#fdf3f3] border border-[#ecc6c6] rounded-md">
-                            PENDIENTE
-                          </span>
-                        )}
+                        <PaymentBadge paymentStatus={order.paymentStatus} paymentMethod={order.paymentMethod} />
                       </div>
                       {order.paymentStatus === 'paid' && (
                         <div className="mt-2 text-xs space-y-1">
-                          {order.payment.cashAmount > 0 ? <div className="text-muted">Efectivo: {formatCurrency(order.payment.cashAmount)}</div> : null}
-                          {order.payment.qrAmount > 0 ? <div className="text-muted">QR: {formatCurrency(order.payment.qrAmount)}</div> : null}
-                          {order.payment.cashReceived > 0 ? <div className="text-muted">Recibido: {formatCurrency(order.payment.cashReceived)}</div> : null}
-                          {order.payment.change > 0 ? <div className="font-semibold text-accent">Cambio: {formatCurrency(order.payment.change)}</div> : null}
+                          {order.payment?.cashAmount > 0 ? <div className="text-muted">Efectivo: {formatCurrency(order.payment.cashAmount)}</div> : null}
+                          {order.payment?.qrAmount > 0 ? <div className="text-muted">QR: {formatCurrency(order.payment.qrAmount)}</div> : null}
+                          {order.payment?.cashReceived > 0 ? <div className="text-muted">Recibido: {formatCurrency(order.payment.cashReceived)}</div> : null}
+                          {order.payment?.change > 0 ? <div className="font-semibold text-accent">Cambio: {formatCurrency(order.payment.change)}</div> : null}
                         </div>
                       )}
                     </div>
