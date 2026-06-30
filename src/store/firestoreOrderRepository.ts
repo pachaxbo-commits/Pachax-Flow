@@ -100,11 +100,12 @@ export class FirestoreOrderRepository {
   })
   private readonly listeners = new Set<Listener>()
   private readonly statusListeners = new Set<Listener>()
-  private readonly dayKey = getTodayKey()
+  private readonly todayKey = getTodayKey()
   private pendingOperations = 0
   private started = false
   private lastSnapshotFromCache = true
-  private unsubscribeSnapshot: Unsubscribe | null = null
+  private unsubscribes: Unsubscribe[] = []
+  private readonly daysOrders = new Map<string, Order[]>()
 
   constructor() {
     window.addEventListener('online', this.handleNetworkChange)
@@ -136,8 +137,8 @@ export class FirestoreOrderRepository {
   }
 
   destroy() {
-    this.unsubscribeSnapshot?.()
-    this.unsubscribeSnapshot = null
+    this.unsubscribes.forEach((unsub) => unsub())
+    this.unsubscribes = []
     window.removeEventListener('online', this.handleNetworkChange)
     window.removeEventListener('offline', this.handleNetworkChange)
     this.listeners.clear()
@@ -156,7 +157,7 @@ export class FirestoreOrderRepository {
     this.refreshStatus('Sincronizando nuevo pedido...')
 
     try {
-      const dayRef = doc(firebase.db, 'restaurants', firebase.restaurantId, 'days', this.dayKey)
+      const dayRef = doc(firebase.db, 'restaurants', firebase.restaurantId, 'days', this.todayKey)
       const ordersRef = collection(dayRef, 'orders')
       const orderRef = doc(ordersRef)
 
@@ -167,7 +168,7 @@ export class FirestoreOrderRepository {
 
       if (this.state.sequence === 0) {
         batch.set(dayRef, {
-          dayKey: this.dayKey,
+          dayKey: this.todayKey,
           restaurantId: firebase.restaurantId,
           sequence: 1,
           createdAt: serverTimestamp(),
@@ -221,6 +222,9 @@ export class FirestoreOrderRepository {
       throw new Error('Firebase no esta configurado.')
     }
 
+    const order = this.state.orders.find((o) => o.id === orderId)
+    const targetDayKey = order?.dayKey || this.todayKey
+
     const previousState = this.state
     const readyAt = readyStatuses.has(status) ? new Date().toISOString() : undefined
     const deliveredAt = status === 'delivered' ? new Date().toISOString() : undefined
@@ -231,7 +235,7 @@ export class FirestoreOrderRepository {
     this.refreshStatus('Sincronizando cambio de estado...')
 
     try {
-      const orderRef = doc(firebase.db, 'restaurants', firebase.restaurantId, 'days', this.dayKey, 'orders', orderId)
+      const orderRef = doc(firebase.db, 'restaurants', firebase.restaurantId, 'days', targetDayKey, 'orders', orderId)
       await updateDoc(orderRef, {
         status,
         ...(readyStatuses.has(status) ? { readyAt: serverTimestamp() } : {}),
@@ -256,6 +260,9 @@ export class FirestoreOrderRepository {
       throw new Error('Firebase no esta configurado.')
     }
 
+    const order = this.state.orders.find((o) => o.id === orderId)
+    const targetDayKey = order?.dayKey || this.todayKey
+
     const previousState = this.state
     this.state = updateOrderCancelStatus(this.state, orderId, cancelledBy, cancelledReason)
     this.emitState()
@@ -264,7 +271,7 @@ export class FirestoreOrderRepository {
     this.refreshStatus('Sincronizando cancelacion...')
 
     try {
-      const orderRef = doc(firebase.db, 'restaurants', firebase.restaurantId, 'days', this.dayKey, 'orders', orderId)
+      const orderRef = doc(firebase.db, 'restaurants', firebase.restaurantId, 'days', targetDayKey, 'orders', orderId)
       await updateDoc(orderRef, {
         status: 'cancelled',
         cancelledAt: serverTimestamp(),
@@ -290,6 +297,9 @@ export class FirestoreOrderRepository {
       throw new Error('Firebase no esta configurado.')
     }
 
+    const order = this.state.orders.find((o) => o.id === orderId)
+    const targetDayKey = order?.dayKey || this.todayKey
+
     const previousState = this.state
     this.state = updateOrderPayment(this.state, orderId, input)
     this.emitState()
@@ -298,7 +308,7 @@ export class FirestoreOrderRepository {
     this.refreshStatus('Sincronizando pago...')
 
     try {
-      const orderRef = doc(firebase.db, 'restaurants', firebase.restaurantId, 'days', this.dayKey, 'orders', orderId)
+      const orderRef = doc(firebase.db, 'restaurants', firebase.restaurantId, 'days', targetDayKey, 'orders', orderId)
       await updateDoc(orderRef, {
         paymentStatus: 'paid',
         paymentMethod: input.paymentMethod,
@@ -325,6 +335,9 @@ export class FirestoreOrderRepository {
       throw new Error('Firebase no esta configurado.')
     }
 
+    const order = this.state.orders.find((o) => o.id === orderId)
+    const targetDayKey = order?.dayKey || this.todayKey
+
     const previousState = this.state
     this.state = updateOrderFields(this.state, orderId, input)
     this.emitState()
@@ -333,7 +346,7 @@ export class FirestoreOrderRepository {
     this.refreshStatus('Sincronizando modificacion de pedido...')
 
     try {
-      const orderRef = doc(firebase.db, 'restaurants', firebase.restaurantId, 'days', this.dayKey, 'orders', orderId)
+      const orderRef = doc(firebase.db, 'restaurants', firebase.restaurantId, 'days', targetDayKey, 'orders', orderId)
       await updateDoc(orderRef, {
         items: input.items,
         total: input.total,
@@ -390,27 +403,41 @@ export class FirestoreOrderRepository {
         }
       }
 
-      const ordersRef = collection(firebase.db, 'restaurants', firebase.restaurantId, 'days', this.dayKey, 'orders')
-      
-      let ordersQuery
-      if (role === 'pedidos' && currentUser) {
-        ordersQuery = query(ordersRef, where('createdBy', '==', currentUser.uid))
-      } else {
-        ordersQuery = query(ordersRef, orderBy('sequence', 'desc'))
+      const daysToQuery = 7
+      const dayKeys: string[] = []
+      const now = new Date()
+      for (let i = 0; i < daysToQuery; i++) {
+        const d = new Date(now)
+        d.setDate(now.getDate() - i)
+        const year = d.getFullYear()
+        const month = String(d.getMonth() + 1).padStart(2, '0')
+        const day = String(d.getDate()).padStart(2, '0')
+        dayKeys.push(`${year}-${month}-${day}`)
       }
 
-      this.unsubscribeSnapshot = onSnapshot(
-        ordersQuery,
-        { includeMetadataChanges: true },
-        (snapshot) => this.handleSnapshot(snapshot),
-        (error) => this.handleSnapshotError(error),
-      )
+      dayKeys.forEach((dayKey) => {
+        const ordersRef = collection(firebase.db, 'restaurants', firebase.restaurantId, 'days', dayKey, 'orders')
+        let ordersQuery
+        if (role === 'pedidos' && currentUser) {
+          ordersQuery = query(ordersRef, where('createdBy', '==', currentUser.uid))
+        } else {
+          ordersQuery = query(ordersRef, orderBy('sequence', 'desc'))
+        }
+
+        const unsubscribe = onSnapshot(
+          ordersQuery,
+          { includeMetadataChanges: true },
+          (snapshot) => this.handleDaySnapshot(dayKey, snapshot),
+          (error) => this.handleSnapshotError(error),
+        )
+        this.unsubscribes.push(unsubscribe)
+      })
     } catch (error) {
       this.handleSnapshotError(error as FirestoreError)
     }
   }
 
-  private handleSnapshot(snapshot: QuerySnapshot<DocumentData>) {
+  private handleDaySnapshot(dayKey: string, snapshot: QuerySnapshot<DocumentData>) {
     const latestServerField = snapshot.docs.reduce<unknown>((latestValue, documentSnapshot) => {
       const nextValue = getMostRecentServerField(documentSnapshot.data())
 
@@ -436,18 +463,44 @@ export class FirestoreOrderRepository {
       syncServerClock(latestServerField)
     }
 
-    const orders = snapshot.docs.map((documentSnapshot) => mapDocToOrder(documentSnapshot.id, documentSnapshot.data()))
-    orders.sort((left, right) => right.sequence - left.sequence)
-    const highestSequence = orders.reduce((max, order) => Math.max(max, order.sequence), 0)
+    const orders = snapshot.docs.map((documentSnapshot) => {
+      const order = mapDocToOrder(documentSnapshot.id, documentSnapshot.data())
+      order.dayKey = dayKey
+      return order
+    })
+
+    this.daysOrders.set(dayKey, orders)
+    this.lastSnapshotFromCache = snapshot.metadata.fromCache
+
+    this.mergeAndEmit(snapshot.metadata.hasPendingWrites)
+  }
+
+  private mergeAndEmit(hasPendingWrites = false) {
+    const allOrders: Order[] = []
+    this.daysOrders.forEach((orders) => {
+      allOrders.push(...orders)
+    })
+
+    allOrders.sort((left, right) => {
+      const leftTime = new Date(left.createdAt).getTime()
+      const rightTime = new Date(right.createdAt).getTime()
+      if (leftTime !== rightTime) {
+        return rightTime - leftTime
+      }
+      return right.sequence - left.sequence
+    })
+
+    const todayOrders = this.daysOrders.get(this.todayKey) || []
+    const highestTodaySequence = todayOrders.reduce((max, order) => Math.max(max, order.sequence), 0)
 
     this.state = {
-      orders,
-      sequence: highestSequence,
+      orders: allOrders,
+      sequence: highestTodaySequence,
       lastUpdatedAt: Date.now(),
     }
-    this.lastSnapshotFromCache = snapshot.metadata.fromCache
+
     this.emitState()
-    this.refreshStatus(snapshot.metadata.hasPendingWrites ? 'Guardando cambios...' : 'Tiempo real activo.')
+    this.refreshStatus(hasPendingWrites ? 'Guardando cambios...' : 'Tiempo real activo.')
   }
 
   private handleSnapshotError(error: FirestoreError) {

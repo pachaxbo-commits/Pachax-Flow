@@ -29,16 +29,12 @@ service cloud.firestore {
       return /databases/$(database)/documents/restaurants/$(restaurantId)/members/$(request.auth.uid);
     }
 
-    function hasMemberDoc(restaurantId) {
-      return isSignedIn() && exists(memberPath(restaurantId));
-    }
-
     function memberData(restaurantId) {
       return get(memberPath(restaurantId)).data;
     }
 
     function isActiveMember(restaurantId) {
-      return hasMemberDoc(restaurantId) && memberData(restaurantId).active == true;
+      return isSignedIn() && memberData(restaurantId).active == true;
     }
 
     function hasRole(restaurantId, roles) {
@@ -64,32 +60,7 @@ service cloud.firestore {
         && payment.cashAmount >= 0
         && payment.qrAmount >= 0
         && payment.cashReceived >= 0
-        && payment.change >= 0
-        && (
-          (paymentStatus == 'pending'
-            && payment.cashAmount == 0
-            && payment.qrAmount == 0
-            && payment.cashReceived == 0
-            && payment.change == 0)
-          || (paymentStatus == 'paid' && (
-            (payment.method == 'cash'
-              && payment.cashAmount == total
-              && payment.qrAmount == 0
-              && payment.cashReceived >= payment.cashAmount
-              && payment.change == payment.cashReceived - payment.cashAmount)
-            || (payment.method == 'qr'
-              && payment.cashAmount == 0
-              && payment.qrAmount == total
-              && payment.cashReceived == 0
-              && payment.change == 0)
-            || (payment.method == 'mixed'
-              && payment.cashAmount > 0
-              && payment.qrAmount > 0
-              && payment.cashAmount + payment.qrAmount == total
-              && payment.cashReceived >= payment.cashAmount
-              && payment.change == payment.cashReceived - payment.cashAmount)
-          ))
-        );
+        && payment.change >= 0;
     }
 
     function isValidOrderItems(items) {
@@ -157,10 +128,6 @@ service cloud.firestore {
         && (!('createdBy' in request.resource.data) || request.resource.data.createdBy is string)
         && isValidPayment(request.resource.data.payment, request.resource.data.total, request.resource.data.paymentStatus)
         && isValidFulfillment(request.resource.data)
-        && existsAfter(dayPath(restaurantId, dayId))
-        && getAfter(dayPath(restaurantId, dayId)).data.sequence == request.resource.data.sequence
-        && getAfter(dayPath(restaurantId, dayId)).data.dayKey == dayId
-        && getAfter(dayPath(restaurantId, dayId)).data.restaurantId == restaurantId
         && (
           (!exists(dayPath(restaurantId, dayId)) && request.resource.data.sequence == 1)
           || (exists(dayPath(restaurantId, dayId))
@@ -188,118 +155,50 @@ service cloud.firestore {
         && request.resource.data.sequence == resource.data.sequence + 1;
     }
 
-    function baseOrderFieldsUnchangedExceptStatus() {
-      return request.resource.data.id == resource.data.id
-        && request.resource.data.sequence == resource.data.sequence
-        && request.resource.data.displayNumber == resource.data.displayNumber
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.items == resource.data.items
-        && request.resource.data.total == resource.data.total
-        && request.resource.data.payment == resource.data.payment
-        && request.resource.data.paymentStatus == resource.data.paymentStatus
-        && request.resource.data.paymentMethod == resource.data.paymentMethod
-        && request.resource.data.get('expectedPaymentMethod', null) == resource.data.get('expectedPaymentMethod', null)
-        && request.resource.data.orderSource == resource.data.orderSource
-        && request.resource.data.fulfillmentType == resource.data.fulfillmentType
-        && request.resource.data.get('tableInfo', '') == resource.data.get('tableInfo', '')
-        && request.resource.data.get('customerName', '') == resource.data.get('customerName', '')
-        && request.resource.data.get('customerPhone', '') == resource.data.get('customerPhone', '')
-        && request.resource.data.get('deliveryAddress', '') == resource.data.get('deliveryAddress', '')
-        && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
-        && request.resource.data.get('paidAt', null) == resource.data.get('paidAt', null)
-        && request.resource.data.get('paidBy', null) == resource.data.get('paidBy', null);
-    }
 
-    function baseOrderFieldsUnchangedExceptPayment() {
-      return request.resource.data.id == resource.data.id
-        && request.resource.data.sequence == resource.data.sequence
-        && request.resource.data.displayNumber == resource.data.displayNumber
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.items == resource.data.items
-        && request.resource.data.total == resource.data.total
-        && request.resource.data.status == resource.data.status
-        && request.resource.data.orderSource == resource.data.orderSource
-        && request.resource.data.fulfillmentType == resource.data.fulfillmentType
-        && request.resource.data.get('tableInfo', '') == resource.data.get('tableInfo', '')
-        && request.resource.data.get('customerName', '') == resource.data.get('customerName', '')
-        && request.resource.data.get('customerPhone', '') == resource.data.get('customerPhone', '')
-        && request.resource.data.get('deliveryAddress', '') == resource.data.get('deliveryAddress', '')
-        && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
-        && request.resource.data.get('readyAt', null) == resource.data.get('readyAt', null)
-        && request.resource.data.get('deliveredAt', null) == resource.data.get('deliveredAt', null)
-        && request.resource.data.get('cancelledAt', null) == resource.data.get('cancelledAt', null);
-    }
 
-    function baseOrderFieldsUnchangedExceptCancel() {
-      return request.resource.data.id == resource.data.id
-        && request.resource.data.sequence == resource.data.sequence
-        && request.resource.data.displayNumber == resource.data.displayNumber
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.items == resource.data.items
-        && request.resource.data.total == resource.data.total
-        && request.resource.data.payment == resource.data.payment
-        && request.resource.data.paymentStatus == resource.data.paymentStatus
-        && request.resource.data.paymentMethod == resource.data.paymentMethod
-        && request.resource.data.orderSource == resource.data.orderSource
-        && request.resource.data.fulfillmentType == resource.data.fulfillmentType
-        && request.resource.data.get('tableInfo', '') == resource.data.get('tableInfo', '')
-        && request.resource.data.get('customerName', '') == resource.data.get('customerName', '')
-        && request.resource.data.get('customerPhone', '') == resource.data.get('customerPhone', '')
-        && request.resource.data.get('deliveryAddress', '') == resource.data.get('deliveryAddress', '')
-        && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
-        && request.resource.data.get('readyAt', null) == resource.data.get('readyAt', null)
-        && request.resource.data.get('deliveredAt', null) == resource.data.get('deliveredAt', null);
-    }
-
-    function canAdvanceToPreparing(restaurantId) {
-      return hasRole(restaurantId, ['admin', 'cocina'])
-        && resource.data.status == 'pending'
+    function isPreparingTransition() {
+      return resource.data.status == 'pending'
         && request.resource.data.status == 'preparing'
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'updatedAt']);
     }
 
-    function canAdvanceToReady(restaurantId) {
-      return hasRole(restaurantId, ['admin', 'cocina'])
-        && resource.data.status == 'preparing'
+    function isReadyTransition() {
+      return resource.data.status == 'preparing'
         && request.resource.data.status == 'ready'
         && request.resource.data.readyAt is timestamp
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readyAt', 'updatedAt']);
     }
 
-    function canAdvanceToReadyForPickup(restaurantId) {
-      return hasRole(restaurantId, ['admin', 'cocina'])
-        && resource.data.status == 'pending'
+    function isReadyForPickupTransition() {
+      return resource.data.status == 'pending'
         && request.resource.data.status == 'ready_for_pickup'
         && request.resource.data.readyAt is timestamp
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readyAt', 'updatedAt']);
     }
 
-    function canAdvanceToReadyForDispatch(restaurantId) {
-      return hasRole(restaurantId, ['admin', 'cocina'])
-        && resource.data.status == 'pending'
+    function isReadyForDispatchTransition() {
+      return resource.data.status == 'pending'
         && request.resource.data.status == 'ready_for_dispatch'
         && request.resource.data.readyAt is timestamp
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readyAt', 'updatedAt']);
     }
 
-    function canAdvanceToOutForDelivery(restaurantId) {
-      return hasRole(restaurantId, ['admin', 'caja'])
-        && resource.data.status == 'ready_for_dispatch'
+    function isOutForDeliveryTransition() {
+      return resource.data.status == 'ready_for_dispatch'
         && request.resource.data.status == 'out_for_delivery'
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'updatedAt']);
     }
 
-    function canAdvanceToDelivered(restaurantId) {
-      return hasRole(restaurantId, ['admin', 'caja', 'cocina'])
-        && resource.data.status in ['pending', 'preparing', 'ready', 'ready_for_pickup', 'ready_for_dispatch', 'out_for_delivery']
+    function isDeliveredTransition() {
+      return resource.data.status in ['pending', 'preparing', 'ready', 'ready_for_pickup', 'ready_for_dispatch', 'out_for_delivery']
         && request.resource.data.status == 'delivered'
         && request.resource.data.deliveredAt is timestamp
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'deliveredAt', 'updatedAt']);
     }
 
-    function canCancelOrder(restaurantId) {
-      return hasRole(restaurantId, ['admin', 'caja'])
-        && resource.data.status in ['pending', 'preparing', 'ready', 'ready_for_pickup', 'ready_for_dispatch', 'out_for_delivery']
+    function isCancelTransition() {
+      return resource.data.status in ['pending', 'preparing', 'ready', 'ready_for_pickup', 'ready_for_dispatch', 'out_for_delivery']
         && resource.data.paymentStatus == 'pending'
         && request.resource.data.status == 'cancelled'
         && request.resource.data.cancelledAt is timestamp
@@ -310,9 +209,8 @@ service cloud.firestore {
         );
     }
 
-    function canConfirmPayment(restaurantId) {
-      return hasRole(restaurantId, ['admin', 'caja'])
-        && resource.data.paymentStatus == 'pending'
+    function isPaymentTransition() {
+      return resource.data.paymentStatus == 'pending'
         && request.resource.data.paymentStatus == 'paid'
         && request.resource.data.paidAt is timestamp
         && request.resource.data.paidBy is string
@@ -402,26 +300,53 @@ service cloud.firestore {
               && request.resource.data.createdBy == request.auth.uid
             )
           );
-        allow update: if isValidDayId(dayId)
+        allow update: if resource != null
+          && isValidDayId(dayId)
           && (
             (
-              baseOrderFieldsUnchangedExceptStatus()
+              hasRole(restaurantId, ['admin', 'cocina'])
+              && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readyAt', 'deliveredAt', 'updatedAt'])
               && (
-                canAdvanceToPreparing(restaurantId)
-                || canAdvanceToReady(restaurantId)
-                || canAdvanceToReadyForPickup(restaurantId)
-                || canAdvanceToReadyForDispatch(restaurantId)
-                || canAdvanceToOutForDelivery(restaurantId)
-                || canAdvanceToDelivered(restaurantId)
+                isPreparingTransition()
+                || isReadyTransition()
+                || isReadyForPickupTransition()
+                || isReadyForDispatchTransition()
+                || isDeliveredTransition()
               )
             )
             || (
-              baseOrderFieldsUnchangedExceptPayment()
-              && canConfirmPayment(restaurantId)
-            )
-            || (
-              baseOrderFieldsUnchangedExceptCancel()
-              && canCancelOrder(restaurantId)
+              hasRole(restaurantId, ['admin', 'caja'])
+              && (
+                (
+                  request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readyAt', 'deliveredAt', 'updatedAt'])
+                  && (
+                    isOutForDeliveryTransition()
+                    || isDeliveredTransition()
+                  )
+                )
+                || (
+                  request.resource.data.diff(resource.data).changedKeys().hasOnly(['paymentStatus', 'paymentMethod', 'payment', 'paidAt', 'paidBy', 'updatedAt'])
+                  && isPaymentTransition()
+                )
+                || (
+                  request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'cancelledAt', 'cancelledBy', 'cancelledReason', 'updatedAt'])
+                  && isCancelTransition()
+                )
+                || (
+                  resource.data.status == 'pending'
+                  && request.resource.data.status == 'pending'
+                  && request.resource.data.paymentStatus == resource.data.paymentStatus
+                  && request.resource.data.paymentMethod == resource.data.paymentMethod
+                  && request.resource.data.payment == resource.data.payment
+                  && request.resource.data.id == resource.data.id
+                  && request.resource.data.sequence == resource.data.sequence
+                  && request.resource.data.displayNumber == resource.data.displayNumber
+                  && request.resource.data.createdAt == resource.data.createdAt
+                  && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
+                  && request.resource.data.get('orderSource', '') == resource.data.get('orderSource', '')
+                  && isValidFulfillment(request.resource.data)
+                )
+              )
             )
             || (
               hasRole(restaurantId, ['pedidos'])
@@ -438,18 +363,9 @@ service cloud.firestore {
               && (!('tableInfo' in request.resource.data) || request.resource.data.tableInfo == '')
               && request.resource.data.total is number
               && request.resource.data.total >= 0
-              && request.resource.data.paymentStatus in ['paid', 'pending']
-              && (request.resource.data.paymentMethod == null || request.resource.data.paymentMethod in ['cash', 'qr', 'mixed'])
-              && isValidPayment(request.resource.data.payment, request.resource.data.total, request.resource.data.paymentStatus)
-              && isValidFulfillment(request.resource.data)
-            )
-            || (
-              hasRole(restaurantId, ['admin', 'caja'])
-              && resource.data.status == 'pending'
-              && request.resource.data.id == resource.data.id
-              && request.resource.data.sequence == resource.data.sequence
-              && request.resource.data.displayNumber == resource.data.displayNumber
-              && request.resource.data.createdAt == resource.data.createdAt
+              && request.resource.data.paymentStatus == resource.data.paymentStatus
+              && request.resource.data.paymentMethod == resource.data.paymentMethod
+              && request.resource.data.payment == resource.data.payment
               && isValidFulfillment(request.resource.data)
             )
           );

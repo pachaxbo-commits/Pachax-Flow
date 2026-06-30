@@ -1,6 +1,7 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app'
 import {
   browserLocalPersistence,
+  connectAuthEmulator,
   getAuth,
   inMemoryPersistence,
   onAuthStateChanged,
@@ -11,7 +12,14 @@ import {
   type User,
   type Unsubscribe,
 } from 'firebase/auth'
-import { initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager, type Firestore } from 'firebase/firestore'
+import {
+  connectFirestoreEmulator,
+  initializeFirestore,
+  memoryLocalCache,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore,
+} from 'firebase/firestore'
 
 interface FirebaseWebConfig {
   apiKey: string
@@ -81,11 +89,15 @@ export async function getFirebaseContext(): Promise<FirebaseContext | null> {
       const app = initializeApp(firebaseConfig)
       let db: Firestore
 
+      const useEmulator = import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true'
+
       try {
         db = initializeFirestore(app, {
-          localCache: persistentLocalCache({
-            tabManager: persistentMultipleTabManager(),
-          }),
+          localCache: useEmulator
+            ? memoryLocalCache()
+            : persistentLocalCache({
+                tabManager: persistentMultipleTabManager(),
+              }),
         })
       } catch {
         db = initializeFirestore(app, {
@@ -94,6 +106,12 @@ export async function getFirebaseContext(): Promise<FirebaseContext | null> {
       }
 
       const auth = getAuth(app)
+
+      if (useEmulator) {
+        const host = window.location.hostname || 'localhost'
+        connectFirestoreEmulator(db, host, 8080)
+        connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true })
+      }
 
       try {
         await setPersistence(auth, browserLocalPersistence)

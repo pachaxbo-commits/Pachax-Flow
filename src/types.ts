@@ -145,6 +145,7 @@ export interface Order {
   customerPhone?: string
   deliveryAddress?: string
   createdBy?: string
+  dayKey?: string
 }
 
 export interface CreateOrderInput {

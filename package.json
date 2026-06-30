@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:emulator": "vite --mode emulator",
+    "emulators": "cmd /c \"set PATH=%PATH%;C:\\Program Files\\Android\\Android Studio\\jbr\\bin&& firebase emulators:start --import=.emulator-data --export-on-exit=.emulator-data\"",
     "build": "tsc -b && vite build",
+    "typecheck": "tsc -b",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -17,6 +20,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
