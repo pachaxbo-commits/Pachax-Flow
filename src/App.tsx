@@ -168,9 +168,9 @@ function MainShell({
       return false
     }
   }
-  const handleAdvanceStatus = async (orderId: string, nextStatus: OrderStatus) => {
+  const handleAdvanceStatus = async (orderId: string, nextStatus: OrderStatus, estimatedDelay?: number) => {
     try {
-      await setOrderStatus(orderId, nextStatus)
+      await setOrderStatus(orderId, nextStatus, estimatedDelay)
       setErrorMessage(null)
       return true
     } catch (error) {

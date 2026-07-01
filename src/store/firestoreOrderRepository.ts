@@ -215,7 +215,7 @@ export class FirestoreOrderRepository {
     }
   }
 
-  async setOrderStatus(orderId: string, status: OrderStatus) {
+  async setOrderStatus(orderId: string, status: OrderStatus, estimatedDelay?: number) {
     const firebase = await getFirebaseContext()
 
     if (!firebase) {
@@ -238,6 +238,7 @@ export class FirestoreOrderRepository {
       const orderRef = doc(firebase.db, 'restaurants', firebase.restaurantId, 'days', targetDayKey, 'orders', orderId)
       await updateDoc(orderRef, {
         status,
+        ...(estimatedDelay !== undefined ? { estimatedDelay } : {}),
         ...(readyStatuses.has(status) ? { readyAt: serverTimestamp() } : {}),
         ...(status === 'delivered' ? { deliveredAt: serverTimestamp() } : {}),
         updatedAt: serverTimestamp(),

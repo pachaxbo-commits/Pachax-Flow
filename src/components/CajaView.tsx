@@ -124,7 +124,7 @@ export function CajaView({
     customerPhone?: string
     deliveryAddress?: string
   }) => Promise<void>
-  onSetOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>
+  onSetOrderStatus: (orderId: string, status: OrderStatus, estimatedDelay?: number) => Promise<void>
 }) {
   // Main view mode: either POS catalog or orders list
   const [viewMode, setViewMode] = useState<'new_order' | 'orders_list'>('new_order')
@@ -174,6 +174,9 @@ export function CajaView({
   // Cancel Order Modal State
   const [cancellingOrder, setCancellingOrder] = useState<Order | null>(null)
   const [cancelReason, setCancelReason] = useState('')
+
+  // Confirm WhatsApp Order Delay State
+  const [confirmingDelayOrderId, setConfirmingDelayOrderId] = useState<string | null>(null)
 
   const activeCategory = visibleCategories.some((category) => category.id === selectedCategoryId)
     ? selectedCategoryId
@@ -676,6 +679,44 @@ export function CajaView({
                                 <FileEdit size={14} />
                                 Editar
                               </button>
+                            ) : null}
+
+                            {/* Confirm order with delay button */}
+                            {order.status === 'pending' ? (
+                              confirmingDelayOrderId === order.id ? (
+                                <div className="flex items-center gap-1 bg-[#f8fafc] p-1.5 rounded-xl border border-[#cbd5e1] flex-wrap">
+                                  <span className="text-[10px] font-black text-slate-500 px-1">Minutos:</span>
+                                  {[10, 15, 20, 30, 45, 60].map((mins) => (
+                                    <button
+                                      key={mins}
+                                      type="button"
+                                      className="bg-amber-500 hover:bg-amber-600 text-white px-2 py-1.5 rounded-lg text-[10px] font-black transition"
+                                      onClick={async () => {
+                                        await onSetOrderStatus(order.id, 'preparing', mins)
+                                        setConfirmingDelayOrderId(null)
+                                      }}
+                                    >
+                                      {mins}m
+                                    </button>
+                                  ))}
+                                  <button
+                                    type="button"
+                                    className="bg-red-500 hover:bg-red-600 text-white px-2 py-1.5 rounded-lg text-[10px] font-black transition"
+                                    onClick={() => setConfirmingDelayOrderId(null)}
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-xl text-xs font-black tracking-wide transition shadow-md shadow-amber-500/10 min-h-[40px]"
+                                  onClick={() => setConfirmingDelayOrderId(order.id)}
+                                >
+                                  <CheckCircle2 size={14} />
+                                  Aceptar Pedido
+                                </button>
+                              )
                             ) : null}
 
                             {/* State advancement buttons */}

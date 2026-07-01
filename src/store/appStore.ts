@@ -109,8 +109,8 @@ export function useOrdersStore() {
         tableInfo,
       })
     },
-    async setOrderStatus(orderId: string, status: OrderStatus) {
-      await getOrdersRepository().setOrderStatus(orderId, status)
+    async setOrderStatus(orderId: string, status: OrderStatus, estimatedDelay?: number) {
+      await getOrdersRepository().setOrderStatus(orderId, status, estimatedDelay)
     },
     async cancelOrder(orderId: string, cancelledBy: string, cancelledReason?: string) {
       await getOrdersRepository().cancelOrder(orderId, cancelledBy, cancelledReason)
