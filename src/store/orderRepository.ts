@@ -7,7 +7,7 @@ export interface OrdersRepository {
   getStatus(): RepositoryStatus
   subscribeStatus(listener: () => void): () => void
   placeOrder(order: CreateOrderInput): Promise<string>
-  setOrderStatus(orderId: string, status: OrderStatus): Promise<void>
+  setOrderStatus(orderId: string, status: OrderStatus, estimatedDelay?: number): Promise<void>
   cancelOrder(orderId: string, cancelledBy: string, cancelledReason?: string): Promise<void>
   confirmPayment(orderId: string, input: ConfirmPaymentInput): Promise<void>
   updateOrder(orderId: string, input: Omit<CreateOrderInput, 'createdBy'>): Promise<void>
@@ -327,7 +327,7 @@ export function createLocalOrdersRepository(): OrdersRepository {
       this.save(nextState)
       return nextState.orders[0]?.displayNumber ?? `#${String(currentState.sequence + 1).padStart(3, '0')}`
     },
-    async setOrderStatus(orderId, nextStatus) {
+    async setOrderStatus(orderId, nextStatus, _estimatedDelay) {
       this.save(
         updateOrderStatus(
           this.read(),

@@ -20,12 +20,13 @@ import {
   Shuffle,
   CheckCircle2,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatCurrency } from '../lib/format'
 import type { CartItem, CatalogCategory, PaymentMethod, PaymentSummary, Product, Order, OrderStatus, FulfillmentType } from '../types'
 import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
 import { StatusPill, SourceBadge, FulfillmentBadge, PaymentBadge } from './ui/StatusPill'
+import { playKitchenNotification } from '../lib/sound'
 
 function buildCartItem(product: Product): CartItem {
   return {
@@ -124,7 +125,7 @@ export function CajaView({
     customerPhone?: string
     deliveryAddress?: string
   }) => Promise<void>
-  onSetOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>
+  onSetOrderStatus: (orderId: string, status: OrderStatus, estimatedDelay?: number) => Promise<void>
 }) {
   // Main view mode: either POS catalog or orders list
   const [viewMode, setViewMode] = useState<'new_order' | 'orders_list'>('new_order')
@@ -174,6 +175,9 @@ export function CajaView({
   // Cancel Order Modal State
   const [cancellingOrder, setCancellingOrder] = useState<Order | null>(null)
   const [cancelReason, setCancelReason] = useState('')
+
+  // Confirm WhatsApp Order Delay State
+  const [confirmingDelayOrderId, setConfirmingDelayOrderId] = useState<string | null>(null)
 
   const activeCategory = visibleCategories.some((category) => category.id === selectedCategoryId)
     ? selectedCategoryId
@@ -272,6 +276,41 @@ export function CajaView({
       return order.paymentStatus === 'pending' && order.status !== 'cancelled'
     }).length
   }, [orders, userRole, userId])
+
+  const pendingWhatsappCount = useMemo(() => {
+    return orders.filter((order) => order.orderSource === 'whatsapp' && order.status === 'pending').length
+  }, [orders])
+
+  // Escuchador para sonar alerta si entra un nuevo pedido de WhatsApp
+  const lastPendingWhatsappSequence = useRef<number>(0)
+
+  useEffect(() => {
+    const pendingWhatsappOrders = orders.filter(
+      (order) => order.orderSource === 'whatsapp' && order.status === 'pending'
+    )
+    
+    const highestSequence = pendingWhatsappOrders.reduce(
+      (highest, order) => Math.max(highest, order.sequence), 
+      0
+    )
+
+    if (highestSequence > lastPendingWhatsappSequence.current) {
+      const prevSequence = lastPendingWhatsappSequence.current
+      lastPendingWhatsappSequence.current = highestSequence
+
+      // Alerta sonora solo si es un pedido genuino recién ingresado
+      if (highestSequence !== 0 && prevSequence !== 0) {
+        const latestOrder = pendingWhatsappOrders.find((o) => o.sequence === highestSequence)
+        if (latestOrder && new Date().getTime() - new Date(latestOrder.createdAt).getTime() < 15000) {
+          playKitchenNotification()
+        }
+      }
+    }
+
+    if (highestSequence === 0) {
+      lastPendingWhatsappSequence.current = 0
+    }
+  }, [orders])
 
   const filteredOrders = useMemo(() => {
     return orders
@@ -544,9 +583,9 @@ export function CajaView({
                     label: string
                   }> = [
                     { id: 'active', label: 'Activos' },
-                    { id: 'whatsapp', label: 'WhatsApp' },
+                    { id: 'whatsapp', label: `WhatsApp ${pendingWhatsappCount > 0 ? `(${pendingWhatsappCount})` : ''}` },
                     { id: 'local', label: 'Local' },
-                    { id: 'pending_payment', label: 'Cobros Pendientes' },
+                    { id: 'pending_payment', label: `Cobros Pendientes ${pendingPaymentCount > 0 ? `(${pendingPaymentCount})` : ''}` },
                     { id: 'ready_for_pickup', label: 'Listos Retiro' },
                     { id: 'ready_for_dispatch', label: 'Listos Despacho' },
                     { id: 'out_for_delivery', label: 'En Delivery' },
@@ -676,6 +715,44 @@ export function CajaView({
                                 <FileEdit size={14} />
                                 Editar
                               </button>
+                            ) : null}
+
+                            {/* Confirm order with delay button */}
+                            {order.status === 'pending' ? (
+                              confirmingDelayOrderId === order.id ? (
+                                <div className="flex items-center gap-1 bg-[#f8fafc] p-1.5 rounded-xl border border-[#cbd5e1] flex-wrap">
+                                  <span className="text-[10px] font-black text-slate-500 px-1">Minutos:</span>
+                                  {[10, 15, 20, 30, 45, 60].map((mins) => (
+                                    <button
+                                      key={mins}
+                                      type="button"
+                                      className="bg-amber-500 hover:bg-amber-600 text-white px-2 py-1.5 rounded-lg text-[10px] font-black transition"
+                                      onClick={async () => {
+                                        await onSetOrderStatus(order.id, 'preparing', mins)
+                                        setConfirmingDelayOrderId(null)
+                                      }}
+                                    >
+                                      {mins}m
+                                    </button>
+                                  ))}
+                                  <button
+                                    type="button"
+                                    className="bg-red-500 hover:bg-red-600 text-white px-2 py-1.5 rounded-lg text-[10px] font-black transition"
+                                    onClick={() => setConfirmingDelayOrderId(null)}
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-xl text-xs font-black tracking-wide transition shadow-md shadow-amber-500/10 min-h-[40px]"
+                                  onClick={() => setConfirmingDelayOrderId(order.id)}
+                                >
+                                  <CheckCircle2 size={14} />
+                                  Aceptar Pedido
+                                </button>
+                              )
                             ) : null}
 
                             {/* State advancement buttons */}
