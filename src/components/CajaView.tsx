@@ -20,12 +20,13 @@ import {
   Shuffle,
   CheckCircle2,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatCurrency } from '../lib/format'
 import type { CartItem, CatalogCategory, PaymentMethod, PaymentSummary, Product, Order, OrderStatus, FulfillmentType } from '../types'
 import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
 import { StatusPill, SourceBadge, FulfillmentBadge, PaymentBadge } from './ui/StatusPill'
+import { playKitchenNotification } from '../lib/sound'
 
 function buildCartItem(product: Product): CartItem {
   return {
@@ -275,6 +276,41 @@ export function CajaView({
       return order.paymentStatus === 'pending' && order.status !== 'cancelled'
     }).length
   }, [orders, userRole, userId])
+
+  const pendingWhatsappCount = useMemo(() => {
+    return orders.filter((order) => order.orderSource === 'whatsapp' && order.status === 'pending').length
+  }, [orders])
+
+  // Escuchador para sonar alerta si entra un nuevo pedido de WhatsApp
+  const lastPendingWhatsappSequence = useRef<number>(0)
+
+  useEffect(() => {
+    const pendingWhatsappOrders = orders.filter(
+      (order) => order.orderSource === 'whatsapp' && order.status === 'pending'
+    )
+    
+    const highestSequence = pendingWhatsappOrders.reduce(
+      (highest, order) => Math.max(highest, order.sequence), 
+      0
+    )
+
+    if (highestSequence > lastPendingWhatsappSequence.current) {
+      const prevSequence = lastPendingWhatsappSequence.current
+      lastPendingWhatsappSequence.current = highestSequence
+
+      // Alerta sonora solo si es un pedido genuino recién ingresado
+      if (highestSequence !== 0 && prevSequence !== 0) {
+        const latestOrder = pendingWhatsappOrders.find((o) => o.sequence === highestSequence)
+        if (latestOrder && new Date().getTime() - new Date(latestOrder.createdAt).getTime() < 15000) {
+          playKitchenNotification()
+        }
+      }
+    }
+
+    if (highestSequence === 0) {
+      lastPendingWhatsappSequence.current = 0
+    }
+  }, [orders])
 
   const filteredOrders = useMemo(() => {
     return orders
@@ -547,9 +583,9 @@ export function CajaView({
                     label: string
                   }> = [
                     { id: 'active', label: 'Activos' },
-                    { id: 'whatsapp', label: 'WhatsApp' },
+                    { id: 'whatsapp', label: `WhatsApp ${pendingWhatsappCount > 0 ? `(${pendingWhatsappCount})` : ''}` },
                     { id: 'local', label: 'Local' },
-                    { id: 'pending_payment', label: 'Cobros Pendientes' },
+                    { id: 'pending_payment', label: `Cobros Pendientes ${pendingPaymentCount > 0 ? `(${pendingPaymentCount})` : ''}` },
                     { id: 'ready_for_pickup', label: 'Listos Retiro' },
                     { id: 'ready_for_dispatch', label: 'Listos Despacho' },
                     { id: 'out_for_delivery', label: 'En Delivery' },
