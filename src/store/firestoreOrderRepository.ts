@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -18,7 +19,7 @@ import {
 import { getFirebaseContext } from '../lib/firebase'
 import { syncServerClock } from '../lib/serverClock'
 import type { AppState, ConfirmPaymentInput, CreateOrderInput, FulfillmentType, Order, OrderStatus, RepositoryStatus } from '../types'
-import { buildDefaultState, createRepositoryStatus, normalizeOrder, updateOrderStatus, updateOrderCancelStatus, updateOrderPayment, updateOrderFields } from './orderRepository'
+import { buildDefaultState, createRepositoryStatus, normalizeOrder, updateOrderStatus, updateOrderCancelStatus, updateOrderPayment, updateOrderFields, deleteOrderFromState } from './orderRepository'
 
 type Listener = () => void
 
@@ -369,6 +370,37 @@ export class FirestoreOrderRepository {
       this.state = previousState
       this.emitState()
       this.refreshStatus('No se pudo modificar el pedido en Firebase.')
+      throw error
+    }
+  }
+
+  async deleteOrder(orderId: string) {
+    const firebase = await getFirebaseContext()
+
+    if (!firebase) {
+      throw new Error('Firebase no esta configurado.')
+    }
+
+    const order = this.state.orders.find((o) => o.id === orderId)
+    const targetDayKey = order?.dayKey || this.todayKey
+
+    const previousState = this.state
+    this.state = deleteOrderFromState(this.state, orderId)
+    this.emitState()
+
+    this.pendingOperations += 1
+    this.refreshStatus('Sincronizando eliminación de pedido...')
+
+    try {
+      const orderRef = doc(firebase.db, 'restaurants', firebase.restaurantId, 'days', targetDayKey, 'orders', orderId)
+      await deleteDoc(orderRef)
+      this.pendingOperations = Math.max(0, this.pendingOperations - 1)
+      this.refreshStatus('Pedido eliminado en tiempo real.')
+    } catch (error) {
+      this.pendingOperations = Math.max(0, this.pendingOperations - 1)
+      this.state = previousState
+      this.emitState()
+      this.refreshStatus('No se pudo eliminar el pedido en Firebase.')
       throw error
     }
   }

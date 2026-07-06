@@ -158,5 +158,8 @@ export function useOrdersStore() {
         deliveryAddress: input.deliveryAddress,
       })
     },
+    async deleteOrder(orderId: string) {
+      await getOrdersRepository().deleteOrder(orderId)
+    },
   }
 }

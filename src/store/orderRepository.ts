@@ -11,6 +11,7 @@ export interface OrdersRepository {
   cancelOrder(orderId: string, cancelledBy: string, cancelledReason?: string): Promise<void>
   confirmPayment(orderId: string, input: ConfirmPaymentInput): Promise<void>
   updateOrder(orderId: string, input: Omit<CreateOrderInput, 'createdBy'>): Promise<void>
+  deleteOrder(orderId: string): Promise<void>
   destroy?(): void
 }
 
@@ -214,6 +215,14 @@ export function updateOrderFields(
   }
 }
 
+export function deleteOrderFromState(state: AppState, orderId: string): AppState {
+  return {
+    ...state,
+    lastUpdatedAt: Date.now(),
+    orders: state.orders.filter((order) => order.id !== orderId),
+  }
+}
+
 function readStoredState(): AppState {
   const raw = window.localStorage.getItem(STORAGE_KEY)
 
@@ -363,6 +372,14 @@ export function createLocalOrdersRepository(): OrdersRepository {
           this.read(),
           orderId,
           input,
+        ),
+      )
+    },
+    async deleteOrder(orderId) {
+      this.save(
+        deleteOrderFromState(
+          this.read(),
+          orderId,
         ),
       )
     },

@@ -12,12 +12,12 @@ import {
   Store,
   Utensils,
   ShoppingBag,
-  Truck,
   Coins,
   QrCode,
   Shuffle,
   CheckCircle2,
   Printer,
+  AlertCircle,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatCurrency } from '../lib/format'
@@ -78,6 +78,7 @@ export function CajaView({
   onSubmitOrder,
   onConfirmPayment,
   onCancelOrder,
+  onDeleteOrder,
   onUpdateOrder,
   onSetOrderStatus,
 }: {
@@ -110,6 +111,7 @@ export function CajaView({
     paidBy: string
   }) => Promise<void>
   onCancelOrder: (orderId: string, cancelledBy: string, reason?: string) => Promise<boolean>
+  onDeleteOrder: (orderId: string) => Promise<void>
   onUpdateOrder: (orderId: string, input: {
     cartItems: CartItem[]
     productsById: Map<string, Product>
@@ -319,16 +321,45 @@ export function CajaView({
     }
   }, [orders])
 
-  // Columnas para el Tablero Operativo
+  const todayKey = useMemo(() => {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }, [])
+
+  const getOrderDayKey = (createdAtStr: string) => {
+    const d = new Date(createdAtStr)
+    if (isNaN(d.getTime())) return ''
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  // Pedidos pendientes de días anteriores para alerta
+  const pastPendingOrders = useMemo(() => {
+    return orders.filter((order) => {
+      const orderDay = getOrderDayKey(order.createdAt)
+      const isPast = orderDay && orderDay < todayKey
+      const isPending = order.status !== 'delivered' && order.status !== 'cancelled'
+      return isPast && isPending
+    })
+  }, [orders, todayKey])
+
+  // Columnas para el Tablero Operativo (Solo hoy)
   const finalizadosOrders = useMemo(() => {
     return orders
+      .filter((order) => getOrderDayKey(order.createdAt) === todayKey)
       .filter((order) => order.status === 'delivered' || order.status === 'cancelled')
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 30) // Limitar a los últimos 30 pedidos finalizados del día para mejor rendimiento
-  }, [orders])
+  }, [orders, todayKey])
 
   const whatsappOrders = useMemo(() => {
     return orders
+      .filter((order) => getOrderDayKey(order.createdAt) === todayKey)
       .filter((order) => 
         (order.orderSource === 'whatsapp' || order.fulfillmentType === 'delivery') &&
         order.status !== 'delivered' &&
@@ -340,10 +371,11 @@ export function CajaView({
         return true
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  }, [orders, whatsappSubFilter])
+  }, [orders, todayKey, whatsappSubFilter])
 
   const localesOrders = useMemo(() => {
     return orders
+      .filter((order) => getOrderDayKey(order.createdAt) === todayKey)
       .filter((order) => 
         order.orderSource === 'local' &&
         order.fulfillmentType !== 'delivery' &&
@@ -351,7 +383,7 @@ export function CajaView({
         order.status !== 'cancelled'
       )
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  }, [orders])
+  }, [orders, todayKey])
 
   const updateItem = (lineId: string, updater: (item: CartItem) => CartItem) => {
     setCartItems((currentItems) => currentItems.map((item) => (item.lineId === lineId ? updater(item) : item)))
@@ -570,6 +602,33 @@ export function CajaView({
                 </div>
               </div>
 
+              {pastPendingOrders.length > 0 && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-pulse">
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="text-red-700 shrink-0" size={20} />
+                    <div>
+                      <div className="text-sm font-black text-red-950 uppercase tracking-wide">Pedidos pendientes de días anteriores</div>
+                      <div className="text-xs text-red-800 mt-0.5 font-bold">
+                        Hay {pastPendingOrders.length} pedido(s) sin entregar o anular de fechas pasadas. Debes gestionarlos o anularlos para limpiar el reporte diario.
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="px-4 py-2 bg-red-750 hover:bg-red-800 text-white text-xs font-black rounded-xl transition shadow-sm shrink-0"
+                    onClick={async () => {
+                      if (window.confirm(`¿Estás seguro de que deseas ANULAR automáticamente los ${pastPendingOrders.length} pedidos pendientes de días anteriores?`)) {
+                        for (const order of pastPendingOrders) {
+                          await onCancelOrder(order.id, 'Sistema', 'Anulación automática por cambio de día')
+                        }
+                      }
+                    }}
+                  >
+                    ANULAR TODOS ({pastPendingOrders.length})
+                  </button>
+                </div>
+              )}
+
               {/* Tablero Kanban de 3 Columnas */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
                 
@@ -632,14 +691,28 @@ export function CajaView({
 
                           <div className="border-t border-line pt-2 flex justify-between items-center">
                             <span className="text-xs font-black text-ink">Total: {formatCurrency(order.total)}</span>
-                            <button
-                              type="button"
-                              className="p-1.5 rounded-lg border border-line bg-panel text-muted hover:text-ink transition hover:bg-line"
-                              title="Imprimir ticket"
-                              onClick={() => setPrintedOrder(order)}
-                            >
-                              <Printer size={13} />
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                className="p-1.5 rounded-lg border border-line bg-panel text-muted hover:text-ink transition hover:bg-line"
+                                title="Imprimir ticket"
+                                onClick={() => setPrintedOrder(order)}
+                              >
+                                <Printer size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                className="p-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition"
+                                title="Eliminar permanentemente"
+                                onClick={async () => {
+                                  if (window.confirm('¿Estás seguro de que deseas ELIMINAR permanentemente este pedido del sistema? Esta acción no se puede deshacer.')) {
+                                    await onDeleteOrder(order.id)
+                                  }
+                                }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))
@@ -828,6 +901,19 @@ export function CajaView({
                               >
                                 <Ban size={12} />
                               </button>
+
+                              <button
+                                type="button"
+                                className="flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition"
+                                onClick={async () => {
+                                  if (window.confirm('¿Estás seguro de que deseas ELIMINAR permanentemente este pedido del sistema? Esta acción no se puede deshacer.')) {
+                                    await onDeleteOrder(order.id)
+                                  }
+                                }}
+                                title="Eliminar permanentemente"
+                              >
+                                <Trash2 size={12} />
+                              </button>
                             </div>
                           </div>
                         )
@@ -964,6 +1050,19 @@ export function CajaView({
                                 }}
                               >
                                 <Ban size={12} />
+                              </button>
+
+                              <button
+                                type="button"
+                                className="flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition"
+                                onClick={async () => {
+                                  if (window.confirm('¿Estás seguro de que deseas ELIMINAR permanentemente este pedido del sistema? Esta acción no se puede deshacer.')) {
+                                    await onDeleteOrder(order.id)
+                                  }
+                                }}
+                                title="Eliminar permanentemente"
+                              >
+                                <Trash2 size={12} />
                               </button>
                             </div>
                           </div>
@@ -1295,7 +1394,7 @@ export function CajaView({
                   {/* Modalidad de entrega */}
                   <div className="rounded-[1.2rem] border border-line bg-white p-3 shadow-sm">
                     <div className="text-[10px] font-black uppercase tracking-wider text-muted">Entrega</div>
-                    <div className="mt-2 grid grid-cols-3 gap-2">
+                    <div className="mt-2 grid grid-cols-2 gap-2">
                     {(() => {
                       const options: Array<{
                         id: FulfillmentType
@@ -1305,7 +1404,6 @@ export function CajaView({
                       }> = [
                         { id: 'table', label: 'Mesa', icon: Utensils, disabled: userRole === 'pedidos' || orderSource === 'whatsapp' },
                         { id: 'pickup', label: 'Retiro', icon: ShoppingBag },
-                        { id: 'delivery', label: 'Despacho', icon: Truck },
                       ]
                       return options.map((option) => {
                         const isActive = fulfillmentType === option.id

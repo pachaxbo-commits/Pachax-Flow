@@ -87,6 +87,7 @@ function MainShell({
     cancelOrder,
     confirmPayment,
     updateOrder,
+    deleteOrder,
   } = useOrdersStore()
   const {
     state: { categories, products },
@@ -311,6 +312,7 @@ function MainShell({
               userName={userName}
               onConfirmPayment={confirmPayment}
               onCancelOrder={handleCancelOrder}
+              onDeleteOrder={deleteOrder}
               onUpdateOrder={updateOrder}
               onSetOrderStatus={setOrderStatus}
             />
