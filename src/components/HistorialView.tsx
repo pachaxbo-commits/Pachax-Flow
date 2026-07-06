@@ -1,4 +1,4 @@
-import { Download, Filter, ReceiptText, ScrollText, TrendingUp } from 'lucide-react'
+import { Download, Filter, ScrollText, TrendingUp } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { downloadTextFile, formatCurrency, formatDateTime, formatPaymentMethod, formatTime } from '../lib/format'
 import type { Order, OrderStatus } from '../types'
@@ -449,102 +449,64 @@ export function HistorialView({
         </div>
       </div>
 
-      <Panel className="overflow-hidden border-white/85 bg-white/78">
-        <div className="flex items-center justify-between border-b border-line px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accentWash text-accent">
-              <ScrollText size={20} />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-ink">Registro del dia</h3>
-              <p className="text-sm text-muted">{filteredOrders.length} pedidos visibles</p>
-            </div>
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accentWash text-accent">
+            <ScrollText size={20} />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-ink">Registro del día</h3>
+            <p className="text-sm text-muted">{filteredOrders.length} pedidos visibles</p>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-line text-left">
-            <thead className="bg-canvas/70">
-              <tr className="text-xs uppercase tracking-[0.2em] text-muted">
-                <th className="px-6 py-4">Numero</th>
-                <th className="px-6 py-4">Horas</th>
-                <th className="px-6 py-4">Detalle</th>
-                <th className="px-6 py-4">Pago</th>
-                <th className="px-6 py-4">Estado</th>
-                <th className="px-6 py-4 text-right">Total</th>
-                <th className="px-6 py-4 text-right">Accion</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {filteredOrders.map((order) => (
-                <tr key={order.id} className="align-top transition hover:bg-accentWash/45">
-                  <td className="px-6 py-5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-panel text-accent shadow-insetSoft">
-                        <ReceiptText size={18} />
-                      </div>
-                      <div>
-                        <div className="text-sm font-semibold text-ink">{order.displayNumber}</div>
-                        <div className="mt-1 flex flex-col gap-1.5">
-                          <SourceBadge source={order.orderSource} />
-                          <FulfillmentBadge type={order.fulfillmentType} tableInfo={order.tableInfo} />
-                        </div>
-                      </div>
+        {filteredOrders.length === 0 ? (
+          <div className="rounded-[1.6rem] border border-dashed border-line p-10 text-center text-muted font-semibold bg-white/50">
+            No se encontraron pedidos para este filtro.
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredOrders.map((order) => {
+              return (
+                <div key={order.id} className="rounded-2xl border border-line bg-white p-4 shadow-sm hover:shadow transition-all space-y-3.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-black text-ink">{order.displayNumber}</span>
+                    <span className="text-xs text-muted font-medium">
+                      {formatTime(order.createdAt)}
+                    </span>
+                  </div>
+
+                  <div className="text-xs space-y-1.5">
+                    <div>
+                      <span className="font-bold text-muted">Cliente:</span>{' '}
+                      <span className="font-semibold text-ink">{order.customerName || 'Cliente General'}</span>
                     </div>
-                  </td>
-                  <td className="px-6 py-5 text-sm text-muted">
-                    <div>Creado: {formatTime(order.createdAt)}</div>
-                    <div>Listo: {order.readyAt ? formatTime(order.readyAt) : '-'}</div>
-                    <div>Entregado: {order.deliveredAt ? formatTime(order.deliveredAt) : '-'}</div>
-                    {order.cancelledAt ? <div className="text-danger font-semibold">Anulado: {formatTime(order.cancelledAt)}</div> : null}
-                  </td>
-                  <td className="px-6 py-5 text-sm text-ink">
-                    <div className="space-y-3">
-                      {order.items.map((item) => (
-                        <div key={item.id} className="rounded-[1.3rem] border border-line bg-panel/72 p-3">
-                          <div className="font-semibold">
-                            {item.quantity}x {item.name}
-                          </div>
-                          <div className="mt-1 text-muted">
-                            {[...item.modifiers.extras.map((extra) => extra.name), ...item.modifiers.options].join(' / ') || 'Sin modificadores'}
-                          </div>
-                          {item.modifiers.note ? <div className="mt-1 font-semibold text-accent">Obs: {item.modifiers.note}</div> : null}
-                        </div>
-                      ))}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                      <SourceBadge source={order.orderSource} />
+                      <FulfillmentBadge type={order.fulfillmentType} tableInfo={order.tableInfo} />
+                      <PaymentBadge paymentStatus={order.paymentStatus} paymentMethod={order.paymentMethod} />
+                      <StatusPill status={order.status} />
                     </div>
-                  </td>
-                  <td className="px-6 py-5 text-sm text-ink">
-                    <div className="space-y-2">
-                      <div className="font-bold">
-                        <PaymentBadge paymentStatus={order.paymentStatus} paymentMethod={order.paymentMethod} />
+                  </div>
+
+                  <div className="border-t border-dashed border-line pt-2.5 text-xs text-ink/90 space-y-1 max-h-[120px] overflow-y-auto pr-1">
+                    {order.items.map((item) => (
+                      <div key={item.id} className="flex justify-between">
+                        <span>{item.quantity}x {item.name}</span>
+                        <span className="text-muted font-semibold">{formatCurrency(item.lineTotal)}</span>
                       </div>
-                      {order.paymentStatus === 'paid' && (
-                        <div className="mt-2 text-xs space-y-1">
-                          {order.payment?.cashAmount > 0 ? <div className="text-muted">Efectivo: {formatCurrency(order.payment.cashAmount)}</div> : null}
-                          {order.payment?.qrAmount > 0 ? <div className="text-muted">QR: {formatCurrency(order.payment.qrAmount)}</div> : null}
-                          {order.payment?.cashReceived > 0 ? <div className="text-muted">Recibido: {formatCurrency(order.payment.cashReceived)}</div> : null}
-                          {order.payment?.change > 0 ? <div className="font-semibold text-accent">Cambio: {formatCurrency(order.payment.change)}</div> : null}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-5">
-                    <StatusPill status={order.status} />
-                    {order.status === 'cancelled' ? (
-                      <div className="mt-1 text-xs text-danger/80 font-medium">
-                        Por: {order.cancelledBy || 'Usuario'}
-                        {order.cancelledReason ? ` - "${order.cancelledReason}"` : ''}
-                      </div>
-                    ) : null}
-                  </td>
-                  <td className="px-6 py-5 text-right text-sm font-semibold text-ink">{formatCurrency(order.total)}</td>
-                  <td className="px-6 py-5 text-right">
-                    <div className="flex flex-col items-end gap-2">
+                    ))}
+                  </div>
+
+                  <div className="border-t border-line pt-2.5 flex justify-between items-center">
+                    <span className="text-xs font-black text-ink">Total: {formatCurrency(order.total)}</span>
+                    <div className="flex gap-2">
                       {order.status !== 'delivered' && order.status !== 'cancelled' ? (
                         <>
                           <Button
                             size="sm"
                             tone="success"
+                            className="px-2 py-1 h-7 text-[10px] font-black rounded-lg"
                             disabled={busyOrderId === order.id}
                             onClick={async () => {
                               setBusyOrderId(order.id)
@@ -552,7 +514,7 @@ export function HistorialView({
                               setBusyOrderId(null)
                             }}
                           >
-                            Marcar entregado
+                            Entregar
                           </Button>
 
                           {(userRole === 'admin' || userRole === 'caja' || userRole === 'demo') ? (
@@ -560,35 +522,25 @@ export function HistorialView({
                               type="button"
                               disabled={busyOrderId === order.id}
                               onClick={() => handleCancelClick(order.id)}
-                              className="text-xs font-semibold text-danger hover:underline disabled:opacity-50 mt-1"
+                              className="text-[10px] font-black text-rose-600 hover:underline"
                             >
-                              Anular comanda
+                              Anular
                             </button>
                           ) : null}
                         </>
                       ) : (
-                        <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted">
                           {order.status === 'cancelled' ? 'Anulado' : 'Entregado'}
                         </span>
                       )}
                     </div>
-                  </td>
-                </tr>
-              ))}
-
-              {filteredOrders.length === 0 ? (
-                <tr>
-                  <td className="px-6 py-12 text-center" colSpan={7}>
-                    <div className="mx-auto max-w-md text-sm text-muted">
-                      No hay pedidos para este filtro. Cambia la vista o registra nuevos pedidos desde caja.
-                    </div>
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </section>
   )
 }

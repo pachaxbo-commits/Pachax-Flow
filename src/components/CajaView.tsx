@@ -19,6 +19,7 @@ import {
   QrCode,
   Shuffle,
   CheckCircle2,
+  Printer,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatCurrency } from '../lib/format'
@@ -129,10 +130,6 @@ export function CajaView({
 }) {
   // Main view mode: either POS catalog or orders list
   const [viewMode, setViewMode] = useState<'new_order' | 'orders_list'>('new_order')
-  const [orderFilter, setOrderFilter] = useState<
-    'active' | 'whatsapp' | 'local' | 'pending_payment' | 'ready_for_pickup' | 'ready_for_dispatch' | 'out_for_delivery' | 'delivered' | 'cancelled'
-  >('active')
-
   // Edit Order State
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
 
@@ -178,6 +175,20 @@ export function CajaView({
 
   // Confirm WhatsApp Order Delay State
   const [confirmingDelayOrderId, setConfirmingDelayOrderId] = useState<string | null>(null)
+
+  // Print ticket and sub-filter state
+  const [printedOrder, setPrintedOrder] = useState<Order | null>(null)
+  const [whatsappSubFilter, setWhatsappSubFilter] = useState<'all' | 'pending' | 'paid'>('all')
+
+  useEffect(() => {
+    if (printedOrder) {
+      const timer = setTimeout(() => {
+        window.print()
+        setPrintedOrder(null)
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [printedOrder])
 
   const activeCategory = visibleCategories.some((category) => category.id === selectedCategoryId)
     ? selectedCategoryId
@@ -230,11 +241,12 @@ export function CajaView({
             : false
 
   const isDeliveryInfoValid =
-    fulfillmentType === 'delivery'
-      ? customerName.trim() !== '' && customerPhone.trim() !== '' && deliveryAddress.trim() !== ''
+    customerName.trim() !== '' &&
+    (fulfillmentType === 'delivery'
+      ? customerPhone.trim() !== '' && deliveryAddress.trim() !== ''
       : orderSource === 'whatsapp'
-        ? customerName.trim() !== '' && customerPhone.trim() !== ''
-        : true
+        ? customerPhone.trim() !== ''
+        : true)
 
   const buildPaymentSummary = (): PaymentSummary => ({
     method: paymentMethod || 'cash',
@@ -277,10 +289,6 @@ export function CajaView({
     }).length
   }, [orders, userRole, userId])
 
-  const pendingWhatsappCount = useMemo(() => {
-    return orders.filter((order) => order.orderSource === 'whatsapp' && order.status === 'pending').length
-  }, [orders])
-
   // Escuchador para sonar alerta si entra un nuevo pedido de WhatsApp
   const lastPendingWhatsappSequence = useRef<number>(0)
 
@@ -312,40 +320,39 @@ export function CajaView({
     }
   }, [orders])
 
-  const filteredOrders = useMemo(() => {
+  // Columnas para el Tablero Operativo
+  const finalizadosOrders = useMemo(() => {
     return orders
-      .filter((order) => {
-        // Pedidos operator role can only see their own active orders
-        if (userRole === 'pedidos') {
-          if (order.createdBy !== userId) return false
-          if (order.status === 'cancelled') return false
-        }
+      .filter((order) => order.status === 'delivered' || order.status === 'cancelled')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 30) // Limitar a los últimos 30 pedidos finalizados del día para mejor rendimiento
+  }, [orders])
 
-        switch (orderFilter) {
-          case 'active':
-            return order.status !== 'delivered' && order.status !== 'cancelled'
-          case 'whatsapp':
-            return order.orderSource === 'whatsapp'
-          case 'local':
-            return order.orderSource === 'local'
-          case 'pending_payment':
-            return order.paymentStatus === 'pending' && order.status !== 'cancelled'
-          case 'ready_for_pickup':
-            return order.status === 'ready_for_pickup'
-          case 'ready_for_dispatch':
-            return order.status === 'ready_for_dispatch'
-          case 'out_for_delivery':
-            return order.status === 'out_for_delivery'
-          case 'delivered':
-            return order.status === 'delivered'
-          case 'cancelled':
-            return order.status === 'cancelled'
-          default:
-            return true
-        }
+  const whatsappOrders = useMemo(() => {
+    return orders
+      .filter((order) => 
+        (order.orderSource === 'whatsapp' || order.fulfillmentType === 'delivery') &&
+        order.status !== 'delivered' &&
+        order.status !== 'cancelled'
+      )
+      .filter((order) => {
+        if (whatsappSubFilter === 'pending') return order.paymentStatus === 'pending'
+        if (whatsappSubFilter === 'paid') return order.paymentStatus === 'paid'
+        return true
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  }, [orders, orderFilter, userRole, userId])
+  }, [orders, whatsappSubFilter])
+
+  const localesOrders = useMemo(() => {
+    return orders
+      .filter((order) => 
+        order.orderSource === 'local' &&
+        order.fulfillmentType !== 'delivery' &&
+        order.status !== 'delivered' &&
+        order.status !== 'cancelled'
+      )
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  }, [orders])
 
   const updateItem = (lineId: string, updater: (item: CartItem) => CartItem) => {
     setCartItems((currentItems) => currentItems.map((item) => (item.lineId === lineId ? updater(item) : item)))
@@ -446,7 +453,7 @@ export function CajaView({
             className="flex items-center gap-2 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-2 text-xs font-extrabold tracking-wider hover:bg-rose-100 transition shadow-sm animate-pulse"
             onClick={() => {
               setViewMode('orders_list')
-              setOrderFilter('pending_payment')
+              setWhatsappSubFilter('pending')
             }}
           >
             <DollarSign size={14} />
@@ -491,74 +498,52 @@ export function CajaView({
           {viewMode === 'new_order' ? (
             <>
               {/* POS Categories & Catalog */}
-              <div className="flex flex-wrap gap-2 2xl:gap-3">
+              <div className="flex flex-wrap gap-2 pb-2 overflow-x-auto no-scrollbar">
                 {visibleCategories.map((category) => {
                   const isActive = category.id === activeCategory
 
                   return (
                     <button
                       key={category.id}
-                      className={`group rounded-[1.2rem] border px-3 py-2 text-left transition duration-150 2xl:rounded-[1.6rem] 2xl:px-4 2xl:py-3 ${
+                      className={`px-4 py-2 rounded-full text-xs font-black tracking-wider transition shrink-0 shadow-sm ${
                         isActive
-                          ? 'border-accent/15 bg-ink text-white shadow-lg shadow-black/8'
-                          : 'border-white/80 bg-white/72 text-ink hover:-translate-y-0.5 hover:bg-white'
+                          ? 'bg-ink text-white'
+                          : 'bg-white border border-line text-ink hover:bg-panel'
                       }`}
                       onClick={() => setSelectedCategoryId(category.id)}
                     >
-                      <div className="flex items-center gap-2 2xl:gap-3">
-                        <div
-                          className={`rounded-xl px-2.5 py-2 text-[10px] font-bold tracking-[0.2em] 2xl:rounded-2xl 2xl:px-3 2xl:text-[11px] 2xl:tracking-[0.24em] ${
-                            isActive ? 'bg-white/10 text-white' : 'bg-accentWash text-accent'
-                          }`}
-                        >
-                          {category.emoji}
-                        </div>
-                        <div>
-                          <div className="text-sm font-semibold">{category.name}</div>
-                          <div className={`hidden text-xs 2xl:block ${isActive ? 'text-white/65' : 'text-muted'}`}>
-                            {category.subtitle || 'Categoria activa'}
-                          </div>
-                        </div>
-                      </div>
+                      <span className="mr-1">{category.emoji}</span>
+                      {category.name.toUpperCase()}
                     </button>
                   )
                 })}
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3 2xl:gap-4">
+              <div className="grid gap-3.5 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-3 2xl:grid-cols-4">
                 {visibleProducts.map((product) => (
                   <Panel
                     key={product.id}
-                    className="group overflow-hidden border-white/80 bg-white/78 transition duration-200 hover:-translate-y-1 hover:shadow-float"
+                    className="group overflow-hidden border-slate-800 bg-[#1e1e2d] text-white transition duration-200 hover:-translate-y-1 hover:shadow-float flex flex-col justify-between rounded-2xl min-h-[280px]"
                   >
                     <ProductVisual alt={product.name} badge={product.badge} image={product.image} />
 
-                    <div className="space-y-3 p-4 2xl:space-y-4 2xl:p-5">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <h3 className="text-lg font-semibold text-ink 2xl:text-xl">{product.name}</h3>
-                          <p className="mt-1 text-sm leading-5 text-muted 2xl:mt-2 2xl:leading-6">{product.description || 'Sin descripcion'}</p>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <div className="text-lg font-semibold text-ink">{formatCurrency(product.price)}</div>
-                        </div>
+                    <div className="p-3.5 flex-1 flex flex-col justify-between space-y-3">
+                      <div>
+                        <h3 className="text-sm font-bold text-white tracking-wide truncate">{product.name}</h3>
+                        <p className="mt-1 text-[11px] leading-relaxed text-slate-400 line-clamp-2 min-h-[32px]">{product.description || 'Sin descripción'}</p>
                       </div>
-
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="hidden flex-wrap gap-2 text-xs text-muted 2xl:flex">
-                          {product.extras?.length ? <span className="rounded-full bg-accentWash px-3 py-1">Extras</span> : null}
-                          {product.options?.length ? <span className="rounded-full bg-accentWash px-3 py-1">Opciones</span> : null}
-                        </div>
+                      
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <div className="text-sm font-black text-amber-500">{formatCurrency(product.price)}</div>
                         <Button
-                          className="min-w-[110px] 2xl:min-w-[124px]"
-                          size="sm"
+                          className="px-2.5 py-1.5 h-8 text-[10px] font-black rounded-lg bg-accent hover:bg-accent/95 text-white flex items-center gap-1 shrink-0"
                           onClick={() => {
                             const nextItem = buildCartItem(product)
                             setCartItems((currentItems) => [...currentItems, nextItem])
                             setExpandedLineId(nextItem.lineId)
                           }}
                         >
-                          <Plus size={16} />
+                          <Plus size={11} />
                           Agregar
                         </Button>
                       </div>
@@ -568,240 +553,424 @@ export function CajaView({
 
                 {visibleProducts.length === 0 ? (
                   <Panel className="col-span-full border-dashed border-lineStrong bg-white/55 p-8 text-center text-sm text-muted">
-                    No hay productos disponibles en esta categoria.
+                    No hay productos disponibles en esta categoría.
                   </Panel>
                 ) : null}
               </div>
             </>
           ) : (
             /* Orders Queue / List view */
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2 bg-white/40 p-2 rounded-2xl border border-line shadow-sm">
-                {(() => {
-                  const filterOptions: Array<{
-                    id: typeof orderFilter
-                    label: string
-                  }> = [
-                    { id: 'active', label: 'Activos' },
-                    { id: 'whatsapp', label: `WhatsApp ${pendingWhatsappCount > 0 ? `(${pendingWhatsappCount})` : ''}` },
-                    { id: 'local', label: 'Local' },
-                    { id: 'pending_payment', label: `Cobros Pendientes ${pendingPaymentCount > 0 ? `(${pendingPaymentCount})` : ''}` },
-                    { id: 'ready_for_pickup', label: 'Listos Retiro' },
-                    { id: 'ready_for_dispatch', label: 'Listos Despacho' },
-                    { id: 'out_for_delivery', label: 'En Delivery' },
-                    { id: 'delivered', label: 'Entregados' },
-                    { id: 'cancelled', label: 'Anulados' },
-                  ]
-                  return filterOptions.map((filter) => {
-                    const isActive = orderFilter === filter.id
-                    return (
-                      <button
-                        key={filter.id}
-                        type="button"
-                        className={`px-3 py-1.5 rounded-xl text-xs font-black tracking-wide transition ${
-                          isActive
-                            ? 'bg-ink text-white shadow-sm'
-                            : 'bg-white/70 border border-line text-ink hover:bg-panel'
-                        }`}
-                        onClick={() => setOrderFilter(filter.id)}
-                      >
-                        {filter.label}
-                      </button>
-                    )
-                  })
-                })()}
+            <div className="space-y-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-black text-ink">Sistema de Pedidos</h1>
+                  <p className="text-xs text-muted">Gestión de comandas y estado de entregas en tiempo real.</p>
+                </div>
               </div>
 
-              <div className="space-y-3.5">
-                {filteredOrders.length === 0 ? (
-                  <div className="rounded-[1.5rem] border border-dashed border-line p-10 text-center text-muted font-semibold bg-white/50">
-                    No se encontraron pedidos con este filtro.
+              {/* Tablero Kanban de 3 Columnas */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+                
+                {/* COLUMNA 1: PEDIDOS FINALIZADOS */}
+                <div className="space-y-4">
+                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 size={18} className="text-emerald-700" />
+                      <span className="font-black text-sm tracking-wide">Pedidos Finalizados</span>
+                    </div>
+                    <span className="bg-emerald-600 text-white rounded-full text-xs px-2.5 py-0.5 font-bold">
+                      {finalizadosOrders.length}
+                    </span>
                   </div>
-                ) : (
-                  filteredOrders.map((order) => {
-                    const isPaid = order.paymentStatus === 'paid'
 
-                    return (
-                      <div key={order.id} className="rounded-[1.6rem] border border-line bg-white p-5 shadow-card hover:shadow-lg transition-all duration-200 space-y-3.5">
-                        <div className="flex items-start justify-between flex-wrap gap-3">
-                          <div className="flex items-center flex-wrap gap-2">
-                            <span className="text-2xl font-black text-ink">{order.displayNumber}</span>
-                            <SourceBadge source={order.orderSource} />
-                            <StatusPill status={order.status} />
+                  <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+                    {finalizadosOrders.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-line p-8 text-center text-xs text-muted font-semibold bg-white/40">
+                        No hay pedidos finalizados hoy.
+                      </div>
+                    ) : (
+                      finalizadosOrders.map((order) => (
+                        <div key={order.id} className="rounded-2xl border border-line bg-white p-4 shadow-sm hover:shadow transition space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-black text-ink">{order.displayNumber}</span>
+                            <span className="text-[10px] text-muted font-semibold">
+                              {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
                           </div>
-                          <span className="text-xs font-semibold text-muted bg-panel px-2.5 py-1 rounded-lg">
-                            {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-
-                        {/* Customer & Fulfillment Info */}
-                        <div className="flex flex-wrap items-center gap-2">
-                          <FulfillmentBadge type={order.fulfillmentType} tableInfo={order.tableInfo} />
-                          <PaymentBadge paymentStatus={order.paymentStatus} paymentMethod={order.paymentMethod} />
-                        </div>
-
-                        {(order.customerName || order.customerPhone || order.deliveryAddress) ? (
-                          <div className="rounded-[1.2rem] border border-line bg-canvas/30 px-3.5 py-2.5 text-xs text-ink space-y-1.5">
-                            {order.customerName ? (
-                              <div>
-                                <span className="font-bold text-muted">Cliente: </span>
-                                <span className="font-semibold text-ink">{order.customerName}</span>
-                              </div>
-                            ) : null}
-                            {order.customerPhone ? (
-                              <div>
-                                <span className="font-bold text-muted">Teléfono: </span>
-                                <span className="font-semibold text-ink">{order.customerPhone}</span>
-                              </div>
-                            ) : null}
-                            {order.deliveryAddress ? (
-                              <div>
-                                <span className="font-bold text-muted">Dirección: </span>
-                                <span className="font-semibold text-ink">{order.deliveryAddress}</span>
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-
-                        {order.createdBy ? (
-                          <div className="text-[10px] text-muted font-medium uppercase tracking-wider">
-                            Creado por: <span className="font-bold">{order.createdBy.replace('mock-', '')}</span>
-                          </div>
-                        ) : null}
-
-                        {/* Order items summary */}
-                        <div className="border-t border-dashed border-line pt-3 text-xs text-ink space-y-1.5">
-                          {order.items.map((item) => (
-                            <div key={item.id} className="flex justify-between">
-                              <span>{item.quantity}x {item.name}</span>
-                              <span className="text-muted font-semibold">{formatCurrency(item.lineTotal)}</span>
+                          
+                          <div className="text-xs space-y-1">
+                            <div>
+                              <span className="font-bold text-muted">Cliente:</span>{' '}
+                              <span className="font-semibold text-ink">{order.customerName || 'Cliente en local'}</span>
                             </div>
-                          ))}
-                        </div>
-
-                        {/* Total, Payment status & Actions */}
-                        <div className="flex items-center justify-between flex-wrap gap-3 border-t border-line pt-3">
-                          <div>
-                            <span className="text-base font-black text-ink">Total: {formatCurrency(order.total)}</span>
+                            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                              <SourceBadge source={order.orderSource} />
+                              <FulfillmentBadge type={order.fulfillmentType} tableInfo={order.tableInfo} />
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                order.status === 'cancelled'
+                                  ? 'bg-rose-50 border border-rose-200 text-rose-800'
+                                  : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                              }`}>
+                                {order.status === 'cancelled' ? 'Anulado' : 'Entregado'}
+                              </span>
+                              <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                Pagado
+                              </span>
+                            </div>
                           </div>
 
-                          {/* Order Actions */}
-                          <div className="flex flex-wrap gap-2">
-                            {/* Quick payment button */}
-                            {userRole !== 'pedidos' && !isPaid && order.status !== 'cancelled' ? (
+                          <div className="border-t border-dashed border-line pt-2 text-[11px] text-ink/90 space-y-1">
+                            {order.items.map((item) => (
+                              <div key={item.id} className="flex justify-between">
+                                <span>{item.quantity}x {item.name}</span>
+                                <span>{formatCurrency(item.lineTotal)}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="border-t border-line pt-2 flex justify-between items-center">
+                            <span className="text-xs font-black text-ink">Total: {formatCurrency(order.total)}</span>
+                            <button
+                              type="button"
+                              className="p-1.5 rounded-lg border border-line bg-panel text-muted hover:text-ink transition hover:bg-line"
+                              title="Imprimir ticket"
+                              onClick={() => setPrintedOrder(order)}
+                            >
+                              <Printer size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* COLUMNA 2: PEDIDOS WHATSAPP / DELIVERY */}
+                <div className="space-y-4">
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <MessageSquareText size={18} className="text-amber-700" />
+                      <span className="font-black text-sm tracking-wide">WhatsApp / Delivery</span>
+                    </div>
+                    <span className="bg-amber-600 text-white rounded-full text-xs px-2.5 py-0.5 font-bold">
+                      {whatsappOrders.length}
+                    </span>
+                  </div>
+
+                  {/* Subfiltros de Pago para WhatsApp */}
+                  <div className="flex gap-1.5 bg-white/60 p-1 rounded-xl border border-line shadow-insetSoft">
+                    {[
+                      { id: 'all', label: `Todos (${whatsappOrders.length})` },
+                      { id: 'pending', label: 'Por Pagar' },
+                      { id: 'paid', label: 'Pagados' },
+                    ].map((tab) => {
+                      const isActive = whatsappSubFilter === tab.id
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          className={`flex-1 py-1.5 rounded-lg text-[10px] font-black tracking-wider transition ${
+                            isActive
+                              ? 'bg-ink text-white shadow-sm'
+                              : 'text-muted hover:text-ink'
+                          }`}
+                          onClick={() => setWhatsappSubFilter(tab.id as any)}
+                        >
+                          {tab.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="space-y-3 max-h-[64vh] overflow-y-auto pr-1">
+                    {whatsappOrders.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-line p-8 text-center text-xs text-muted font-semibold bg-white/40">
+                        Sin pedidos activos en esta sección.
+                      </div>
+                    ) : (
+                      whatsappOrders.map((order) => {
+                        const isPaid = order.paymentStatus === 'paid'
+                        return (
+                          <div key={order.id} className="rounded-2xl border border-line bg-white p-4 shadow-sm hover:shadow transition space-y-3 border-l-4 border-l-amber-500">
+                            <div className="flex justify-between items-center">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm font-black text-ink">{order.displayNumber}</span>
+                                <StatusPill status={order.status} />
+                              </div>
+                              <span className="text-[10px] text-muted font-semibold">
+                                {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+
+                            <div className="text-xs space-y-1.5">
+                              <div>
+                                <span className="font-bold text-muted">Cliente:</span>{' '}
+                                <span className="font-semibold text-ink">{order.customerName || 'Cliente WhatsApp'}</span>
+                              </div>
+                              {order.customerPhone ? (
+                                <div>
+                                  <span className="font-bold text-muted">Teléfono:</span>{' '}
+                                  <span className="font-semibold text-ink">{order.customerPhone}</span>
+                                </div>
+                              ) : null}
+                              {order.deliveryAddress ? (
+                                <div>
+                                  <span className="font-bold text-muted">Dirección:</span>{' '}
+                                  <span className="font-semibold text-ink">{order.deliveryAddress}</span>
+                                </div>
+                              ) : null}
+                              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                <SourceBadge source={order.orderSource} />
+                                <FulfillmentBadge type={order.fulfillmentType} tableInfo={order.tableInfo} />
+                                <PaymentBadge paymentStatus={order.paymentStatus} paymentMethod={order.paymentMethod} />
+                              </div>
+                            </div>
+
+                            <div className="border-t border-dashed border-line pt-2 text-[11px] text-ink/90 space-y-1">
+                              {order.items.map((item) => (
+                                <div key={item.id} className="flex justify-between">
+                                  <span>{item.quantity}x {item.name}</span>
+                                  <span className="text-muted font-semibold">{formatCurrency(item.lineTotal)}</span>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="border-t border-line pt-2 flex justify-between items-center">
+                              <span className="text-xs font-black text-ink">Total: {formatCurrency(order.total)}</span>
                               <button
                                 type="button"
-                                className="flex items-center gap-1.5 bg-[#10b981] hover:bg-[#0d9488] text-white px-3 py-2 rounded-xl text-xs font-black tracking-wide transition shadow-md shadow-emerald-500/10 min-h-[40px]"
-                                onClick={() => {
-                                  setPayingOrder(order)
-                                  setFastPayMethod('cash')
-                                  setFastCashReceived('')
-                                  setFastCashSplit('')
-                                }}
+                                className="p-1.5 rounded-lg border border-line bg-panel text-muted hover:text-ink transition hover:bg-line"
+                                title="Imprimir ticket"
+                                onClick={() => setPrintedOrder(order)}
                               >
-                                <Coins size={14} />
-                                Cobrar
+                                <Printer size={13} />
                               </button>
-                            ) : null}
+                            </div>
 
-                            {/* Edit order details (based on role restrictions) */}
-                            {(userRole !== 'pedidos' && order.status !== 'delivered' && order.status !== 'cancelled') ||
-                             (userRole === 'pedidos' && order.createdBy === userId && order.status === 'pending') ? (
-                              <button
-                                type="button"
-                                className="flex items-center gap-1.5 bg-[#6366f1] hover:bg-[#4f46e5] text-white px-3 py-2 rounded-xl text-xs font-black tracking-wide transition shadow-md shadow-indigo-500/10 min-h-[40px]"
-                                onClick={() => handleEditOrder(order)}
-                              >
-                                <FileEdit size={14} />
-                                Editar
-                              </button>
-                            ) : null}
-
-                            {/* Confirm order with delay button */}
-                            {order.status === 'pending' ? (
-                              confirmingDelayOrderId === order.id ? (
-                                <div className="flex items-center gap-1 bg-[#f8fafc] p-1.5 rounded-xl border border-[#cbd5e1] flex-wrap">
-                                  <span className="text-[10px] font-black text-slate-500 px-1">Minutos:</span>
-                                  {[10, 15, 20, 30, 45, 60].map((mins) => (
+                            {/* Acciones para WhatsApp */}
+                            <div className="flex flex-wrap gap-1.5 pt-1 border-t border-dashed border-line">
+                              {order.status === 'pending' ? (
+                                confirmingDelayOrderId === order.id ? (
+                                  <div className="flex items-center gap-1 bg-[#f8fafc] p-1.5 rounded-xl border border-[#cbd5e1] flex-wrap w-full">
+                                    <span className="text-[10px] font-black text-slate-500 px-1">Minutos:</span>
+                                    {[10, 15, 20, 30, 45, 60].map((mins) => (
+                                      <button
+                                        key={mins}
+                                        type="button"
+                                        className="bg-amber-500 hover:bg-amber-600 text-white px-1.5 py-1 rounded text-[9px] font-black transition"
+                                        onClick={async () => {
+                                          await onSetOrderStatus(order.id, 'preparing', mins)
+                                          setConfirmingDelayOrderId(null)
+                                          // Auto imprimir al confirmar
+                                          setPrintedOrder(order)
+                                        }}
+                                      >
+                                        {mins}m
+                                      </button>
+                                    ))}
                                     <button
-                                      key={mins}
                                       type="button"
-                                      className="bg-amber-500 hover:bg-amber-600 text-white px-2 py-1.5 rounded-lg text-[10px] font-black transition"
-                                      onClick={async () => {
-                                        await onSetOrderStatus(order.id, 'preparing', mins)
-                                        setConfirmingDelayOrderId(null)
-                                      }}
+                                      className="bg-red-500 hover:bg-red-600 text-white px-1.5 py-1 rounded text-[9px] font-black transition"
+                                      onClick={() => setConfirmingDelayOrderId(null)}
                                     >
-                                      {mins}m
+                                      X
                                     </button>
-                                  ))}
+                                  </div>
+                                ) : (
                                   <button
                                     type="button"
-                                    className="bg-red-500 hover:bg-red-600 text-white px-2 py-1.5 rounded-lg text-[10px] font-black transition"
-                                    onClick={() => setConfirmingDelayOrderId(null)}
+                                    className="flex-1 flex items-center justify-center gap-1 bg-amber-500 hover:bg-amber-600 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm"
+                                    onClick={() => setConfirmingDelayOrderId(order.id)}
                                   >
-                                    Cancelar
+                                    <CheckCircle2 size={12} />
+                                    Confirmar
                                   </button>
-                                </div>
-                              ) : (
+                                )
+                              ) : null}
+
+                              {!isPaid && (
                                 <button
                                   type="button"
-                                  className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-xl text-xs font-black tracking-wide transition shadow-md shadow-amber-500/10 min-h-[40px]"
-                                  onClick={() => setConfirmingDelayOrderId(order.id)}
-                                >
-                                  <CheckCircle2 size={14} />
-                                  Aceptar Pedido
-                                </button>
-                              )
-                            ) : null}
-
-                            {/* State advancement buttons */}
-                            {userRole !== 'pedidos' && order.status === 'ready_for_dispatch' ? (
-                              <button
-                                type="button"
-                                className="flex items-center gap-1.5 bg-[#ec4899] hover:bg-[#db2777] text-white px-3 py-2 rounded-xl text-xs font-black tracking-wide transition shadow-md shadow-pink-500/10 min-h-[40px]"
-                                onClick={() => onSetOrderStatus(order.id, 'out_for_delivery')}
-                              >
-                                <Truck size={14} />
-                                Despachar
-                              </button>
-                            ) : null}
-
-                            {userRole !== 'pedidos' && (order.status === 'ready_for_pickup' || order.status === 'out_for_delivery') ? (
-                              <button
-                                type="button"
-                                className="flex items-center gap-1.5 bg-[#2563eb] hover:bg-[#1d4ed8] text-white px-3 py-2 rounded-xl text-xs font-black tracking-wide transition shadow-md shadow-blue-500/10 min-h-[40px]"
-                                onClick={() => onSetOrderStatus(order.id, 'delivered')}
-                              >
-                                <CheckCircle2 size={14} />
-                                Entregar
-                              </button>
-                            ) : null}
-
-                             {/* Cancel order button with reason */}
-                             {userRole !== 'pedidos' && order.status !== 'cancelled' && order.status !== 'delivered' ? (
-                               <button
-                                 type="button"
-                                 className="flex items-center gap-1.5 bg-red-50 border border-red-200 hover:bg-red-100 text-red-800 px-3 py-2 rounded-xl text-xs font-black tracking-wide transition min-h-[40px]"
-                                 onClick={() => {
-                                   if (order.paymentStatus === 'paid') {
-                                     window.alert('Un pedido cobrado requiere devolución antes de poder anularse.')
-                                     return
-                                   }
-                                   setCancellingOrder(order)
-                                   setCancelReason('')
+                                  className="flex-1 flex items-center justify-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm"
+                                  onClick={() => {
+                                    setPayingOrder(order)
+                                    setFastPayMethod('cash')
+                                    setFastCashReceived('')
+                                    setFastCashSplit('')
                                   }}
-                               >
-                                 <Ban size={14} />
-                                 Anular
-                               </button>
-                             ) : null}
+                                >
+                                  <Coins size={12} />
+                                  Cobrar
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                className="flex items-center justify-center p-1.5 border border-line bg-panel text-muted hover:text-ink rounded-lg text-[10px] font-black transition"
+                                onClick={() => handleEditOrder(order)}
+                              >
+                                <FileEdit size={12} />
+                              </button>
+
+                              <button
+                                type="button"
+                                className="flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition"
+                                onClick={() => {
+                                  if (order.paymentStatus === 'paid') {
+                                    window.alert('Un pedido cobrado requiere devolución antes de poder anularse.')
+                                    return
+                                  }
+                                  setCancellingOrder(order)
+                                  setCancelReason('')
+                                }}
+                              >
+                                <Ban size={12} />
+                              </button>
+                            </div>
                           </div>
-                        </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* COLUMNA 3: PEDIDOS LOCALES ACTIVES */}
+                <div className="space-y-4">
+                  <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <Store size={18} className="text-blue-700" />
+                      <span className="font-black text-sm tracking-wide">Pedidos Locales (Caja)</span>
+                    </div>
+                    <span className="bg-blue-600 text-white rounded-full text-xs px-2.5 py-0.5 font-bold">
+                      {localesOrders.length}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+                    {localesOrders.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-line p-8 text-center text-xs text-muted font-semibold bg-white/40">
+                        Sin pedidos de caja activos hoy.
                       </div>
-                    )
-                  })
-                )}
+                    ) : (
+                      localesOrders.map((order) => {
+                        const isPaid = order.paymentStatus === 'paid'
+                        return (
+                          <div key={order.id} className="rounded-2xl border border-line bg-white p-4 shadow-sm hover:shadow transition space-y-3 border-l-4 border-l-blue-500">
+                            <div className="flex justify-between items-center">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm font-black text-ink">{order.displayNumber}</span>
+                                <StatusPill status={order.status} />
+                              </div>
+                              <span className="text-[10px] text-muted font-semibold">
+                                {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+
+                            <div className="text-xs space-y-1.5">
+                              <div>
+                                <span className="font-bold text-muted">Cliente:</span>{' '}
+                                <span className="font-semibold text-ink">{order.customerName || 'Cliente General'}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                <FulfillmentBadge type={order.fulfillmentType} tableInfo={order.tableInfo} />
+                                <PaymentBadge paymentStatus={order.paymentStatus} paymentMethod={order.paymentMethod} />
+                              </div>
+                            </div>
+
+                            <div className="border-t border-dashed border-line pt-2 text-[11px] text-ink/90 space-y-1">
+                              {order.items.map((item) => (
+                                <div key={item.id} className="flex justify-between">
+                                  <span>{item.quantity}x {item.name}</span>
+                                  <span className="text-muted font-semibold">{formatCurrency(item.lineTotal)}</span>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="border-t border-line pt-2 flex justify-between items-center">
+                              <span className="text-xs font-black text-ink">Total: {formatCurrency(order.total)}</span>
+                              <button
+                                type="button"
+                                className="p-1.5 rounded-lg border border-line bg-panel text-muted hover:text-ink transition hover:bg-line"
+                                title="Imprimir ticket"
+                                onClick={() => setPrintedOrder(order)}
+                              >
+                                <Printer size={13} />
+                              </button>
+                            </div>
+
+                            {/* Acciones para Pedido Local */}
+                            <div className="flex flex-wrap gap-1.5 pt-1 border-t border-dashed border-line">
+                              {order.status === 'pending' ? (
+                                <button
+                                  type="button"
+                                  className="flex-1 flex items-center justify-center gap-1 bg-amber-500 hover:bg-amber-600 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm"
+                                  onClick={async () => {
+                                    await onSetOrderStatus(order.id, 'preparing')
+                                    setPrintedOrder(order) // Auto imprimir al enviar a cocina
+                                  }}
+                                >
+                                  <CookingPot size={12} />
+                                  A Cocina
+                                </button>
+                              ) : null}
+
+                              {order.status === 'preparing' ? (
+                                <button
+                                  type="button"
+                                  className="flex-1 flex items-center justify-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm"
+                                  onClick={() => onSetOrderStatus(order.id, 'delivered')}
+                                >
+                                  <CheckCircle2 size={12} />
+                                  Entregar
+                                </button>
+                              ) : null}
+
+                              {!isPaid && (
+                                <button
+                                  type="button"
+                                  className="flex-1 flex items-center justify-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm"
+                                  onClick={() => {
+                                    setPayingOrder(order)
+                                    setFastPayMethod('cash')
+                                    setFastCashReceived('')
+                                    setFastCashSplit('')
+                                  }}
+                                >
+                                  <Coins size={12} />
+                                  Cobrar
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                className="flex items-center justify-center p-1.5 border border-line bg-panel text-muted hover:text-ink rounded-lg text-[10px] font-black transition"
+                                onClick={() => handleEditOrder(order)}
+                              >
+                                <FileEdit size={12} />
+                              </button>
+
+                              <button
+                                type="button"
+                                className="flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition"
+                                onClick={() => {
+                                  if (order.paymentStatus === 'paid') {
+                                    window.alert('Un pedido cobrado requiere devolución antes de poder anularse.')
+                                    return
+                                  }
+                                  setCancellingOrder(order)
+                                  setCancelReason('')
+                                }}
+                              >
+                                <Ban size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+
               </div>
             </div>
           )}
@@ -1198,25 +1367,25 @@ export function CajaView({
               </div>
 
               {/* Customer Contact metadata fields */}
-              {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') ? (
-                <div className="mb-3 rounded-[1.2rem] border border-line bg-white p-3 2xl:rounded-[1.4rem] space-y-2.5">
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Datos de Contacto</div>
-                  <div>
-                    <input
-                      className={`w-full rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
-                        (orderSource === 'whatsapp' || fulfillmentType === 'delivery') && customerName.trim() === ''
-                          ? 'border-red-300 focus:border-red-500'
-                          : 'border-line'
-                      }`}
-                      placeholder="Nombre del Cliente"
-                      value={customerName}
-                      onChange={(event) => setCustomerName(event.target.value)}
-                    />
-                    {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') && customerName.trim() === '' ? (
-                      <span className="text-[10px] text-red-500 font-semibold mt-0.5 block px-1">Nombre es obligatorio</span>
-                    ) : null}
-                  </div>
+              <div className="mb-3 rounded-[1.2rem] border border-line bg-white p-3 2xl:rounded-[1.4rem] space-y-2.5">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Datos de Contacto</div>
+                <div>
+                  <input
+                    className={`w-full rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
+                      customerName.trim() === ''
+                        ? 'border-red-300 focus:border-red-500'
+                        : 'border-line'
+                    }`}
+                    placeholder="Nombre del Cliente"
+                    value={customerName}
+                    onChange={(event) => setCustomerName(event.target.value)}
+                  />
+                  {customerName.trim() === '' ? (
+                    <span className="text-[10px] text-red-500 font-semibold mt-0.5 block px-1">Nombre es obligatorio</span>
+                  ) : null}
+                </div>
 
+                {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') ? (
                   <div>
                     <input
                       className={`w-full rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
@@ -1232,26 +1401,26 @@ export function CajaView({
                       <span className="text-[10px] text-red-500 font-semibold mt-0.5 block px-1">Teléfono es obligatorio</span>
                     ) : null}
                   </div>
+                ) : null}
 
-                  {fulfillmentType === 'delivery' ? (
-                    <div>
-                      <textarea
-                        className={`w-full min-h-[50px] rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
-                          fulfillmentType === 'delivery' && deliveryAddress.trim() === ''
-                            ? 'border-red-300 focus:border-red-500'
-                            : 'border-line'
-                        }`}
-                        placeholder="Dirección completa"
-                        value={deliveryAddress}
-                        onChange={(event) => setDeliveryAddress(event.target.value)}
-                      />
-                      {fulfillmentType === 'delivery' && deliveryAddress.trim() === '' ? (
-                        <span className="text-[10px] text-red-500 font-semibold mt-0.5 block px-1">Dirección es obligatoria</span>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
+                {fulfillmentType === 'delivery' ? (
+                  <div>
+                    <textarea
+                      className={`w-full min-h-[50px] rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
+                        fulfillmentType === 'delivery' && deliveryAddress.trim() === ''
+                          ? 'border-red-300 focus:border-red-500'
+                          : 'border-line'
+                      }`}
+                      placeholder="Dirección completa"
+                      value={deliveryAddress}
+                      onChange={(event) => setDeliveryAddress(event.target.value)}
+                    />
+                    {fulfillmentType === 'delivery' && deliveryAddress.trim() === '' ? (
+                      <span className="text-[10px] text-red-500 font-semibold mt-0.5 block px-1">Dirección es obligatoria</span>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
 
               {/* Payment status and method selector */}
               <div className="mb-4 rounded-[1.2rem] border border-line bg-white p-3 2xl:rounded-[1.4rem]">
@@ -1449,9 +1618,9 @@ export function CajaView({
                     orderSource,
                     fulfillmentType,
                     tableInfo: fulfillmentType === 'table' ? tableInfo.trim() : '',
-                    customerName: (orderSource === 'whatsapp' || fulfillmentType === 'delivery') ? customerName.trim() : '',
-                    customerPhone: (orderSource === 'whatsapp' || fulfillmentType === 'delivery') ? customerPhone.trim() : '',
-                    deliveryAddress: fulfillmentType === 'delivery' ? deliveryAddress.trim() : '',
+                    customerName: customerName.trim(),
+                    customerPhone: customerPhone.trim(),
+                    deliveryAddress: deliveryAddress.trim(),
                     createdBy: userId,
                   }
 
@@ -1468,6 +1637,37 @@ export function CajaView({
                   }
 
                   if (isSuccess) {
+                    // Generar recibo imprimible antes de limpiar el estado
+                    const completedOrderMock = {
+                      displayNumber: nextOrderNumber,
+                      createdAt: new Date().toISOString(),
+                      items: cartItems.map((item) => {
+                        const product = productsById.get(item.productId)
+                        const selectedExtras = item.modifiers.extras
+                        const extrasTotal = selectedExtras.reduce((sum, extra) => sum + extra.price, 0)
+                        return {
+                          id: item.lineId,
+                          name: product?.name || 'Producto',
+                          price: product?.price || 0,
+                          quantity: item.quantity,
+                          lineTotal: ((product?.price || 0) + extrasTotal) * item.quantity,
+                          modifiers: item.modifiers
+                        }
+                      }),
+                      total: cartTotal,
+                      payment: buildPaymentSummary(),
+                      paymentStatus,
+                      paymentMethod,
+                      orderSource,
+                      fulfillmentType,
+                      tableInfo: fulfillmentType === 'table' ? tableInfo.trim() : '',
+                      customerName: customerName.trim(),
+                      customerPhone: customerPhone.trim(),
+                      deliveryAddress: deliveryAddress.trim(),
+                      createdBy: userId,
+                    }
+                    setPrintedOrder(completedOrderMock as any)
+
                     setCartItems([])
                     setExpandedLineId(null)
                     setPaymentStatus('paid')
@@ -1674,6 +1874,142 @@ export function CajaView({
               >
                 Cancelar
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Estilos para impresión térmica y división de tickets */}
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #print-section, #print-section * {
+            visibility: visible;
+          }
+          #print-section {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 76mm;
+            padding: 0;
+            margin: 0;
+            background: white;
+            color: black;
+          }
+          .print-page {
+            page-break-after: always;
+            break-after: page;
+          }
+        }
+      `}</style>
+
+      {/* Recibo térmico dual (Cliente + Cocina) */}
+      {printedOrder ? (
+        <div id="print-section" className="hidden print:block text-black font-mono text-[10px] p-1 leading-normal bg-white w-[76mm]">
+          {/* Ticket de Cliente */}
+          <div className="print-page w-full flex flex-col items-center">
+            <div className="text-center font-bold text-base tracking-wider mb-0.5">BURGUER LAB</div>
+            <div className="text-center text-[8px] text-gray-500 mb-2">Comandero & WhatsApp Bot</div>
+            
+            <div className="border-t border-b border-black border-dashed py-1 w-full text-left space-y-0.5 text-[9px]">
+              <div><b>Ticket:</b> {printedOrder.displayNumber}</div>
+              <div><b>Fecha:</b> {new Date(printedOrder.createdAt).toLocaleString('es-ES')}</div>
+              <div><b>Cliente:</b> {printedOrder.customerName || 'Cliente General'}</div>
+              <div><b>Origen:</b> {printedOrder.orderSource === 'whatsapp' ? 'PEDIDO WHATSAPP' : 'PEDIDO LOCAL'}</div>
+              <div><b>Entrega:</b> {printedOrder.fulfillmentType === 'table' ? `Mesa: ${printedOrder.tableInfo}` : printedOrder.fulfillmentType === 'pickup' ? 'Retiro en Local' : 'Delivery'}</div>
+            </div>
+            
+            <div className="mt-2 w-full space-y-1.5 text-[9px]">
+              {printedOrder.items.map((item: any, idx: number) => (
+                 <div key={idx} className="w-full">
+                    <div className="flex justify-between font-bold">
+                       <span>{item.quantity}x {item.name}</span>
+                       <span>{formatCurrency(item.lineTotal || (item.price * item.quantity))}</span>
+                    </div>
+                    {item.modifiers.extras.length > 0 && (
+                      <div className="text-[8px] text-gray-600 ml-2">
+                         + Extras: {item.modifiers.extras.map((e: any) => e.name).join(', ')}
+                      </div>
+                    )}
+                    {item.modifiers.options.length > 0 && (
+                      <div className="text-[8px] text-gray-600 ml-2">
+                         + Opción: {item.modifiers.options.join(', ')}
+                      </div>
+                    )}
+                    {item.modifiers.note && (
+                      <div className="text-[8px] text-red-700 font-bold ml-2">
+                         Obs: {item.modifiers.note}
+                      </div>
+                    )}
+                 </div>
+              ))}
+            </div>
+            
+            <div className="border-t border-black border-dashed mt-2 pt-1 w-full text-right text-[9px] space-y-0.5">
+               <div className="flex justify-between">
+                  <span>Subtotal:</span>
+                  <span>{formatCurrency(printedOrder.total)}</span>
+               </div>
+               <div className="flex justify-between font-bold text-xs">
+                  <span>TOTAL:</span>
+                  <span>{formatCurrency(printedOrder.total)}</span>
+               </div>
+               <div className="flex justify-between">
+                  <span>Método:</span>
+                  <span>{printedOrder.payment?.method === 'qr' ? 'Pago QR' : printedOrder.payment?.method === 'mixed' ? 'Mixto' : 'Efectivo'}</span>
+               </div>
+               <div className="flex justify-between">
+                  <span>Estado:</span>
+                  <span>{printedOrder.paymentStatus === 'paid' ? 'PAGADO' : 'PENDIENTE'}</span>
+               </div>
+            </div>
+            
+            <div className="text-center text-[8px] mt-4 border-t border-black border-dotted pt-1">
+               ¡Muchas gracias por su preferencia!
+            </div>
+          </div>
+
+          {/* Ticket de Cocina */}
+          <div className="print-page w-full flex flex-col items-center mt-8">
+            <div className="text-center font-bold text-sm tracking-wider mb-0.5">COMANDA DE COCINA</div>
+            <div className="text-center font-bold text-base bg-black text-white px-2 py-0.5 rounded mb-2">
+              {printedOrder.displayNumber}
+            </div>
+            
+            <div className="border-t border-b border-black border-dashed py-1 w-full text-left space-y-0.5 text-[9px]">
+              <div><b>Fecha:</b> {new Date(printedOrder.createdAt).toLocaleString('es-ES')}</div>
+              <div><b>Cliente:</b> {printedOrder.customerName || 'Cliente General'}</div>
+              <div><b>Origen:</b> {printedOrder.orderSource === 'whatsapp' ? 'WHATSAPP' : 'LOCAL'}</div>
+              <div><b>Entrega:</b> {printedOrder.fulfillmentType === 'table' ? `Mesa: ${printedOrder.tableInfo}` : printedOrder.fulfillmentType === 'pickup' ? 'Retiro en Local' : 'Delivery'}</div>
+            </div>
+            
+            <div className="mt-2 w-full space-y-2 text-[10px]">
+              {printedOrder.items.map((item: any, idx: number) => (
+                 <div key={idx} className="w-full border-b border-black/10 pb-1">
+                    <div className="font-bold text-xs">{item.quantity}x {item.name}</div>
+                    {item.modifiers.extras.length > 0 && (
+                      <div className="text-[9px] text-gray-700 ml-2 font-medium">
+                         Extras: {item.modifiers.extras.map((e: any) => e.name).join(', ')}
+                      </div>
+                    )}
+                    {item.modifiers.options.length > 0 && (
+                      <div className="text-[9px] text-gray-700 ml-2 font-medium">
+                         Opción: {item.modifiers.options.join(', ')}
+                      </div>
+                    )}
+                    {item.modifiers.note && (
+                      <div className="text-[9px] text-red-600 font-bold ml-2 border border-red-200 bg-red-50 p-1 mt-0.5 rounded">
+                         OBS: {item.modifiers.note}
+                      </div>
+                    )}
+                 </div>
+              ))}
+            </div>
+            
+            <div className="text-center text-[8px] mt-4 border-t border-black border-dotted pt-1">
+               Burguer Lab Cocina
             </div>
           </div>
         </div>
