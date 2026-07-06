@@ -292,11 +292,15 @@ export class FirestoreCatalogRepository implements CatalogRepository {
       throw new Error('Firebase no esta configurado.')
     }
 
-    if (this.state.categories.length > 0 || this.state.products.length > 0) {
-      return false
-    }
-
     const batch = writeBatch(firebase.db)
+
+    this.state.categories.forEach((category) => {
+      batch.delete(doc(firebase.db, 'restaurants', firebase.restaurantId, 'catalog', 'current', 'categories', category.id))
+    })
+
+    this.state.products.forEach((product) => {
+      batch.delete(doc(firebase.db, 'restaurants', firebase.restaurantId, 'catalog', 'current', 'products', product.id))
+    })
 
     demoCategories.forEach((category) => {
       batch.set(doc(firebase.db, 'restaurants', firebase.restaurantId, 'catalog', 'current', 'categories', category.id), {
