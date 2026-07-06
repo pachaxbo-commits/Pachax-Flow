@@ -1,12 +1,10 @@
 import {
   ChevronDown,
-  ChevronUp,
   CookingPot,
   LoaderCircle,
   MessageSquareText,
   Minus,
   Plus,
-  Sparkles,
   Trash2,
   DollarSign,
   Ban,
@@ -130,6 +128,7 @@ export function CajaView({
 }) {
   // Main view mode: either POS catalog or orders list
   const [viewMode, setViewMode] = useState<'new_order' | 'orders_list'>('new_order')
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false)
   // Edit Order State
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
 
@@ -395,6 +394,7 @@ export function CajaView({
     }
     setViewMode('new_order')
     setActiveTab('cart')
+    setShowCheckoutModal(true)
   }
 
   const handleDiscardEdit = () => {
@@ -411,6 +411,7 @@ export function CajaView({
     setExpectedPaymentMethod(null)
     setCashReceivedInput('')
     setCashSplitInput('')
+    setShowCheckoutModal(false)
   }
 
   return (
@@ -491,10 +492,10 @@ export function CajaView({
         </button>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[1.6fr_0.98fr] 2xl:gap-5">
+      <div className="w-full space-y-5">
         
         {/* Main Panel Section */}
-        <section className={`min-w-0 space-y-5 ${activeTab === 'catalog' ? 'block' : 'hidden xl:block'}`}>
+        <section className="w-full space-y-5">
           {viewMode === 'new_order' ? (
             <>
               {/* POS Categories & Catalog */}
@@ -541,6 +542,7 @@ export function CajaView({
                             const nextItem = buildCartItem(product)
                             setCartItems((currentItems) => [...currentItems, nextItem])
                             setExpandedLineId(nextItem.lineId)
+                            setShowCheckoutModal(true)
                           }}
                         >
                           <Plus size={11} />
@@ -969,732 +971,741 @@ export function CajaView({
                       })
                     )}
                   </div>
-                </div>
-
               </div>
+            </div>
             </div>
           )}
         </section>
+      </div>
 
-        {/* Sidebar Checkout Cart Panel */}
-        <aside className={`min-w-0 xl:sticky xl:top-5 xl:self-start ${activeTab === 'cart' ? 'block' : 'hidden xl:block'}`}>
-          <Panel className="flex min-h-[76vh] flex-col overflow-hidden border-white/85 bg-[#fffdfb]">
-            <div className="border-b border-line px-4 pb-4 pt-4 2xl:px-5 2xl:pb-5 2xl:pt-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent">Pedido actual</p>
-                  <h2 className="mt-2 text-xl font-semibold text-ink 2xl:text-2xl">Carrito de caja</h2>
+      {/* Botón flotante para reabrir el carrito cuando hay productos y el modal está cerrado */}
+      {cartItems.length > 0 && !showCheckoutModal && (
+        <button
+          type="button"
+          className="fixed bottom-6 right-6 z-40 bg-accent hover:bg-accent/90 text-white font-black px-6 py-4 rounded-full shadow-2xl flex items-center gap-2 transition transform hover:scale-105 active:scale-95 border border-white/20"
+          onClick={() => setShowCheckoutModal(true)}
+        >
+          <ShoppingBag size={18} />
+          <span>VER CARRITO / COBRAR ({cartItems.reduce((sum, item) => sum + item.quantity, 0)})</span>
+        </button>
+      )}
+
+      {/* Modal emergente de checkout de doble columna (horizontal y vertical grande) */}
+      {showCheckoutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <Panel className="w-full max-w-5xl h-[85vh] bg-[#fffdfb] rounded-[2.2rem] shadow-float overflow-hidden flex flex-col border border-line">
+            
+            {/* Cabecera del Modal */}
+            <div className="border-b border-line px-5 py-4 flex items-center justify-between bg-white shrink-0">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-accent">CONFIRMAR PEDIDO</p>
+                <h2 className="mt-1 text-lg font-black text-ink flex items-center gap-2">
+                  <span>Carrito & Datos de Cobro</span>
+                  {editingOrderId ? <span className="text-[10px] bg-orange-100 text-orange-900 px-2 py-0.5 rounded-full font-black">EDITANDO PEDIDO</span> : null}
+                </h2>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl border border-line bg-accentWash px-3 py-1.5 text-right shadow-insetSoft flex items-center gap-2">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted">Siguiente Ticket:</span>
+                  <span className="text-sm font-black text-ink">{nextOrderNumber}</span>
                 </div>
-                <div className="rounded-[1rem] border border-line bg-accentWash px-3 py-2.5 text-right shadow-insetSoft 2xl:rounded-[1.2rem] 2xl:px-4 2xl:py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">Proximo</div>
-                  <div className="mt-1 text-xl font-semibold text-ink">{nextOrderNumber}</div>
-                </div>
+                
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-xl text-xs font-black bg-panel hover:bg-line transition text-ink"
+                  onClick={() => setShowCheckoutModal(false)}
+                >
+                  Seguir Agregando
+                </button>
               </div>
             </div>
 
-            {/* Editing order info indicator */}
-            {editingOrderId ? (
-              <div className="px-4 pt-3">
-                <div className="flex items-center justify-between rounded-2xl border border-orange-200 bg-orange-50/70 p-3 text-xs text-orange-900 font-semibold shadow-sm">
-                  <span>Editando Pedido Activo</span>
-                  <button
-                    type="button"
-                    className="rounded-lg bg-orange-100 hover:bg-orange-200 px-2 py-1 transition font-bold"
-                    onClick={handleDiscardEdit}
-                  >
-                    Descartar
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="border-b border-line px-4 py-4 2xl:px-5">
-              <div className="grid grid-cols-3 gap-2 2xl:gap-3">
-                <div className="rounded-[1rem] border border-line bg-panel/80 p-3 2xl:rounded-[1.3rem]">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Lineas</div>
-                  <div className="mt-1 text-xl font-semibold text-ink">{cartItems.length}</div>
-                </div>
-                <div className="rounded-[1rem] border border-line bg-panel/80 p-3 2xl:rounded-[1.3rem]">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Productos</div>
-                  <div className="mt-1 text-xl font-semibold text-ink">{totalUnits}</div>
-                </div>
-                <div className="rounded-[1rem] border border-line bg-panel/80 p-3 2xl:rounded-[1.3rem]">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Subtotal</div>
-                  <div className="mt-1 text-xl font-semibold text-ink">{formatCurrency(cartTotal)}</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4 2xl:space-y-4 2xl:px-5 2xl:py-5">
-              {cartItems.length === 0 ? (
-                <div className="rounded-[1.4rem] border border-dashed border-lineStrong bg-canvas/60 p-5 text-center 2xl:rounded-[1.8rem] 2xl:p-7">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-accent shadow-insetSoft">
-                    <CookingPot size={24} />
-                  </div>
-                  <h3 className="mt-4 text-lg font-semibold text-ink">Todavia no hay productos</h3>
-                  <p className="mt-2 text-sm leading-6 text-muted">
-                    Agrega productos para armar el pedido.
-                  </p>
-                </div>
-              ) : null}
-
-              {cartItems.map((item) => {
-                const product = productsById.get(item.productId)
-
-                if (!product) {
-                  return null
-                }
-
-                const selectedExtras = item.modifiers.extras
-                const selectedOptions = item.modifiers.options
-                const extrasTotal = selectedExtras.reduce((sum, extra) => sum + extra.price, 0)
-                const lineTotal = (product.price + extrasTotal) * item.quantity
-                const isExpanded = expandedLineId === item.lineId
-                const hasModifiers = selectedExtras.length > 0 || selectedOptions.length > 0 || Boolean(item.modifiers.note)
-
-                return (
-                  <article
-                    key={item.lineId}
-                    className={`rounded-[1.4rem] border bg-white p-3 transition duration-150 2xl:rounded-[1.8rem] 2xl:p-4 ${
-                      isExpanded ? 'border-accent/20 shadow-card' : 'border-line'
-                    }`}
-                  >
-                    <div className="flex items-start gap-4">
-                      {isImageUrl(product.image) ? (
-                        <img alt={product.name} className="h-20 w-20 rounded-[1.3rem] object-cover" src={product.image} />
-                      ) : (
-                        <div className="flex h-20 w-20 items-center justify-center rounded-[1.3rem] bg-accentWash text-4xl">{product.image}</div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <h3 className="text-base font-semibold text-ink">{product.name}</h3>
-                            <p className="mt-1 text-sm text-muted">{formatCurrency(product.price)}</p>
-                          </div>
-                          <button
-                            type="button"
-                            className="rounded-full p-2 text-muted transition hover:bg-accentWash hover:text-accent"
-                            onClick={() => removeItem(item.lineId)}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-
-                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex items-center gap-2 rounded-full border border-line bg-panel/80 p-1">
-                            <button
-                              type="button"
-                              className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition hover:bg-white hover:text-ink"
-                              onClick={() =>
-                                updateItem(item.lineId, (currentItem) => ({
-                                  ...currentItem,
-                                  quantity: Math.max(1, currentItem.quantity - 1),
-                                }))
-                              }
-                            >
-                              <Minus size={16} />
-                            </button>
-                            <div className="min-w-8 text-center text-sm font-semibold text-ink">{item.quantity}</div>
-                            <button
-                              type="button"
-                              className="flex h-9 w-9 items-center justify-center rounded-full bg-ink text-white transition hover:scale-[1.03]"
-                              onClick={() =>
-                                updateItem(item.lineId, (currentItem) => ({
-                                  ...currentItem,
-                                  quantity: currentItem.quantity + 1,
-                                }))
-                              }
-                            >
-                              <Plus size={16} />
-                            </button>
-                          </div>
-
-                          <div className="text-right">
-                            <div className="text-xs uppercase tracking-[0.14em] text-muted">Linea</div>
-                            <div className="text-lg font-semibold text-ink">{formatCurrency(lineTotal)}</div>
-                          </div>
-                        </div>
-
-                        {hasModifiers ? (
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {selectedExtras.map((extra) => (
-                              <span key={extra.id} className="rounded-full bg-accentWash px-3 py-1 text-xs font-semibold text-accent">
-                                {extra.name}
-                              </span>
-                            ))}
-                            {selectedOptions.map((option) => (
-                              <span key={option} className="rounded-full bg-canvas px-3 py-1 text-xs font-semibold text-ink">
-                                {option}
-                              </span>
-                            ))}
-                            {item.modifiers.note ? (
-                              <span className="rounded-full bg-warningSoft px-3 py-1 text-xs font-semibold text-warning">Nota cargada</span>
-                            ) : null}
-                          </div>
-                        ) : null}
-
-                        <button
-                          type="button"
-                          className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-accent 2xl:mt-4"
-                          onClick={() => setExpandedLineId((currentLineId) => (currentLineId === item.lineId ? null : item.lineId))}
-                        >
-                          <Sparkles size={15} />
-                          {isExpanded ? 'Ocultar detalles' : 'Personalizar'}
-                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                        </button>
+            {/* Dos columnas del modal */}
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden bg-canvas/30">
+              
+              {/* Columna Izquierda: Lista de items en el carrito */}
+              <div className="lg:col-span-5 border-r border-line flex flex-col h-full overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+                  {cartItems.length === 0 ? (
+                    <div className="rounded-[1.4rem] border border-dashed border-lineStrong bg-canvas/60 p-5 text-center">
+                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-accent shadow-insetSoft">
+                        <CookingPot size={24} />
                       </div>
+                      <h3 className="mt-4 text-sm font-bold text-ink">Todavia no hay productos</h3>
+                      <p className="mt-1 text-xs text-muted">
+                        Agrega productos para armar el pedido.
+                      </p>
                     </div>
+                  ) : null}
 
-                    {isExpanded ? (
-                      <div className="mt-4 space-y-4 border-t border-line pt-4">
-                        {product.extras?.length ? (
-                          <div>
-                            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted">Extras</p>
-                            <div className="flex flex-wrap gap-2">
-                              {product.extras.map((extra) => {
-                                const isSelected = selectedExtras.some((selectedExtra) => selectedExtra.id === extra.id)
+                  {cartItems.map((item) => {
+                    const product = productsById.get(item.productId)
 
-                                return (
-                                  <button
-                                    key={extra.id}
-                                    type="button"
-                                    className={`rounded-full px-3 py-2 text-sm transition ${
-                                      isSelected ? 'bg-ink text-white' : 'bg-accentWash text-ink hover:bg-accentSoft'
-                                    }`}
-                                    onClick={() =>
-                                      updateItem(item.lineId, (currentItem) => {
-                                        const alreadySelected = currentItem.modifiers.extras.some(
-                                          (selectedExtra) => selectedExtra.id === extra.id,
-                                        )
-
-                                        return {
-                                          ...currentItem,
-                                          modifiers: {
-                                            ...currentItem.modifiers,
-                                            extras: alreadySelected
-                                              ? currentItem.modifiers.extras.filter((selectedExtra) => selectedExtra.id !== extra.id)
-                                              : [...currentItem.modifiers.extras, extra],
-                                          },
-                                        }
-                                      })
-                                    }
-                                  >
-                                    {extra.name} +{formatCurrency(extra.price)}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {product.options?.length ? (
-                          <div>
-                            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted">Modificadores</p>
-                            <div className="flex flex-wrap gap-2">
-                              {product.options.map((option) => {
-                                const isSelected = selectedOptions.includes(option.label)
-
-                                return (
-                                  <button
-                                    key={option.id}
-                                    type="button"
-                                    className={`rounded-full px-3 py-2 text-sm transition ${
-                                      isSelected ? 'bg-accent text-white' : 'bg-canvas text-ink hover:bg-accentSoft'
-                                    }`}
-                                    onClick={() =>
-                                      updateItem(item.lineId, (currentItem) => ({
-                                        ...currentItem,
-                                        modifiers: {
-                                          ...currentItem.modifiers,
-                                          options: currentItem.modifiers.options.includes(option.label)
-                                            ? currentItem.modifiers.options.filter((currentOption) => currentOption !== option.label)
-                                            : [...currentItem.modifiers.options, option.label],
-                                        },
-                                      }))
-                                    }
-                                  >
-                                    {option.label}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        ) : null}
-
-                        <div>
-                          <label className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-                            <MessageSquareText size={14} />
-                            Observacion para cocina
-                          </label>
-                          <textarea
-                            className="min-h-20 w-full rounded-[1.4rem] border border-line bg-canvas/35 px-4 py-3 text-sm text-ink outline-none transition placeholder:text-muted focus:border-accent"
-                            placeholder="Ej. salsa aparte, pan bien tostado, sin sal..."
-                            value={item.modifiers.note}
-                            onChange={(event) =>
-                              updateItem(item.lineId, (currentItem) => ({
-                                ...currentItem,
-                                modifiers: {
-                                  ...currentItem.modifiers,
-                                  note: event.target.value,
-                                },
-                              }))
-                            }
-                          />
-                        </div>
-                      </div>
-                    ) : null}
-                  </article>
-                )
-              })}
-            </div>
-
-            <div className="border-t border-line bg-white/80 px-4 py-4 2xl:px-5 2xl:py-5">
-              <div className="mb-4 rounded-[1.2rem] border border-line bg-panel/90 p-4 2xl:rounded-[1.6rem]">
-                <div className="flex items-center justify-between text-sm text-muted">
-                  <span>Resumen</span>
-                  <span>{totalUnits} productos</span>
-                </div>
-                <div className="mt-2 flex items-end justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Subtotal</div>
-                    <div className="mt-1 text-2xl font-semibold text-ink 2xl:text-3xl">{formatCurrency(cartTotal)}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Ticket</div>
-                    <div className="mt-1 text-xl font-semibold text-ink">{nextOrderNumber}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Order source selector for admin/caja roles */}
-              {userRole !== 'pedidos' ? (
-                <div className="mb-3 rounded-[1.2rem] border border-line bg-white p-3 2xl:rounded-[1.4rem]">
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Origen</div>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    {[
-                      { id: 'local', label: 'Local', icon: Store },
-                      { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquareText },
-                    ].map((option) => {
-                      const isActive = orderSource === option.id
-                      const Icon = option.icon
-
-                      return (
-                        <button
-                          key={option.id}
-                          type="button"
-                          className={`rounded-[0.9rem] border py-2 text-sm font-semibold transition flex items-center justify-center gap-1.5 min-h-[44px] ${
-                            isActive
-                              ? option.id === 'local'
-                                ? 'border-[#3b82f6] bg-[#3b82f6] text-white shadow-sm'
-                                : 'border-[#10b981] bg-[#10b981] text-white shadow-sm'
-                              : 'border-line bg-panel/80 text-ink hover:bg-panel'
-                          }`}
-                          onClick={() => {
-                            setOrderSource(option.id as 'local' | 'whatsapp')
-                            if (option.id === 'local') {
-                              setFulfillmentType('table')
-                            } else {
-                              setFulfillmentType('pickup')
-                            }
-                          }}
-                        >
-                          <Icon size={16} />
-                          {option.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Delivery Modality Selection */}
-              <div className="mb-3 rounded-[1.2rem] border border-line bg-white p-3 2xl:rounded-[1.4rem]">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Entrega</div>
-                <div className="mt-2 grid grid-cols-3 gap-2">
-                {(() => {
-                  const options: Array<{
-                    id: FulfillmentType
-                    label: string
-                    icon: typeof Utensils
-                    disabled?: boolean
-                  }> = [
-                    { id: 'table', label: 'Mesa', icon: Utensils, disabled: userRole === 'pedidos' || orderSource === 'whatsapp' },
-                    { id: 'pickup', label: 'Retiro', icon: ShoppingBag },
-                    { id: 'delivery', label: 'Despacho', icon: Truck },
-                  ]
-                  return options.map((option) => {
-                    const isActive = fulfillmentType === option.id
-                    const Icon = option.icon
-
-                    if (option.disabled) return null
-
-                    let activeStyles = 'border-ink bg-ink text-white shadow-sm'
-                    if (option.id === 'table') {
-                      activeStyles = 'border-[#6366f1] bg-[#6366f1] text-white shadow-sm'
-                    } else if (option.id === 'pickup') {
-                      activeStyles = 'border-[#d97706] bg-[#d97706] text-white shadow-sm'
-                    } else if (option.id === 'delivery') {
-                      activeStyles = 'border-[#ec4899] bg-[#ec4899] text-white shadow-sm'
+                    if (!product) {
+                      return null
                     }
 
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        className={`rounded-[0.9rem] border py-2 text-xs font-semibold transition flex flex-col items-center justify-center gap-0.5 min-h-[44px] ${
-                          isActive ? activeStyles : 'border-line bg-panel/80 text-ink hover:bg-panel'
-                        }`}
-                        onClick={() => setFulfillmentType(option.id)}
-                      >
-                        <Icon size={14} />
-                        <span>{option.label}</span>
-                      </button>
-                    )
-                  })
-                })()}
-                </div>
-
-                {fulfillmentType === 'table' ? (
-                  <div className="mt-2">
-                    <input
-                      className="w-full rounded-[0.9rem] border border-line bg-canvas/35 px-3 py-2 text-sm text-ink outline-none transition focus:border-accent"
-                      placeholder="Mesa (ej: 4, Terraza 2)"
-                      value={tableInfo}
-                      onChange={(event) => setTableInfo(event.target.value)}
-                    />
-                  </div>
-                ) : null}
-              </div>
-
-              {/* Customer Contact metadata fields */}
-              <div className="mb-3 rounded-[1.2rem] border border-line bg-white p-3 2xl:rounded-[1.4rem] space-y-2.5">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Datos de Contacto</div>
-                <div>
-                  <input
-                    className={`w-full rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
-                      customerName.trim() === ''
-                        ? 'border-red-300 focus:border-red-500'
-                        : 'border-line'
-                    }`}
-                    placeholder="Nombre del Cliente"
-                    value={customerName}
-                    onChange={(event) => setCustomerName(event.target.value)}
-                  />
-                  {customerName.trim() === '' ? (
-                    <span className="text-[10px] text-red-500 font-semibold mt-0.5 block px-1">Nombre es obligatorio</span>
-                  ) : null}
-                </div>
-
-                {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') ? (
-                  <div>
-                    <input
-                      className={`w-full rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
-                        (orderSource === 'whatsapp' || fulfillmentType === 'delivery') && customerPhone.trim() === ''
-                          ? 'border-red-300 focus:border-red-500'
-                          : 'border-line'
-                      }`}
-                      placeholder="Teléfono"
-                      value={customerPhone}
-                      onChange={(event) => setCustomerPhone(event.target.value)}
-                    />
-                    {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') && customerPhone.trim() === '' ? (
-                      <span className="text-[10px] text-red-500 font-semibold mt-0.5 block px-1">Teléfono es obligatorio</span>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                {fulfillmentType === 'delivery' ? (
-                  <div>
-                    <textarea
-                      className={`w-full min-h-[50px] rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
-                        fulfillmentType === 'delivery' && deliveryAddress.trim() === ''
-                          ? 'border-red-300 focus:border-red-500'
-                          : 'border-line'
-                      }`}
-                      placeholder="Dirección completa"
-                      value={deliveryAddress}
-                      onChange={(event) => setDeliveryAddress(event.target.value)}
-                    />
-                    {fulfillmentType === 'delivery' && deliveryAddress.trim() === '' ? (
-                      <span className="text-[10px] text-red-500 font-semibold mt-0.5 block px-1">Dirección es obligatoria</span>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-
-              {/* Payment status and method selector */}
-              <div className="mb-4 rounded-[1.2rem] border border-line bg-white p-3 2xl:rounded-[1.4rem]">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Estado de Pago</div>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  {[
-                    { id: 'paid', label: 'Pagado' },
-                    { id: 'pending', label: 'Pendiente' },
-                  ].map((option) => {
-                    const isActive = paymentStatus === option.id
+                    const selectedExtras = item.modifiers.extras
+                    const selectedOptions = item.modifiers.options
+                    const extrasTotal = selectedExtras.reduce((sum, extra) => sum + extra.price, 0)
+                    const lineTotal = (product.price + extrasTotal) * item.quantity
+                    const isExpanded = expandedLineId === item.lineId
+                    const hasModifiers = selectedExtras.length > 0 || selectedOptions.length > 0 || Boolean(item.modifiers.note)
 
                     return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        className={`rounded-[0.9rem] border py-2 text-sm font-semibold transition min-h-[44px] ${
-                          isActive
-                            ? option.id === 'paid'
-                              ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm'
-                              : 'border-[#ef4444] bg-[#ef4444] text-white shadow-sm'
-                            : 'border-line bg-panel/80 text-ink hover:bg-panel'
+                      <article
+                        key={item.lineId}
+                        className={`rounded-[1.4rem] border bg-white p-3.5 transition duration-150 ${
+                          isExpanded ? 'border-accent/20 shadow-card' : 'border-line'
                         }`}
-                        onClick={() => {
-                          setPaymentStatus(option.id as 'paid' | 'pending')
-                          if (option.id === 'pending') {
-                            setPaymentMethod(null)
-                          } else {
-                            setPaymentMethod('cash')
-                          }
-                        }}
                       >
-                        {option.label}
-                      </button>
+                        <div className="flex items-start gap-4">
+                          {isImageUrl(product.image) ? (
+                            <img alt={product.name} className="h-16 w-16 rounded-[1.1rem] object-cover" src={product.image} />
+                          ) : (
+                            <div className="flex h-16 w-16 items-center justify-center rounded-[1.1rem] bg-accentWash text-3xl">{product.image}</div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <h3 className="text-sm font-bold text-ink truncate">{product.name}</h3>
+                                <p className="mt-0.5 text-xs text-muted">{formatCurrency(product.price)}</p>
+                              </div>
+                              <button
+                                type="button"
+                                className="rounded-full p-1.5 text-muted transition hover:bg-accentWash hover:text-accent shrink-0"
+                                onClick={() => removeItem(item.lineId)}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+
+                            <div className="mt-3 flex items-center justify-between border-t border-line pt-2.5">
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-panel text-ink transition hover:bg-line active:scale-95"
+                                  onClick={() =>
+                                    updateItem(item.lineId, (currentItem) => ({
+                                      ...currentItem,
+                                      quantity: Math.max(1, currentItem.quantity - 1),
+                                    }))
+                                  }
+                                >
+                                  <Minus size={12} />
+                                </button>
+                                <span className="w-6 text-center text-xs font-semibold text-ink">{item.quantity}</span>
+                                <button
+                                  type="button"
+                                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-panel text-ink transition hover:bg-line active:scale-95"
+                                  onClick={() =>
+                                    updateItem(item.lineId, (currentItem) => ({
+                                      ...currentItem,
+                                      quantity: currentItem.quantity + 1,
+                                    }))
+                                  }
+                                >
+                                  <Plus size={12} />
+                                </button>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-xs font-bold text-ink">{formatCurrency(lineTotal)}</span>
+                              </div>
+                            </div>
+
+                            {/* Botón de Modificadores */}
+                            <div className="mt-2.5 flex justify-between items-center border-t border-dashed border-line pt-2">
+                              <button
+                                type="button"
+                                className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold transition ${
+                                  isExpanded ? 'bg-accentWash text-accent' : 'bg-panel text-muted hover:text-ink'
+                                }`}
+                                onClick={() => setExpandedLineId(isExpanded ? null : item.lineId)}
+                              >
+                                <span>Modificadores</span>
+                                <ChevronDown size={12} className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                              </button>
+                              {hasModifiers && !isExpanded ? (
+                                <span className="text-[9px] text-accent font-black bg-accentWash px-2 py-0.5 rounded-md">Configurado</span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Panel de Modificadores expandido */}
+                        {isExpanded ? (
+                          <div className="mt-3 space-y-3.5 border-t border-line pt-3">
+                            {product.extras?.length ? (
+                              <div>
+                                <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-muted">Extras</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {product.extras.map((extra) => {
+                                    const isSelected = selectedExtras.some((se) => se.id === extra.id)
+
+                                    return (
+                                      <button
+                                        key={extra.id}
+                                        type="button"
+                                        className={`rounded-full px-2.5 py-1 text-xs transition font-semibold ${
+                                          isSelected ? 'bg-accent text-white shadow-sm' : 'bg-canvas text-ink hover:bg-accentSoft'
+                                        }`}
+                                        onClick={() =>
+                                          updateItem(item.lineId, (currentItem) => {
+                                            const alreadySelected = currentItem.modifiers.extras.some((se) => se.id === extra.id)
+                                            return {
+                                              ...currentItem,
+                                              modifiers: {
+                                                ...currentItem.modifiers,
+                                                extras: alreadySelected
+                                                  ? currentItem.modifiers.extras.filter((se) => se.id !== extra.id)
+                                                  : [...currentItem.modifiers.extras, extra],
+                                              },
+                                            }
+                                          })
+                                        }
+                                      >
+                                        {extra.name} +{formatCurrency(extra.price)}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {product.options?.length ? (
+                              <div>
+                                <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-muted">Modificadores</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {product.options.map((option) => {
+                                    const isSelected = selectedOptions.includes(option.label)
+
+                                    return (
+                                      <button
+                                        key={option.id}
+                                        type="button"
+                                        className={`rounded-full px-2.5 py-1 text-xs transition font-semibold ${
+                                          isSelected ? 'bg-accent text-white shadow-sm' : 'bg-canvas text-ink hover:bg-accentSoft'
+                                        }`}
+                                        onClick={() =>
+                                          updateItem(item.lineId, (currentItem) => ({
+                                            ...currentItem,
+                                            modifiers: {
+                                              ...currentItem.modifiers,
+                                              options: currentItem.modifiers.options.includes(option.label)
+                                                ? currentItem.modifiers.options.filter((currentOption) => currentOption !== option.label)
+                                                : [...currentItem.modifiers.options, option.label],
+                                            },
+                                          }))
+                                        }
+                                      >
+                                        {option.label}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            ) : null}
+
+                            <div>
+                              <label className="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-muted">
+                                <MessageSquareText size={12} />
+                                Observacion para cocina
+                              </label>
+                              <textarea
+                                className="min-h-16 w-full rounded-xl border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-accent"
+                                placeholder="Ej. salsa aparte, sin cebolla..."
+                                value={item.modifiers.note}
+                                onChange={(event) =>
+                                  updateItem(item.lineId, (currentItem) => ({
+                                    ...currentItem,
+                                    modifiers: {
+                                      ...currentItem.modifiers,
+                                      note: event.target.value,
+                                    },
+                                  }))
+                                }
+                              />
+                            </div>
+                          </div>
+                        ) : null}
+                      </article>
                     )
                   })}
                 </div>
 
-                {paymentStatus === 'paid' ? (
-                  <div className="mt-3 border-t border-dashed border-line pt-3">
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Método de Pago</div>
-                    <div className="mt-2 grid grid-cols-3 gap-2">
-                      {[
-                        { id: 'cash', label: 'Efectivo', icon: Coins },
-                        { id: 'qr', label: 'QR', icon: QrCode },
-                        { id: 'mixed', label: 'Mixto', icon: Shuffle },
-                      ].map((option) => {
-                        const isActive = paymentMethod === option.id
-                        const Icon = option.icon
-
-                        return (
-                          <button
-                            key={option.id}
-                            type="button"
-                            className={`rounded-[0.8rem] border py-1.5 text-xs font-semibold transition flex flex-col items-center justify-center gap-0.5 min-h-[44px] ${
-                              isActive ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm' : 'border-line bg-panel/80 text-ink hover:bg-panel'
-                            }`}
-                            onClick={() => setPaymentMethod(option.id as PaymentMethod)}
-                          >
-                            <Icon size={13} />
-                            <span>{option.label}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-
-                    {paymentMethod === 'cash' ? (
-                      <div className="mt-3 space-y-2">
-                        <label className="block">
-                          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted">Recibido</div>
-                          <input
-                            className={`w-full rounded-[0.8rem] border bg-canvas/35 px-3 py-2 text-sm text-ink outline-none transition focus:border-accent ${
-                              cashReceived < cartTotal ? 'border-red-300 focus:border-red-500' : 'border-line'
-                            }`}
-                            inputMode="decimal"
-                            placeholder="0"
-                            value={cashReceivedInput}
-                            onChange={(event) => setCashReceivedInput(event.target.value)}
-                          />
-                          {cashReceived < cartTotal ? (
-                            <span className="text-[10px] text-red-500 font-semibold mt-1 block px-1">
-                              Pago insuficiente (Mínimo: {formatCurrency(cartTotal)})
-                            </span>
-                          ) : null}
-                        </label>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted">Cambio</span>
-                          <span className="font-semibold text-ink">{formatCurrency(change)}</span>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {paymentMethod === 'mixed' ? (
-                      <div className="mt-3 space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          <label className="block">
-                            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted">Efectivo</div>
-                            <input
-                              className={`w-full rounded-[0.8rem] border bg-canvas/35 px-2 py-1.5 text-xs text-ink outline-none transition focus:border-accent ${
-                                cashAmount === 0 ? 'border-red-300 focus:border-red-500' : 'border-line'
-                              }`}
-                              inputMode="decimal"
-                              placeholder="0"
-                              value={cashSplitInput}
-                              onChange={(event) => setCashSplitInput(event.target.value)}
-                            />
-                          </label>
-                          <div className="block">
-                            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted">Monto QR</div>
-                            <div className="rounded-[0.8rem] border border-line bg-panel/80 px-2 py-1.5 text-xs font-semibold text-ink h-[34px] flex items-center">
-                              {formatCurrency(qrAmount)}
-                            </div>
-                          </div>
-                        </div>
-                        {cashAmount === 0 ? (
-                          <span className="text-[10px] text-red-500 font-semibold block px-1">Efectivo debe ser mayor a 0</span>
-                        ) : null}
-
-                        <label className="block mt-2">
-                          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted">Efectivo Recibido</div>
-                          <input
-                            className={`w-full rounded-[0.8rem] border bg-canvas/35 px-2 py-1.5 text-xs text-ink outline-none transition focus:border-accent ${
-                              cashReceived < cashAmount ? 'border-red-300 focus:border-red-500' : 'border-line'
-                            }`}
-                            inputMode="decimal"
-                            placeholder="0"
-                            value={cashReceivedInput}
-                            onChange={(event) => setCashReceivedInput(event.target.value)}
-                          />
-                          {cashReceived < cashAmount ? (
-                            <span className="text-[10px] text-red-500 font-semibold mt-1 block px-1">
-                              Efectivo insuficiente (Mínimo: {formatCurrency(cashAmount)})
-                            </span>
-                          ) : null}
-                        </label>
-                        <div className="flex items-center justify-between text-xs mt-1">
-                          <span className="text-muted">Cambio</span>
-                          <span className="font-semibold text-ink">{formatCurrency(change)}</span>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {paymentMethod === 'qr' ? (
-                      <div className="mt-3 rounded-[0.8rem] bg-panel/80 p-2.5 text-xs">
-                        <div className="text-muted">Monto por QR</div>
-                        <div className="mt-1 font-semibold text-ink">{formatCurrency(cartTotal)}</div>
-                      </div>
-                    ) : null}
+                {/* Subtotal del carrito */}
+                <div className="border-t border-line bg-panel/50 p-4 shrink-0 flex justify-between items-center">
+                  <div>
+                    <div className="text-[9px] font-black uppercase text-muted tracking-wider">Productos</div>
+                    <div className="text-xs font-black text-ink">{totalUnits} unidades</div>
                   </div>
-                ) : (
-                  /* Expected payment method selection for pending orders */
-                  <div className="mt-3 border-t border-dashed border-line pt-3">
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Método Esperado</div>
-                    <div className="mt-2 grid grid-cols-3 gap-2">
-                      {[
-                        { id: 'cash', label: 'Efectivo', icon: Coins },
-                        { id: 'qr', label: 'QR', icon: QrCode },
-                        { id: 'mixed', label: 'Mixto', icon: Shuffle },
-                      ].map((option) => {
-                        const isActive = expectedPaymentMethod === option.id
-                        const Icon = option.icon
-
-                        return (
-                          <button
-                            key={option.id}
-                            type="button"
-                            className={`rounded-[0.8rem] border py-1.5 text-xs font-semibold transition flex flex-col items-center justify-center gap-0.5 min-h-[44px] ${
-                              isActive ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm' : 'border-line bg-panel/80 text-ink hover:bg-panel'
-                            }`}
-                            onClick={() => setExpectedPaymentMethod(option.id as PaymentMethod)}
-                          >
-                            <Icon size={13} />
-                            <span>{option.label}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
+                  <div className="text-right">
+                    <div className="text-[9px] font-black uppercase text-muted tracking-wider">Total Carrito</div>
+                    <div className="text-lg font-black text-accent">{formatCurrency(cartTotal)}</div>
                   </div>
-                )}
+                </div>
               </div>
 
-              <Button
-                fullWidth
-                size="lg"
-                className="shadow-xl shadow-accent/20"
-                disabled={cartItems.length === 0 || isSubmitting || !isPaymentValid || !isDeliveryInfoValid}
-                onClick={async () => {
-                  setIsSubmitting(true)
-                  const payload = {
-                    cartItems,
-                    productsById,
-                    payment: buildPaymentSummary(),
-                    paymentStatus,
-                    paymentMethod,
-                    expectedPaymentMethod,
-                    orderSource,
-                    fulfillmentType,
-                    tableInfo: fulfillmentType === 'table' ? tableInfo.trim() : '',
-                    customerName: customerName.trim(),
-                    customerPhone: customerPhone.trim(),
-                    deliveryAddress: deliveryAddress.trim(),
-                    createdBy: userId,
-                  }
+              {/* Columna Derecha: Formulario de Checkout */}
+              <div className="lg:col-span-7 flex flex-col h-full overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                  
+                  {/* Origen de pedido */}
+                  {userRole !== 'pedidos' ? (
+                    <div className="rounded-[1.2rem] border border-line bg-white p-3 shadow-sm">
+                      <div className="text-[10px] font-black uppercase tracking-wider text-muted">Origen</div>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        {[
+                          { id: 'local', label: 'Local', icon: Store },
+                          { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquareText },
+                        ].map((option) => {
+                          const isActive = orderSource === option.id
+                          const Icon = option.icon
 
-                  let isSuccess = false
-                  if (editingOrderId) {
-                    try {
-                      await onUpdateOrder(editingOrderId, payload)
-                      isSuccess = true
-                    } catch (error) {
-                      console.error('Failed to update order:', error)
-                    }
-                  } else {
-                    isSuccess = await onSubmitOrder(payload)
-                  }
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              className={`rounded-[0.9rem] border py-2 text-xs font-black transition flex items-center justify-center gap-1.5 min-h-[40px] ${
+                                isActive
+                                  ? option.id === 'local'
+                                    ? 'border-[#3b82f6] bg-[#3b82f6] text-white shadow-sm'
+                                    : 'border-[#10b981] bg-[#10b981] text-white shadow-sm'
+                                  : 'border-line bg-panel/80 text-ink hover:bg-panel'
+                              }`}
+                              onClick={() => {
+                                setOrderSource(option.id as 'local' | 'whatsapp')
+                                if (option.id === 'local') {
+                                  setFulfillmentType('table')
+                                } else {
+                                  setFulfillmentType('pickup')
+                                }
+                              }}
+                            >
+                              <Icon size={14} />
+                              {option.label.toUpperCase()}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
 
-                  if (isSuccess) {
-                    // Generar recibo imprimible antes de limpiar el estado
-                    const completedOrderMock = {
-                      displayNumber: nextOrderNumber,
-                      createdAt: new Date().toISOString(),
-                      items: cartItems.map((item) => {
-                        const product = productsById.get(item.productId)
-                        const selectedExtras = item.modifiers.extras
-                        const extrasTotal = selectedExtras.reduce((sum, extra) => sum + extra.price, 0)
-                        return {
-                          id: item.lineId,
-                          name: product?.name || 'Producto',
-                          price: product?.price || 0,
-                          quantity: item.quantity,
-                          lineTotal: ((product?.price || 0) + extrasTotal) * item.quantity,
-                          modifiers: item.modifiers
+                  {/* Modalidad de entrega */}
+                  <div className="rounded-[1.2rem] border border-line bg-white p-3 shadow-sm">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-muted">Entrega</div>
+                    <div className="mt-2 grid grid-cols-3 gap-2">
+                    {(() => {
+                      const options: Array<{
+                        id: FulfillmentType
+                        label: string
+                        icon: typeof Utensils
+                        disabled?: boolean
+                      }> = [
+                        { id: 'table', label: 'Mesa', icon: Utensils, disabled: userRole === 'pedidos' || orderSource === 'whatsapp' },
+                        { id: 'pickup', label: 'Retiro', icon: ShoppingBag },
+                        { id: 'delivery', label: 'Despacho', icon: Truck },
+                      ]
+                      return options.map((option) => {
+                        const isActive = fulfillmentType === option.id
+                        const Icon = option.icon
+
+                        if (option.disabled) return null
+
+                        let activeStyles = 'border-ink bg-ink text-white shadow-sm'
+                        if (option.id === 'table') {
+                          activeStyles = 'border-[#6366f1] bg-[#6366f1] text-white shadow-sm'
+                        } else if (option.id === 'pickup') {
+                          activeStyles = 'border-[#d97706] bg-[#d97706] text-white shadow-sm'
+                        } else if (option.id === 'delivery') {
+                          activeStyles = 'border-[#ec4899] bg-[#ec4899] text-white shadow-sm'
                         }
-                      }),
-                      total: cartTotal,
-                      payment: buildPaymentSummary(),
-                      paymentStatus,
-                      paymentMethod,
-                      orderSource,
-                      fulfillmentType,
-                      tableInfo: fulfillmentType === 'table' ? tableInfo.trim() : '',
-                      customerName: customerName.trim(),
-                      customerPhone: customerPhone.trim(),
-                      deliveryAddress: deliveryAddress.trim(),
-                      createdBy: userId,
-                    }
-                    setPrintedOrder(completedOrderMock as any)
 
-                    setCartItems([])
-                    setExpandedLineId(null)
-                    setPaymentStatus('paid')
-                    setPaymentMethod('cash')
-                    setCashReceivedInput('')
-                    setCashSplitInput('')
-                    setFulfillmentType(userRole === 'pedidos' ? 'pickup' : 'table')
-                    setOrderSource(userRole === 'pedidos' ? 'whatsapp' : 'local')
-                    setTableInfo('')
-                    setCustomerName('')
-                    setCustomerPhone('')
-                    setDeliveryAddress('')
-                    setExpectedPaymentMethod(null)
-                    setEditingOrderId(null)
-                    setActiveTab('catalog')
-                  }
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            className={`rounded-[0.9rem] border py-2 text-xs font-black transition flex flex-col items-center justify-center gap-0.5 min-h-[44px] ${
+                              isActive ? activeStyles : 'border-line bg-panel/80 text-ink hover:bg-panel'
+                            }`}
+                            onClick={() => setFulfillmentType(option.id)}
+                          >
+                            <Icon size={14} />
+                            <span>{option.label.toUpperCase()}</span>
+                          </button>
+                        )
+                      })
+                    })()}
+                    </div>
 
-                  setIsSubmitting(false)
-                }}
-              >
-                {isSubmitting ? <LoaderCircle size={18} className="animate-spin" /> : <CookingPot size={18} />}
-                {isSubmitting ? 'Guardando...' : editingOrderId ? 'Guardar Cambios' : 'Enviar a cocina'}
-              </Button>
+                    {fulfillmentType === 'table' ? (
+                      <div className="mt-2">
+                        <input
+                          className="w-full rounded-[0.9rem] border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent"
+                          placeholder="Mesa (ej: 4, Terraza 2)"
+                          value={tableInfo}
+                          onChange={(event) => setTableInfo(event.target.value)}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Datos de Contacto */}
+                  <div className="rounded-[1.2rem] border border-line bg-white p-3 shadow-sm space-y-2.5">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-muted">Datos de Contacto</div>
+                    <div>
+                      <input
+                        className={`w-full rounded-[0.9rem] border bg-canvas/35 px-3 py-2.5 text-xs text-ink outline-none transition focus:border-accent ${
+                          customerName.trim() === ''
+                            ? 'border-red-300 focus:border-red-500'
+                            : 'border-line'
+                        }`}
+                        placeholder="Nombre del Cliente"
+                        value={customerName}
+                        onChange={(event) => setCustomerName(event.target.value)}
+                      />
+                      {customerName.trim() === '' ? (
+                        <span className="text-[9px] text-red-500 font-bold mt-0.5 block px-1">Nombre es obligatorio</span>
+                      ) : null}
+                    </div>
+
+                    {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') ? (
+                      <div>
+                        <input
+                          className={`w-full rounded-[0.9rem] border bg-canvas/35 px-3 py-2.5 text-xs text-ink outline-none transition focus:border-accent ${
+                            (orderSource === 'whatsapp' || fulfillmentType === 'delivery') && customerPhone.trim() === ''
+                              ? 'border-red-300 focus:border-red-500'
+                              : 'border-line'
+                          }`}
+                          placeholder="Teléfono"
+                          value={customerPhone}
+                          onChange={(event) => setCustomerPhone(event.target.value)}
+                        />
+                        {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') && customerPhone.trim() === '' ? (
+                          <span className="text-[9px] text-red-500 font-bold mt-0.5 block px-1">Teléfono es obligatorio</span>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {fulfillmentType === 'delivery' ? (
+                      <div>
+                        <textarea
+                          className={`w-full min-h-[48px] rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
+                            fulfillmentType === 'delivery' && deliveryAddress.trim() === ''
+                              ? 'border-red-300 focus:border-red-500'
+                              : 'border-line'
+                          }`}
+                          placeholder="Dirección completa de entrega"
+                          value={deliveryAddress}
+                          onChange={(event) => setDeliveryAddress(event.target.value)}
+                        />
+                        {fulfillmentType === 'delivery' && deliveryAddress.trim() === '' ? (
+                          <span className="text-[9px] text-red-500 font-bold mt-0.5 block px-1">Dirección es obligatoria</span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Estado de Pago */}
+                  <div className="rounded-[1.2rem] border border-line bg-white p-3 shadow-sm">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-muted">Estado de Pago</div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      {[
+                        { id: 'paid', label: 'Pagado' },
+                        { id: 'pending', label: 'Pendiente' },
+                      ].map((option) => {
+                        const isActive = paymentStatus === option.id
+
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            className={`rounded-[0.9rem] border py-2 text-xs font-black transition min-h-[40px] ${
+                              isActive
+                                ? option.id === 'paid'
+                                  ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm'
+                                  : 'border-[#ef4444] bg-[#ef4444] text-white shadow-sm'
+                                : 'border-line bg-panel/80 text-ink hover:bg-panel'
+                            }`}
+                            onClick={() => {
+                              setPaymentStatus(option.id as 'paid' | 'pending')
+                              if (option.id === 'pending') {
+                                setPaymentMethod(null)
+                              } else {
+                                setPaymentMethod('cash')
+                              }
+                            }}
+                          >
+                            {option.label.toUpperCase()}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {paymentStatus === 'paid' ? (
+                      <div className="mt-3 border-t border-dashed border-line pt-3">
+                        <div className="text-[10px] font-black uppercase tracking-wider text-muted">Método de Pago</div>
+                        <div className="mt-2 grid grid-cols-3 gap-2">
+                          {[
+                            { id: 'cash', label: 'Efectivo', icon: Coins },
+                            { id: 'qr', label: 'QR', icon: QrCode },
+                            { id: 'mixed', label: 'Mixto', icon: Shuffle },
+                          ].map((option) => {
+                            const isActive = paymentMethod === option.id
+                            const Icon = option.icon
+
+                            return (
+                              <button
+                                key={option.id}
+                                type="button"
+                                className={`rounded-[0.8rem] border py-1.5 text-xs font-black transition flex flex-col items-center justify-center gap-0.5 min-h-[44px] ${
+                                  isActive ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm' : 'border-line bg-panel/80 text-ink hover:bg-panel'
+                                }`}
+                                onClick={() => setPaymentMethod(option.id as PaymentMethod)}
+                              >
+                                <Icon size={13} />
+                                <span>{option.label.toUpperCase()}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        {paymentMethod === 'cash' ? (
+                          <div className="mt-3 space-y-2">
+                            <label className="block">
+                              <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-muted">Recibido</div>
+                              <input
+                                className={`w-full rounded-[0.8rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
+                                  cashReceived < cartTotal ? 'border-red-300 focus:border-red-500' : 'border-line'
+                                }`}
+                                inputMode="decimal"
+                                placeholder="0"
+                                value={cashReceivedInput}
+                                onChange={(event) => setCashReceivedInput(event.target.value)}
+                              />
+                              {cashReceived < cartTotal ? (
+                                <span className="text-[9px] text-red-500 font-bold mt-1 block px-1">
+                                  Pago insuficiente (Mínimo: {formatCurrency(cartTotal)})
+                                </span>
+                              ) : null}
+                            </label>
+                            <div className="flex items-center justify-between text-xs pt-1">
+                              <span className="text-muted font-semibold">Cambio</span>
+                              <span className="font-black text-ink">{formatCurrency(change)}</span>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {paymentMethod === 'mixed' ? (
+                          <div className="mt-3 space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <label className="block">
+                                <div className="mb-1 text-[9px] font-black uppercase tracking-wider text-muted">Efectivo</div>
+                                <input
+                                  className={`w-full rounded-[0.8rem] border bg-canvas/35 px-2.5 py-1.5 text-xs text-ink outline-none transition focus:border-accent ${
+                                    cashAmount === 0 ? 'border-red-300 focus:border-red-500' : 'border-line'
+                                  }`}
+                                  inputMode="decimal"
+                                  placeholder="0"
+                                  value={cashSplitInput}
+                                  onChange={(event) => setCashSplitInput(event.target.value)}
+                                />
+                              </label>
+                              <div className="block">
+                                <div className="mb-1 text-[9px] font-black uppercase tracking-wider text-muted">Monto QR</div>
+                                <div className="rounded-[0.8rem] border border-line bg-panel/80 px-2 py-1.5 text-xs font-bold text-ink h-[32px] flex items-center">
+                                  {formatCurrency(qrAmount)}
+                                </div>
+                              </div>
+                            </div>
+                            {cashAmount === 0 ? (
+                              <span className="text-[9px] text-red-500 font-bold block px-1">Efectivo debe ser mayor a 0</span>
+                            ) : null}
+
+                            <label className="block mt-2">
+                              <div className="mb-1 text-[9px] font-black uppercase tracking-wider text-muted">Efectivo Recibido</div>
+                              <input
+                                className={`w-full rounded-[0.8rem] border bg-canvas/35 px-2.5 py-1.5 text-xs text-ink outline-none transition focus:border-accent ${
+                                  cashReceived < cashAmount ? 'border-red-300 focus:border-red-500' : 'border-line'
+                                }`}
+                                inputMode="decimal"
+                                placeholder="0"
+                                value={cashReceivedInput}
+                                onChange={(event) => setCashReceivedInput(event.target.value)}
+                              />
+                              {cashReceived < cashAmount ? (
+                                <span className="text-[9px] text-red-500 font-bold mt-1 block px-1">
+                                  Efectivo insuficiente (Mínimo: {formatCurrency(cashAmount)})
+                                </span>
+                              ) : null}
+                            </label>
+                            <div className="flex items-center justify-between text-xs mt-1">
+                              <span className="text-muted font-semibold">Cambio</span>
+                              <span className="font-black text-ink">{formatCurrency(change)}</span>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {paymentMethod === 'qr' ? (
+                          <div className="mt-2 rounded-[0.8rem] bg-panel/80 p-2.5 text-xs flex justify-between items-center">
+                            <span className="text-muted font-semibold">Monto por QR</span>
+                            <span className="font-black text-ink">{formatCurrency(cartTotal)}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      /* Expected payment method selection for pending orders */
+                      <div className="mt-3 border-t border-dashed border-line pt-3">
+                        <div className="text-[10px] font-black uppercase tracking-wider text-muted">Método Esperado</div>
+                        <div className="mt-2 grid grid-cols-3 gap-2">
+                          {[
+                            { id: 'cash', label: 'Efectivo', icon: Coins },
+                            { id: 'qr', label: 'QR', icon: QrCode },
+                            { id: 'mixed', label: 'Mixto', icon: Shuffle },
+                          ].map((option) => {
+                            const isActive = expectedPaymentMethod === option.id
+                            const Icon = option.icon
+
+                            return (
+                              <button
+                                key={option.id}
+                                type="button"
+                                className={`rounded-[0.8rem] border py-1.5 text-xs font-black transition flex flex-col items-center justify-center gap-0.5 min-h-[44px] ${
+                                  isActive ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm' : 'border-line bg-panel/80 text-ink hover:bg-panel'
+                                }`}
+                                onClick={() => setExpectedPaymentMethod(option.id as PaymentMethod)}
+                              >
+                                <Icon size={13} />
+                                <span>{option.label.toUpperCase()}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+
+                {/* Footer de Enviar a Cocina */}
+                <div className="border-t border-line bg-white p-4 shrink-0 flex gap-3.5">
+                  <Button
+                    fullWidth
+                    size="lg"
+                    className="shadow-xl shadow-accent/20"
+                    disabled={cartItems.length === 0 || isSubmitting || !isPaymentValid || !isDeliveryInfoValid}
+                    onClick={async () => {
+                      setIsSubmitting(true)
+                      const payload = {
+                        cartItems,
+                        productsById,
+                        payment: buildPaymentSummary(),
+                        paymentStatus,
+                        paymentMethod,
+                        expectedPaymentMethod,
+                        orderSource,
+                        fulfillmentType,
+                        tableInfo: fulfillmentType === 'table' ? tableInfo.trim() : '',
+                        customerName: customerName.trim(),
+                        customerPhone: customerPhone.trim(),
+                        deliveryAddress: deliveryAddress.trim(),
+                        createdBy: userId,
+                      }
+
+                      let isSuccess = false
+                      if (editingOrderId) {
+                        try {
+                          await onUpdateOrder(editingOrderId, payload)
+                          isSuccess = true
+                        } catch (error) {
+                          console.error('Failed to update order:', error)
+                        }
+                      } else {
+                        isSuccess = await onSubmitOrder(payload)
+                      }
+
+                      if (isSuccess) {
+                        // Generar recibo imprimible antes de limpiar el estado
+                        const completedOrderMock = {
+                          displayNumber: nextOrderNumber,
+                          createdAt: new Date().toISOString(),
+                          items: cartItems.map((item) => {
+                            const product = productsById.get(item.productId)
+                            const selectedExtras = item.modifiers.extras
+                            const extrasTotal = selectedExtras.reduce((sum, extra) => sum + extra.price, 0)
+                            return {
+                              id: item.lineId,
+                              name: product?.name || 'Producto',
+                              price: product?.price || 0,
+                              quantity: item.quantity,
+                              lineTotal: ((product?.price || 0) + extrasTotal) * item.quantity,
+                              modifiers: item.modifiers
+                            }
+                          }),
+                          total: cartTotal,
+                          payment: buildPaymentSummary(),
+                          paymentStatus,
+                          paymentMethod,
+                          orderSource,
+                          fulfillmentType,
+                          tableInfo: fulfillmentType === 'table' ? tableInfo.trim() : '',
+                          customerName: customerName.trim(),
+                          customerPhone: customerPhone.trim(),
+                          deliveryAddress: deliveryAddress.trim(),
+                          createdBy: userId,
+                        }
+                        setPrintedOrder(completedOrderMock as any)
+
+                        setCartItems([])
+                        setExpandedLineId(null)
+                        setPaymentStatus('paid')
+                        setPaymentMethod('cash')
+                        setCashReceivedInput('')
+                        setCashSplitInput('')
+                        setFulfillmentType(userRole === 'pedidos' ? 'pickup' : 'table')
+                        setOrderSource(userRole === 'pedidos' ? 'whatsapp' : 'local')
+                        setTableInfo('')
+                        setCustomerName('')
+                        setCustomerPhone('')
+                        setDeliveryAddress('')
+                        setExpectedPaymentMethod(null)
+                        setEditingOrderId(null)
+                        setActiveTab('catalog')
+                        setShowCheckoutModal(false)
+                      }
+
+                      setIsSubmitting(false)
+                    }}
+                  >
+                    {isSubmitting ? <LoaderCircle size={18} className="animate-spin" /> : <CookingPot size={18} />}
+                    {isSubmitting ? 'Guardando...' : editingOrderId ? 'Guardar Cambios' : 'Enviar a cocina'}
+                  </Button>
+
+                  {editingOrderId && (
+                    <button
+                      type="button"
+                      className="px-4 rounded-xl border border-orange-200 bg-orange-50 hover:bg-orange-100 transition text-xs font-bold text-orange-950"
+                      onClick={handleDiscardEdit}
+                    >
+                      Descartar Edición
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className="px-4 rounded-xl border border-line bg-panel hover:bg-line transition text-xs font-bold text-ink"
+                    onClick={() => setShowCheckoutModal(false)}
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+
             </div>
           </Panel>
-        </aside>
-      </div>
+        </div>
+      )}
 
       {/* Fast Payment Modal (QR, Cash change calculation & Mixed validation) */}
       {payingOrder ? (

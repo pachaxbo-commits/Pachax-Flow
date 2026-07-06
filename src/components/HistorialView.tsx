@@ -22,14 +22,33 @@ function getTodayKey(now = new Date()) {
   return `${year}-${month}-${day}`
 }
 
-function getLocalDateKey(dateInput: string | Date | undefined): string | null {
-  if (!dateInput) return null
-  const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
-  if (isNaN(d.getTime())) return null
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+
+function isDateInRange(orderDateStr: string | Date | undefined, referenceDayStr: string, range: 'day' | 'week' | 'month') {
+  if (!orderDateStr) return false
+  const orderDate = new Date(orderDateStr)
+  if (isNaN(orderDate.getTime())) return false
+
+  const refDate = new Date(referenceDayStr)
+  if (isNaN(refDate.getTime())) return false
+
+  const orderMidnight = new Date(orderDate.getFullYear(), orderDate.getMonth(), orderDate.getDate())
+  const refMidnight = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate())
+
+  if (range === 'day') {
+    return orderMidnight.getTime() === refMidnight.getTime()
+  }
+
+  if (range === 'week') {
+    const sevenDaysAgo = new Date(refMidnight)
+    sevenDaysAgo.setDate(refMidnight.getDate() - 7)
+    return orderMidnight.getTime() <= refMidnight.getTime() && orderMidnight.getTime() > sevenDaysAgo.getTime()
+  }
+
+  if (range === 'month') {
+    return orderMidnight.getFullYear() === refMidnight.getFullYear() && orderMidnight.getMonth() === refMidnight.getMonth()
+  }
+
+  return false
 }
 
 export function HistorialView({
@@ -60,16 +79,17 @@ export function HistorialView({
   }, [])
 
   const [selectedDayKey, setSelectedDayKey] = useState<string>(dayOptions[0] ?? getTodayKey())
+  const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month'>('day')
   const [filter, setFilter] = useState<'all' | OrderStatus>('all')
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null)
 
   const selectedDayOrders = useMemo(() => {
     return orders.filter((order) => {
-      const createdOnDay = getLocalDateKey(order.createdAt) === selectedDayKey
-      const paidOnDay = order.paymentStatus === 'paid' && (getLocalDateKey(order.paidAt) === selectedDayKey || (!order.paidAt && createdOnDay))
-      return createdOnDay || paidOnDay
+      const createdInRange = isDateInRange(order.createdAt, selectedDayKey, timeRange)
+      const paidInRange = order.paymentStatus === 'paid' && (isDateInRange(order.paidAt, selectedDayKey, timeRange) || (!order.paidAt && createdInRange))
+      return createdInRange || paidInRange
     })
-  }, [orders, selectedDayKey])
+  }, [orders, selectedDayKey, timeRange])
 
   const filteredOrders = useMemo(
     () => (filter === 'all' ? selectedDayOrders : selectedDayOrders.filter((order) => order.status === filter)),
@@ -77,21 +97,21 @@ export function HistorialView({
   )
 
   const summary = useMemo(() => {
-    // Active orders created on the selected day
-    const activeCreatedOrders = orders.filter((order) => order.status !== 'cancelled' && getLocalDateKey(order.createdAt) === selectedDayKey)
+    // Pedidos activos creados en el rango seleccionado
+    const activeCreatedOrders = orders.filter((order) => order.status !== 'cancelled' && isDateInRange(order.createdAt, selectedDayKey, timeRange))
     
-    // Active orders paid on the selected day (for cash / QR balance)
+    // Pedidos activos pagados en el rango seleccionado (para caja)
     const activePaidOrders = orders.filter((order) => {
       if (order.status === 'cancelled') return false
       if (order.paymentStatus !== 'paid') return false
-      const paidDay = getLocalDateKey(order.paidAt)
+      const paidDay = order.paidAt
       if (paidDay) {
-        return paidDay === selectedDayKey
+        return isDateInRange(paidDay, selectedDayKey, timeRange)
       }
-      return getLocalDateKey(order.createdAt) === selectedDayKey
+      return isDateInRange(order.createdAt, selectedDayKey, timeRange)
     })
 
-    // Active pending payment orders at this moment (regardless of creation date)
+    // Pedidos activos con cobro pendiente en este momento
     const activePendingPaymentOrders = orders.filter((order) => order.status !== 'cancelled' && order.paymentStatus === 'pending')
 
     const mostSoldMap = new Map<string, number>()
@@ -106,7 +126,7 @@ export function HistorialView({
       .slice(0, 5)
       .map(([name, quantity]) => ({ name, quantity }))
 
-    // Payment totals use only orders paid on the selected day
+    // Totales de pago usando solo pedidos pagados en el rango seleccionado
     const paymentTotals = activePaidOrders.reduce(
       (accumulator, order) => {
         accumulator.cashSales += order.payment.cashAmount
@@ -147,7 +167,66 @@ export function HistorialView({
       paymentTotals,
       topProducts,
     }
-  }, [orders, selectedDayKey])
+  }, [orders, selectedDayKey, timeRange])
+
+  // Cálculo de Insumos Gastados (Panes y Carnes)
+  const insumos = useMemo(() => {
+    let panes = 0
+    let carnes = 0
+
+    const activeCreatedOrders = orders.filter((order) => order.status !== 'cancelled' && isDateInRange(order.createdAt, selectedDayKey, timeRange))
+
+    activeCreatedOrders.forEach((order) => {
+      order.items.forEach((item) => {
+        const nameLower = item.name.toLowerCase()
+        const qty = item.quantity
+
+        // Si no es una bebida o porción de papas, asumimos que es hamburguesa
+        const isDrinkOrSide = 
+          nameLower.includes('soda') || 
+          nameLower.includes('coca') || 
+          nameLower.includes('agua') || 
+          nameLower.includes('cerveza') || 
+          nameLower.includes('fanta') || 
+          nameLower.includes('sprite') || 
+          nameLower.includes('jugo') || 
+          nameLower.includes('té') || 
+          nameLower.includes('papas') || 
+          nameLower.includes('porción') || 
+          nameLower.includes('adicional')
+
+        if (!isDrinkOrSide) {
+          // Cada hamburguesa lleva 2 panes (las 2 mitades del pan)
+          panes += 2 * qty
+
+          // Carnes base de la hamburguesa
+          let basePatties = 1
+          if (nameLower.includes('doble') || nameLower.includes('double')) {
+            basePatties = 2
+          } else if (nameLower.includes('triple')) {
+            basePatties = 3
+          } else if (nameLower.includes('cuadruple') || nameLower.includes('cuádruple')) {
+            basePatties = 4
+          }
+
+          // Carnes extras en los modificadores
+          let extraPatties = 0
+          if (item.modifiers && item.modifiers.extras) {
+            item.modifiers.extras.forEach((extra: any) => {
+              const extraNameLower = extra.name.toLowerCase()
+              if (extraNameLower.includes('carne') || extraNameLower.includes('patty') || extraNameLower.includes('patties')) {
+                extraPatties += 1
+              }
+            })
+          }
+
+          carnes += (basePatties + extraPatties) * qty
+        }
+      })
+    })
+
+    return { panes, carnes }
+  }, [orders, selectedDayKey, timeRange])
 
   const exportCsv = () => {
     const csvOrders = selectedDayOrders.filter((order) => order.status !== 'cancelled')
@@ -276,72 +355,129 @@ export function HistorialView({
   return (
     <section className="space-y-5">
       <Panel className="border-white/80 bg-white/68 p-5">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent">Historial y cierre</p>
-            <h2 className="mt-2 font-serif text-4xl text-ink">Pedidos del dia</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-muted">
-              Resumen operativo, cierre por metodos de pago y una vista clara para marcar entregas y anular comandas.
-            </p>
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent">Historial y cierre</p>
+              <h2 className="mt-2 font-serif text-3xl text-ink">Pedidos del Negocio</h2>
+              <p className="mt-1 max-w-3xl text-xs text-muted">
+                Resumen de ventas y arqueo por métodos de pago filtrado por día, semana o mes.
+              </p>
+            </div>
+
+            {/* Controles de Rango de Tiempo y Fecha */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Selector Diario/Semanal/Mensual */}
+              <div className="flex gap-1 bg-panel p-1 rounded-xl border border-line shadow-insetSoft">
+                {[
+                  { id: 'day', label: 'Día' },
+                  { id: 'week', label: 'Semana' },
+                  { id: 'month', label: 'Mes' },
+                ].map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black tracking-wider transition ${
+                      timeRange === r.id
+                        ? 'bg-ink text-white shadow-sm'
+                        : 'text-muted hover:text-ink'
+                    }`}
+                    onClick={() => setTimeRange(r.id as any)}
+                  >
+                    {r.label.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+
+              {/* Selector de Fecha */}
+              <input
+                type="date"
+                value={selectedDayKey}
+                onChange={(event) => setSelectedDayKey(event.target.value)}
+                className="rounded-xl border border-line bg-white px-3 py-2 text-xs font-bold text-ink outline-none focus:border-accent shadow-sm"
+              />
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {dayOptions.map((dayKey) => {
-              const date = new Date(dayKey + 'T00:00:00')
-              const formattedDate = date.toLocaleDateString('es-ES', {
-                weekday: 'short',
-                day: 'numeric',
-                month: 'short',
-              })
-              const isSelected = selectedDayKey === dayKey
-              return (
-                <button
-                  key={dayKey}
-                  onClick={() => {
-                    setSelectedDayKey(dayKey)
-                    setFilter('all')
-                  }}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                    isSelected
-                      ? 'bg-accent text-white shadow-card'
-                      : 'bg-white/72 text-muted hover:bg-white hover:text-ink border border-line'
-                  }`}
-                >
-                  {dayKey === getTodayKey() ? 'Hoy' : formattedDate}
-                </button>
-              )
-            })}
-          </div>
+          {/* Accesos Rápidos de Días (solo visible si el rango es diario) */}
+          {timeRange === 'day' && (
+            <div className="flex flex-wrap gap-1.5 border-t border-dashed border-line pt-3">
+              {dayOptions.map((dayKey) => {
+                const date = new Date(dayKey + 'T00:00:00')
+                const formattedDate = date.toLocaleDateString('es-ES', {
+                  weekday: 'short',
+                  day: 'numeric',
+                })
+                const isSelected = selectedDayKey === dayKey
+                return (
+                  <button
+                    key={dayKey}
+                    onClick={() => {
+                      setSelectedDayKey(dayKey)
+                      setFilter('all')
+                    }}
+                    className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                      isSelected
+                        ? 'bg-accent text-white shadow-sm'
+                        : 'bg-white border border-line text-muted hover:bg-panel hover:text-ink'
+                    }`}
+                  >
+                    {dayKey === getTodayKey() ? 'Hoy' : formattedDate}
+                  </button>
+                )
+              })}
+            </div>
+          )}
 
-          <div className="grid gap-3 sm:grid-cols-5">
+          {/* Grid de Métricas y Estadísticas */}
+          <div className="grid gap-3.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 border-t border-dashed border-line pt-4">
             <div className="rounded-[1.4rem] border border-white/80 bg-panel/95 p-4 shadow-insetSoft">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Ventas registradas</div>
-              <div className="mt-2 text-2xl font-semibold text-ink">{formatCurrency(summary.totalSales)}</div>
-              <div className="mt-1 text-xs text-muted">{summary.orderCount} pedidos</div>
+              <div className="text-[10px] font-black uppercase tracking-wider text-muted">Ventas registradas</div>
+              <div className="mt-2 text-xl font-black text-ink">{formatCurrency(summary.totalSales)}</div>
+              <div className="mt-0.5 text-[10px] text-muted font-bold">{summary.orderCount} pedidos</div>
             </div>
+            
             <div className="rounded-[1.4rem] border border-white/80 bg-panel/95 p-4 shadow-insetSoft">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Cobrado hoy</div>
-              <div className="mt-2 text-2xl font-semibold text-ink">{formatCurrency(summary.paidSales)}</div>
+              <div className="text-[10px] font-black uppercase tracking-wider text-muted">Cobrado en rango</div>
+              <div className="mt-2 text-xl font-black text-ink">{formatCurrency(summary.paidSales)}</div>
             </div>
+
             {summary.pendingPaymentCount > 0 ? (
               <div className="rounded-[1.4rem] border border-[#ead7ad] bg-warningSoft p-4 shadow-insetSoft">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-warning">Pendiente cobro</div>
-                <div className="mt-2 text-2xl font-semibold text-warning">{formatCurrency(summary.pendingPaymentTotal)}</div>
-                <div className="mt-1 text-xs text-warning/80">{summary.pendingPaymentCount} pedidos</div>
+                <div className="text-[10px] font-black uppercase tracking-wider text-warning">Por cobrar</div>
+                <div className="mt-2 text-xl font-black text-warning">{formatCurrency(summary.pendingPaymentTotal)}</div>
+                <div className="mt-0.5 text-[10px] text-warning/80 font-bold">{summary.pendingPaymentCount} pedidos</div>
               </div>
             ) : (
               <div className="rounded-[1.4rem] border border-white/80 bg-panel/95 p-4 shadow-insetSoft">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Pendiente cobro</div>
-                <div className="mt-2 text-2xl font-semibold text-ink">Bs 0</div>
+                <div className="text-[10px] font-black uppercase tracking-wider text-muted">Por cobrar</div>
+                <div className="mt-2 text-xl font-black text-ink">Bs 0</div>
               </div>
             )}
+
             <div className="rounded-[1.4rem] border border-white/80 bg-panel/95 p-4 shadow-insetSoft">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Ticket promedio</div>
-              <div className="mt-2 text-2xl font-semibold text-ink">{formatCurrency(summary.averageTicket)}</div>
+              <div className="text-[10px] font-black uppercase tracking-wider text-muted">Ticket promedio</div>
+              <div className="mt-2 text-xl font-black text-ink">{formatCurrency(summary.averageTicket)}</div>
             </div>
+
             <div className="rounded-[1.4rem] border border-white/80 bg-panel/95 p-4 shadow-insetSoft">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Entregados</div>
-              <div className="mt-2 text-3xl font-semibold text-ink">{summary.delivered}</div>
+              <div className="text-[10px] font-black uppercase tracking-wider text-muted">Pedidos Entregados</div>
+              <div className="mt-2 text-xl font-black text-ink">{summary.delivered}</div>
+            </div>
+
+            {/* Cálculo de Insumos Gastados */}
+            <div className="rounded-[1.4rem] border border-slate-200 bg-slate-50/80 p-4 shadow-insetSoft">
+              <div className="text-[10px] font-black uppercase tracking-wider text-slate-700">Insumos Gastados</div>
+              <div className="mt-2 flex gap-3">
+                <div>
+                  <div className="text-[9px] font-black text-slate-500 uppercase">Panes</div>
+                  <div className="text-sm font-black text-slate-900">{insumos.panes} u</div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-black text-slate-500 uppercase">Carnes</div>
+                  <div className="text-sm font-black text-slate-900">{insumos.carnes} u</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
