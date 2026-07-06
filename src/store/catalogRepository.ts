@@ -382,10 +382,6 @@ export function createLocalCatalogRepository(): CatalogRepository {
       })
     },
     async initializeDemoCatalog() {
-      if (currentState.categories.length > 0 || currentState.products.length > 0) {
-        return false
-      }
-
       persist({
         categories: demoCategories,
         products: demoProducts,
