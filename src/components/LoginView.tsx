@@ -25,7 +25,7 @@ export function LoginView({
         <p className="mt-5 text-xs font-semibold uppercase tracking-[0.28em] text-accent">Comandero</p>
         <h1 className="mt-2 font-serif text-4xl text-ink">Ingreso seguro</h1>
         <p className="mt-3 text-sm leading-7 text-muted">
-          Accede con tu correo y contrasena asignados en Firebase Authentication. No existe registro publico desde la app.
+          Accede con tu correo y contrasena asignados para Burger Lab.
         </p>
 
         <form

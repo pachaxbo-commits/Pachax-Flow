@@ -99,9 +99,9 @@ export function CocinaView({
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent">Cocina</p>
-            <h2 className="mt-2 font-serif text-4xl text-ink">Cola única de pedidos activos</h2>
+            <h2 className="mt-2 font-serif text-4xl text-ink">Pedidos en preparacion</h2>
             <p className="mt-2 text-sm leading-6 text-muted">
-              Visualización optimizada para tablets a distancia. Toca "ENTREGADO" para despachar.
+              Marca cada pedido como servido, listo para retirar o listo para despacho segun corresponda.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -252,7 +252,7 @@ export function CocinaView({
                         setBusyOrderId(order.id)
                         const ok = await onAdvanceStatus(order.id, nextStatus)
                         if (ok) {
-                          setNotice(`Pedido ${order.displayNumber} listo/despachado con éxito`)
+                          setNotice(`Pedido ${order.displayNumber} actualizado correctamente`)
                           const resetTimeout = window.setTimeout(() => setNotice(null), 2500)
                           return () => window.clearTimeout(resetTimeout)
                         }

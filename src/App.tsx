@@ -1,4 +1,4 @@
-import { AlertCircle, BellRing, CalendarClock, CheckCircle2, Clock3, PackageCheck, WalletCards, WifiOff, Zap } from 'lucide-react'
+import { AlertCircle, BellRing, Flame, Clock3, PackageCheck, WalletCards } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { AdminView } from './components/AdminView'
 import { CajaView } from './components/CajaView'
@@ -12,37 +12,9 @@ import { formatCurrency } from './lib/format'
 import { useAuthStore } from './store/authStore'
 import { useCatalogStore } from './store/catalogStore'
 import { useOrdersStore } from './store/appStore'
-import type { CartItem, OrderStatus, PaymentMethod, PaymentSummary, Product, RepositoryStatus, UserRole } from './types'
+import type { CartItem, OrderStatus, PaymentMethod, PaymentSummary, Product, UserRole } from './types'
 
 type View = 'caja' | 'cocina' | 'historial' | 'admin'
-
-function getConnectionTone(status: RepositoryStatus) {
-  if (status.mode === 'connected') {
-    return {
-      container: 'border-[#cfe2d6] bg-successSoft text-success',
-      icon: CheckCircle2,
-    }
-  }
-
-  if (status.mode === 'local') {
-    return {
-      container: 'border-[#edd8cb] bg-accentWash text-accent',
-      icon: Clock3,
-    }
-  }
-
-  if (status.mode === 'connecting') {
-    return {
-      container: 'border-[#ead7ad] bg-warningSoft text-warning',
-      icon: Zap,
-    }
-  }
-
-  return {
-    container: 'border-[#f0cfbf] bg-[#fff3ec] text-[#9c4d2a]',
-    icon: WifiOff,
-  }
-}
 
 function getAllowedViews(role: UserRole | 'demo'): View[] {
   if (role === 'admin' || role === 'demo') {
@@ -82,7 +54,6 @@ function MainShell({
 
   const {
     state: { orders, sequence },
-    status,
     placeOrder,
     setOrderStatus,
     cancelOrder,
@@ -92,7 +63,6 @@ function MainShell({
   } = useOrdersStore()
   const {
     state: { categories, products },
-    status: catalogStatus,
     createCategory,
     updateCategory,
     setCategoryVisibility,
@@ -111,9 +81,6 @@ function MainShell({
   const dailyTotal = useMemo(() => orders.reduce((sum, order) => (order.status !== 'cancelled' && order.paymentStatus === 'paid') ? sum + order.total : sum, 0), [orders])
   const pendingCount = useMemo(() => orders.filter((order) => order.status === 'pending').length, [orders])
   const nextOrderNumber = `#${String(sequence + 1).padStart(3, '0')}`
-  const activeStatus = view === 'admin' ? catalogStatus : status
-  const connectionTone = getConnectionTone(activeStatus)
-  const ConnectionIcon = connectionTone.icon
 
   useEffect(() => {
     if (!confirmation) {
@@ -256,18 +223,6 @@ function MainShell({
                 </div>
               ) : null}
 
-              <div className={`rounded-[1.5rem] border p-4 shadow-card ${connectionTone.container}`}>
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <ConnectionIcon size={16} />
-                  {activeStatus.label}
-                </div>
-                <div className="mt-2 text-sm leading-6">{activeStatus.detail}</div>
-                <div className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] opacity-75">
-                  {activeStatus.source === 'firebase' ? 'Firebase activo' : 'Fallback local'}
-                  {activeStatus.hasPendingWrites ? ' / cambios pendientes' : ''}
-                </div>
-              </div>
-
               <BotControlPanel collapsed={isSidebarCollapsed} userRole={role} />
 
               <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
@@ -287,11 +242,11 @@ function MainShell({
                 </div>
                 <div className="rounded-[1.4rem] border border-white/80 bg-white/72 p-4">
                   <div className="flex items-center gap-2 text-sm font-semibold text-ink">
-                    <CalendarClock size={16} className="text-accent" />
-                    Modo
+                    <Flame size={16} className="text-accent" />
+                    Area
                   </div>
                   <div className="mt-2 text-sm font-semibold text-muted">
-                    {view === 'caja' ? 'Caja activa' : view === 'cocina' ? 'Cocina activa' : view === 'historial' ? 'Historial activo' : 'Admin activa'}
+                    {view === 'caja' ? 'Tomando pedidos' : view === 'cocina' ? 'Preparacion' : view === 'historial' ? 'Reporte diario' : 'Menu y productos'}
                   </div>
                 </div>
               </div>
@@ -346,7 +301,6 @@ function MainShell({
               onUpdateCategory={updateCategory}
               onUpdateProduct={updateProduct}
               products={products}
-              status={catalogStatus}
             />
           ) : null}
         </main>

@@ -575,7 +575,7 @@ export function CajaView({
                             const nextItem = buildCartItem(product)
                             setCartItems((currentItems) => [...currentItems, nextItem])
                             setExpandedLineId(nextItem.lineId)
-                            setShowCheckoutModal(true)
+                            setActiveTab('cart')
                           }}
                         >
                           <Plus size={11} />
@@ -1116,7 +1116,7 @@ export function CajaView({
       {cartItems.length > 0 && !showCheckoutModal && (
         <button
           type="button"
-          className="fixed bottom-6 right-6 z-40 bg-accent hover:bg-accent/90 text-white font-black px-6 py-4 rounded-full shadow-2xl flex items-center gap-2 transition transform hover:scale-105 active:scale-95 border border-white/20"
+          className="fixed bottom-6 right-6 z-40 bg-accent hover:bg-accent/90 text-white font-black px-6 py-4 rounded-full shadow-2xl flex items-center gap-2 transition transform hover:scale-105 active:scale-95 border border-white/20 xl:hidden"
           onClick={() => setShowCheckoutModal(true)}
         >
           <ShoppingBag size={18} />
@@ -1125,9 +1125,9 @@ export function CajaView({
       )}
 
       {/* Modal emergente de checkout de doble columna (horizontal y vertical grande) */}
-      {showCheckoutModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <Panel className="w-full max-w-5xl h-[85vh] bg-[#fffdfb] rounded-[2.2rem] shadow-float overflow-hidden flex flex-col border border-line">
+      {(showCheckoutModal || cartItems.length > 0) && (
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm xl:pointer-events-none xl:left-auto xl:right-5 xl:top-5 xl:bottom-5 xl:w-[min(760px,calc(100vw-340px))] xl:items-stretch xl:justify-end xl:bg-transparent xl:p-0 xl:backdrop-blur-0 ${showCheckoutModal ? '' : 'hidden xl:flex'}`}>
+          <Panel className="w-full max-w-5xl h-[85vh] bg-[#fffdfb] rounded-[2.2rem] shadow-float overflow-hidden flex flex-col border border-line xl:pointer-events-auto xl:h-full xl:max-w-none xl:rounded-[1.7rem]">
             
             {/* Cabecera del Modal */}
             <div className="border-b border-line px-5 py-4 flex items-center justify-between bg-white shrink-0">
@@ -1147,7 +1147,7 @@ export function CajaView({
                 
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-xl text-xs font-black bg-panel hover:bg-line transition text-ink"
+                  className="px-4 py-2 rounded-xl text-xs font-black bg-panel hover:bg-line transition text-ink xl:hidden"
                   onClick={() => setShowCheckoutModal(false)}
                 >
                   Seguir Agregando
@@ -1156,7 +1156,7 @@ export function CajaView({
             </div>
 
             {/* Dos columnas del modal */}
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden bg-canvas/30">
+              <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden bg-canvas/30">
               
               {/* Columna Izquierda: Lista de items en el carrito */}
               <div className="lg:col-span-5 border-r border-line flex flex-col h-full overflow-hidden">

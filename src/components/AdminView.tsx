@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Eye, EyeOff, Pencil, Plus, Power, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { formatCurrency } from '../lib/format'
-import type { CatalogCategory, CatalogCategoryInput, CatalogProductInput, Product, ProductExtra, ProductOption, RepositoryStatus } from '../types'
+import type { CatalogCategory, CatalogCategoryInput, CatalogProductInput, Product, ProductExtra, ProductOption } from '../types'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
@@ -64,7 +64,6 @@ function emptyProductForm(categoryId = '') {
 export function AdminView({
   categories,
   products,
-  status,
   onCreateCategory,
   onUpdateCategory,
   onSetCategoryVisibility,
@@ -81,7 +80,6 @@ export function AdminView({
 }: {
   categories: CatalogCategory[]
   products: Product[]
-  status: RepositoryStatus
   onCreateCategory: (input: CatalogCategoryInput) => Promise<void>
   onUpdateCategory: (categoryId: string, updates: Partial<CatalogCategoryInput>) => Promise<void>
   onSetCategoryVisibility: (categoryId: string, isVisible: boolean) => Promise<void>
@@ -152,15 +150,15 @@ export function AdminView({
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent">Administracion</p>
-            <h2 className="mt-2 font-serif text-4xl text-ink">Catalogo premium editable sin tocar codigo</h2>
+            <h2 className="mt-2 font-serif text-4xl text-ink">Menu Burger Lab</h2>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-muted">
-              Crea, ordena, oculta y reactiva categorias o productos. Los cambios se reflejan al instante en Caja.
+              Crea, ordena, oculta y reactiva categorias o productos. Los cambios se reflejan en Caja y en el bot.
             </p>
           </div>
-          <div className="rounded-[1.5rem] border border-white/80 bg-panel/90 p-4 shadow-card">
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Sincronizacion catalogo</div>
-            <div className="mt-2 text-lg font-semibold text-ink">{status.label}</div>
-            <div className="mt-1 text-sm text-muted">{status.detail}</div>
+          <div className="rounded-[1.5rem] border border-[#f1caca] bg-white p-4 shadow-card">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Resumen</div>
+            <div className="mt-2 text-lg font-semibold text-ink">{products.length} productos</div>
+            <div className="mt-1 text-sm text-muted">{categories.length} categorias en el menu.</div>
           </div>
         </div>
       </Panel>      {/* Selector de Pestañas de Administración */}

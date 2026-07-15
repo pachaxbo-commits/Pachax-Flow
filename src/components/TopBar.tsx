@@ -8,7 +8,7 @@ const items: Array<{ id: View; label: string; subtitle: string; icon: typeof Cre
   { id: 'caja', label: 'Caja', subtitle: 'Cobro y armado', icon: CreditCard },
   { id: 'cocina', label: 'Cocina', subtitle: 'Despacho visual', icon: ChefHat },
   { id: 'historial', label: 'Historial', subtitle: 'Cierre del dia', icon: Archive },
-  { id: 'admin', label: 'Administracion', subtitle: 'Catalogo activo', icon: Settings2 },
+  { id: 'admin', label: 'Administracion', subtitle: 'Menu y productos', icon: Settings2 },
 ]
 
 export function TopBar({
@@ -19,7 +19,6 @@ export function TopBar({
   rightSlot,
   userName,
   userRole,
-  mode,
   onSignOut,
   onToggleCollapsed,
 }: {
@@ -65,7 +64,7 @@ export function TopBar({
       {/* Cuerpo del menú (visible en desktop, y en móvil si está abierto) */}
       <div className={`${mobileMenuOpen ? 'mt-4 flex flex-col gap-4' : 'hidden'} xl:flex xl:flex-col xl:flex-1`}>
         {/* Logo de Desktop (oculto en móvil) */}
-        <div className={`hidden rounded-[1.6rem] border border-white/80 bg-accentWash shadow-insetSoft xl:block ${collapsed ? 'p-3' : 'p-4'}`}>
+        <div className={`hidden rounded-[1.6rem] border border-[#f1caca] bg-white shadow-insetSoft xl:block ${collapsed ? 'p-3' : 'p-4'}`}>
           <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent text-white shadow-lg shadow-accent/20">
               <LayoutGrid size={22} />
@@ -75,7 +74,7 @@ export function TopBar({
               <h1 className="mt-1 font-serif text-2xl text-ink">Operacion sin fichas</h1>
             </div>
           </div>
-          {!collapsed ? <p className="mt-4 text-sm leading-6 text-muted">Caja, cocina e historial en un solo panel.</p> : null}
+          {!collapsed ? <p className="mt-4 text-sm leading-6 text-muted">Pedidos, cocina y reportes diarios.</p> : null}
         </div>
 
         {/* Botón para colapsar en Desktop (oculto en móvil) */}
@@ -133,10 +132,10 @@ export function TopBar({
             <span className={`font-semibold ${collapsed ? 'hidden' : ''}`}>{userName}</span>
           </div>
           <p className={`mt-2 leading-6 ${collapsed ? 'hidden' : ''}`}>
-            Rol activo: {userRole}. {mode === 'local' ? 'Modo demo local: no apto para produccion.' : 'Sesion protegida con Firebase Authentication.'}
+            Rol activo: {userRole}. Gestion diaria de Burger Lab.
           </p>
           <button className={`mt-3 text-sm font-semibold text-accent ${collapsed ? 'w-full text-center' : ''}`} onClick={() => void onSignOut()}>
-            {collapsed ? 'Salir' : mode === 'local' ? 'Modo demo activo' : 'Cerrar sesion'}
+            {collapsed ? 'Salir' : 'Cerrar sesion'}
           </button>
         </div>
       </div>
