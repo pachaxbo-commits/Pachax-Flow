@@ -47,7 +47,7 @@ function MainShell({
 }) {
   const availableViews = getAllowedViews(role)
   const [selectedView, setSelectedView] = useState<View>(availableViews[0] ?? 'caja')
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const isSidebarCollapsed = false
   const view = availableViews.includes(selectedView) ? selectedView : availableViews[0]
   const [confirmation, setConfirmation] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -99,16 +99,6 @@ function MainShell({
     const timeout = window.setTimeout(() => setErrorMessage(null), 4200)
     return () => window.clearTimeout(timeout)
   }, [errorMessage])
-
-  useEffect(() => {
-    const syncSidebarMode = () => {
-      setIsSidebarCollapsed(window.innerWidth >= 1280 && window.innerWidth < 1650)
-    }
-
-    syncSidebarMode()
-    window.addEventListener('resize', syncSidebarMode)
-    return () => window.removeEventListener('resize', syncSidebarMode)
-  }, [])
 
   const handleSubmitOrder = async (input: {
     cartItems: CartItem[]
@@ -199,7 +189,7 @@ function MainShell({
         </div>
       ) : null}
 
-      <div className={`relative mx-auto grid max-w-[1680px] gap-5 ${isSidebarCollapsed ? 'xl:grid-cols-[96px_minmax(0,1fr)]' : 'xl:grid-cols-[300px_minmax(0,1fr)]'}`}>
+      <div className={`relative grid max-w-none gap-4 ${isSidebarCollapsed ? 'xl:grid-cols-[82px_minmax(0,1fr)]' : 'xl:grid-cols-[240px_minmax(0,1fr)]'}`}>
         <TopBar
           availableViews={availableViews}
           collapsed={isSidebarCollapsed}
@@ -207,7 +197,6 @@ function MainShell({
           mode={mode}
           onChange={setSelectedView}
           onSignOut={onSignOut}
-          onToggleCollapsed={() => setIsSidebarCollapsed((currentValue) => !currentValue)}
           rightSlot={
             <div className="space-y-3">
               {role !== 'pedidos' ? (

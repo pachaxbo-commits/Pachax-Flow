@@ -1,4 +1,4 @@
-import { Archive, ChefHat, ChevronLeft, ChevronRight, CreditCard, LayoutGrid, Menu, ReceiptText, Settings2, X } from 'lucide-react'
+import { Archive, ChefHat, CreditCard, LayoutGrid, Menu, ReceiptText, Settings2, X } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import type { UserRole } from '../types'
 
@@ -20,7 +20,6 @@ export function TopBar({
   userName,
   userRole,
   onSignOut,
-  onToggleCollapsed,
 }: {
   availableViews: View[]
   collapsed: boolean
@@ -31,7 +30,6 @@ export function TopBar({
   userRole: UserRole | 'demo'
   mode: 'firebase' | 'local'
   onSignOut: () => Promise<void>
-  onToggleCollapsed: () => void
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -64,30 +62,21 @@ export function TopBar({
       {/* Cuerpo del menú (visible en desktop, y en móvil si está abierto) */}
       <div className={`${mobileMenuOpen ? 'mt-4 flex flex-col gap-4' : 'hidden'} xl:flex xl:flex-col xl:flex-1`}>
         {/* Logo de Desktop (oculto en móvil) */}
-        <div className={`hidden rounded-[1.6rem] border border-[#f1caca] bg-white shadow-insetSoft xl:block ${collapsed ? 'p-3' : 'p-4'}`}>
+        <div className={`hidden rounded-[1.3rem] border border-[#f1caca] bg-white shadow-insetSoft xl:block ${collapsed ? 'p-2.5' : 'p-3'}`}>
           <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent text-white shadow-lg shadow-accent/20">
-              <LayoutGrid size={22} />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-white shadow-lg shadow-accent/20">
+              <LayoutGrid size={19} />
             </div>
             <div className={collapsed ? 'hidden' : ''}>
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent">Comandero</p>
-              <h1 className="mt-1 font-serif text-2xl text-ink">Operacion sin fichas</h1>
+              <h1 className="mt-1 font-serif text-xl text-ink">Burger Lab</h1>
             </div>
           </div>
-          {!collapsed ? <p className="mt-4 text-sm leading-6 text-muted">Pedidos, cocina y reportes diarios.</p> : null}
+          {!collapsed ? <p className="mt-3 text-xs leading-5 text-muted">Pedidos, cocina y reportes diarios.</p> : null}
         </div>
 
-        {/* Botón para colapsar en Desktop (oculto en móvil) */}
-        <button
-          className="mt-4 hidden h-10 items-center justify-center rounded-2xl border border-white/80 bg-panel/80 text-muted transition hover:bg-white hover:text-ink xl:flex"
-          onClick={onToggleCollapsed}
-          title={collapsed ? 'Expandir menu' : 'Contraer menu'}
-        >
-          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-        </button>
-
         {/* Navegación */}
-        <nav className="space-y-2">
+        <nav className="mt-3 space-y-2">
           {items.filter((item) => availableViews.includes(item.id)).map((item) => {
             const Icon = item.icon
             const isActive = currentView === item.id
@@ -95,11 +84,11 @@ export function TopBar({
             return (
               <button
                 key={item.id}
-                className={`flex w-full items-center rounded-[1.4rem] border px-4 py-3 text-left transition duration-150 ${
+                className={`flex w-full items-center rounded-[1.2rem] border text-left transition duration-150 ${
                   isActive
                     ? 'border-accent/20 bg-ink text-white shadow-lg shadow-black/10'
                     : 'border-transparent bg-white/60 text-muted hover:border-white hover:bg-white hover:text-ink'
-                } ${collapsed ? 'justify-center gap-0 px-3' : 'gap-3'}`}
+                } ${collapsed ? 'justify-center gap-0 px-3 py-3' : 'gap-3 px-3 py-2.5'}`}
                 onClick={() => {
                   onChange(item.id)
                   setMobileMenuOpen(false)
@@ -107,11 +96,11 @@ export function TopBar({
                 title={item.label}
               >
                 <div
-                  className={`flex h-11 w-11 items-center justify-center rounded-2xl ${
+                  className={`flex h-9 w-9 items-center justify-center rounded-xl ${
                     isActive ? 'bg-white/10 text-white' : 'bg-accentWash text-accent'
                   }`}
                 >
-                  <Icon size={19} />
+                  <Icon size={17} />
                 </div>
                 <div className={`min-w-0 ${collapsed ? 'hidden' : ''}`}>
                   <div className="text-sm font-semibold">{item.label}</div>

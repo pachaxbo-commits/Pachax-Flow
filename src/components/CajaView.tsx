@@ -51,7 +51,7 @@ function isImageUrl(value: string) {
 
 function ProductVisual({ image, alt, badge }: { image: string; alt: string; badge?: string }) {
   return (
-    <div className="relative h-36 overflow-hidden xl:h-32 2xl:h-52">
+    <div className="relative h-32 overflow-hidden 2xl:h-36">
       {isImageUrl(image) ? (
         <img alt={alt} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" src={image} />
       ) : (
@@ -448,7 +448,7 @@ export function CajaView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 ${cartItems.length > 0 && viewMode === 'new_order' ? 'xl:pr-[480px]' : ''}`}>
       {/* Top View Mode Switcher */}
       <div className="flex flex-wrap justify-between items-center gap-4 border-b border-line pb-4">
         <div className="flex gap-2 bg-white/60 p-1.5 rounded-2xl border border-white/80 shadow-insetSoft">
@@ -553,15 +553,15 @@ export function CajaView({
                 })}
               </div>
 
-              <div className="grid gap-3.5 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-3 2xl:grid-cols-4">
+              <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-2 2xl:grid-cols-3 min-[1850px]:grid-cols-4">
                 {visibleProducts.map((product) => (
                   <Panel
                     key={product.id}
-                    className="group overflow-hidden border-slate-800 bg-[#1e1e2d] text-white transition duration-200 hover:-translate-y-1 hover:shadow-float flex flex-col justify-between rounded-2xl min-h-[280px]"
+                    className="group overflow-hidden border-slate-800 bg-[#1e1e2d] text-white transition duration-200 hover:-translate-y-1 hover:shadow-float flex flex-col justify-between rounded-2xl min-h-[230px]"
                   >
                     <ProductVisual alt={product.name} badge={product.badge} image={product.image} />
 
-                    <div className="p-3.5 flex-1 flex flex-col justify-between space-y-3">
+                    <div className="p-3 flex-1 flex flex-col justify-between space-y-2.5">
                       <div>
                         <h3 className="text-sm font-bold text-white tracking-wide truncate">{product.name}</h3>
                         <p className="mt-1 text-[11px] leading-relaxed text-slate-400 line-clamp-2 min-h-[32px]">{product.description || 'Sin descripción'}</p>
@@ -1125,22 +1125,22 @@ export function CajaView({
       )}
 
       {/* Modal emergente de checkout de doble columna (horizontal y vertical grande) */}
-      {(showCheckoutModal || cartItems.length > 0) && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm xl:pointer-events-none xl:left-auto xl:right-5 xl:top-5 xl:bottom-5 xl:w-[min(760px,calc(100vw-340px))] xl:items-stretch xl:justify-end xl:bg-transparent xl:p-0 xl:backdrop-blur-0 ${showCheckoutModal ? '' : 'hidden xl:flex'}`}>
-          <Panel className="w-full max-w-5xl h-[85vh] bg-[#fffdfb] rounded-[2.2rem] shadow-float overflow-hidden flex flex-col border border-line xl:pointer-events-auto xl:h-full xl:max-w-none xl:rounded-[1.7rem]">
+      {(showCheckoutModal || (cartItems.length > 0 && viewMode === 'new_order')) && (
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm xl:pointer-events-none xl:left-auto xl:right-4 xl:top-5 xl:bottom-5 xl:w-[460px] xl:items-stretch xl:justify-end xl:bg-transparent xl:p-0 xl:backdrop-blur-0 ${showCheckoutModal ? '' : 'hidden xl:flex'}`}>
+          <Panel className="w-full max-w-5xl h-[85vh] bg-[#fffdfb] rounded-[2.2rem] shadow-float overflow-hidden flex flex-col border border-line xl:pointer-events-auto xl:h-full xl:max-w-none xl:rounded-[1.5rem]">
             
             {/* Cabecera del Modal */}
-            <div className="border-b border-line px-5 py-4 flex items-center justify-between bg-white shrink-0">
+            <div className="border-b border-line px-4 py-3 flex items-center justify-between bg-white shrink-0">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.28em] text-accent">CONFIRMAR PEDIDO</p>
-                <h2 className="mt-1 text-lg font-black text-ink flex items-center gap-2">
+                <h2 className="mt-1 text-base font-black text-ink flex items-center gap-2">
                   <span>Carrito & Datos de Cobro</span>
                   {editingOrderId ? <span className="text-[10px] bg-orange-100 text-orange-900 px-2 py-0.5 rounded-full font-black">EDITANDO PEDIDO</span> : null}
                 </h2>
               </div>
               
               <div className="flex items-center gap-3">
-                <div className="rounded-xl border border-line bg-accentWash px-3 py-1.5 text-right shadow-insetSoft flex items-center gap-2">
+                <div className="rounded-xl border border-line bg-accentWash px-2.5 py-1.5 text-right shadow-insetSoft flex items-center gap-2">
                   <span className="text-[9px] font-bold uppercase tracking-wider text-muted">Siguiente Ticket:</span>
                   <span className="text-sm font-black text-ink">{nextOrderNumber}</span>
                 </div>
@@ -1156,11 +1156,11 @@ export function CajaView({
             </div>
 
             {/* Dos columnas del modal */}
-              <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden bg-canvas/30">
+              <div className="flex-1 grid grid-cols-1 grid-rows-[minmax(180px,0.75fr)_minmax(360px,1.25fr)] overflow-hidden bg-canvas/30">
               
               {/* Columna Izquierda: Lista de items en el carrito */}
-              <div className="lg:col-span-5 border-r border-line flex flex-col h-full overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+              <div className="border-b border-line flex flex-col h-full min-h-0 overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
                   {cartItems.length === 0 ? (
                     <div className="rounded-[1.4rem] border border-dashed border-lineStrong bg-canvas/60 p-5 text-center">
                       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-accent shadow-insetSoft">
@@ -1190,20 +1190,20 @@ export function CajaView({
                     return (
                       <article
                         key={item.lineId}
-                        className={`rounded-[1.4rem] border bg-white p-3.5 transition duration-150 ${
+                        className={`rounded-[1.1rem] border bg-white p-3 transition duration-150 ${
                           isExpanded ? 'border-accent/20 shadow-card' : 'border-line'
                         }`}
                       >
                         <div className="flex items-start gap-4">
                           {isImageUrl(product.image) ? (
-                            <img alt={product.name} className="h-16 w-16 rounded-[1.1rem] object-cover" src={product.image} />
+                            <img alt={product.name} className="h-12 w-12 rounded-xl object-cover" src={product.image} />
                           ) : (
-                            <div className="flex h-16 w-16 items-center justify-center rounded-[1.1rem] bg-accentWash text-3xl">{product.image}</div>
+                            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accentWash text-2xl">{product.image}</div>
                           )}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
                               <div>
-                                <h3 className="text-sm font-bold text-ink truncate">{product.name}</h3>
+                                <h3 className="text-xs font-bold text-ink truncate">{product.name}</h3>
                                 <p className="mt-0.5 text-xs text-muted">{formatCurrency(product.price)}</p>
                               </div>
                               <button
@@ -1382,8 +1382,8 @@ export function CajaView({
               </div>
 
               {/* Columna Derecha: Formulario de Checkout */}
-              <div className="lg:col-span-7 flex flex-col h-full overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="flex flex-col h-full min-h-0 overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
                   
                   {/* Origen de pedido */}
                   {userRole !== 'pedidos' ? (
