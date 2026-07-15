@@ -2,6 +2,7 @@ import { AlertCircle, BellRing, CalendarClock, CheckCircle2, Clock3, PackageChec
 import { useEffect, useMemo, useState } from 'react'
 import { AdminView } from './components/AdminView'
 import { CajaView } from './components/CajaView'
+import { BotControlPanel } from './components/BotControlPanel'
 import { CocinaView } from './components/CocinaView'
 import { HistorialView } from './components/HistorialView'
 import { LoginView } from './components/LoginView'
@@ -92,7 +93,6 @@ function MainShell({
   const {
     state: { categories, products },
     status: catalogStatus,
-    initializeDemoCatalog,
     createCategory,
     updateCategory,
     setCategoryVisibility,
@@ -268,6 +268,8 @@ function MainShell({
                 </div>
               </div>
 
+              <BotControlPanel collapsed={isSidebarCollapsed} userRole={role} />
+
               <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
                 <div className="rounded-[1.4rem] border border-white/80 bg-white/72 p-4">
                   <div className="flex items-center gap-2 text-sm font-semibold text-ink">
@@ -330,7 +332,6 @@ function MainShell({
           {view === 'admin' ? (
             <AdminView
               categories={categories}
-              onInitializeDemoCatalog={initializeDemoCatalog}
               onCreateCategory={createCategory}
               onCreateProduct={createProduct}
               onDeleteCategory={deleteCategory}

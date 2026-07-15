@@ -65,7 +65,6 @@ export function AdminView({
   categories,
   products,
   status,
-  onInitializeDemoCatalog,
   onCreateCategory,
   onUpdateCategory,
   onSetCategoryVisibility,
@@ -83,7 +82,6 @@ export function AdminView({
   categories: CatalogCategory[]
   products: Product[]
   status: RepositoryStatus
-  onInitializeDemoCatalog: () => Promise<boolean>
   onCreateCategory: (input: CatalogCategoryInput) => Promise<void>
   onUpdateCategory: (categoryId: string, updates: Partial<CatalogCategoryInput>) => Promise<void>
   onSetCategoryVisibility: (categoryId: string, isVisible: boolean) => Promise<void>
@@ -158,25 +156,6 @@ export function AdminView({
             <p className="mt-3 max-w-3xl text-sm leading-7 text-muted">
               Crea, ordena, oculta y reactiva categorias o productos. Los cambios se reflejan al instante en Caja.
             </p>
-            <div className="mt-4">
-              <Button
-                size="sm"
-                tone="secondary"
-                onClick={() =>
-                  openConfirm({
-                    title: 'Cargar menu Burger Lab',
-                    body: 'Se borraran las categorias y productos actuales, y se cargara el menu oficial de Burger Lab leido desde Quick. Los pedidos e historial no se modifican.',
-                    confirmLabel: 'Reemplazar catalogo',
-                    tone: 'success',
-                    onConfirm: async () => {
-                      await onInitializeDemoCatalog()
-                    },
-                  })
-                }
-              >
-                Cargar menu Burger Lab
-              </Button>
-            </div>
           </div>
           <div className="rounded-[1.5rem] border border-white/80 bg-panel/90 p-4 shadow-card">
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Sincronizacion catalogo</div>
