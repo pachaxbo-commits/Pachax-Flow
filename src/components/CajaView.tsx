@@ -184,11 +184,17 @@ export function CajaView({
 
   useEffect(() => {
     if (printedOrder) {
+      const clearPrintedOrder = () => setPrintedOrder(null)
+      window.addEventListener('afterprint', clearPrintedOrder, { once: true })
       const timer = setTimeout(() => {
         window.print()
-        setPrintedOrder(null)
       }, 500)
-      return () => clearTimeout(timer)
+      const fallbackTimer = setTimeout(clearPrintedOrder, 120000)
+      return () => {
+        clearTimeout(timer)
+        clearTimeout(fallbackTimer)
+        window.removeEventListener('afterprint', clearPrintedOrder)
+      }
     }
   }, [printedOrder])
 
@@ -2026,6 +2032,10 @@ export function CajaView({
       {/* Estilos para impresión térmica y división de tickets */}
       <style>{`
         @media print {
+          @page {
+            size: 80mm auto;
+            margin: 0;
+          }
           body * {
             visibility: hidden;
           }
