@@ -171,14 +171,14 @@ service cloud.firestore {
     }
 
     function isReadyForPickupTransition() {
-      return resource.data.status == 'pending'
+      return resource.data.status in ['pending', 'preparing']
         && request.resource.data.status == 'ready_for_pickup'
         && request.resource.data.readyAt is timestamp
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readyAt', 'updatedAt']);
     }
 
     function isReadyForDispatchTransition() {
-      return resource.data.status == 'pending'
+      return resource.data.status in ['pending', 'preparing']
         && request.resource.data.status == 'ready_for_dispatch'
         && request.resource.data.readyAt is timestamp
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readyAt', 'updatedAt']);

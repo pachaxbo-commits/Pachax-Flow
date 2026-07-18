@@ -8,6 +8,7 @@ import { HistorialView } from './components/HistorialView'
 import { LoginView } from './components/LoginView'
 import { TopBar } from './components/TopBar'
 import { UnauthorizedView } from './components/UnauthorizedView'
+import { notifyBotOrderConfirmed } from './lib/botApi'
 import { formatCurrency } from './lib/format'
 import { useAuthStore } from './store/authStore'
 import { useCatalogStore } from './store/catalogStore'
@@ -128,8 +129,19 @@ function MainShell({
   }
   const handleAdvanceStatus = async (orderId: string, nextStatus: OrderStatus, estimatedDelay?: number) => {
     try {
+      const order = orders.find((currentOrder) => currentOrder.id === orderId)
       await setOrderStatus(orderId, nextStatus, estimatedDelay)
-      setErrorMessage(null)
+      let botNotifyFailed = false
+      if (order?.orderSource === 'whatsapp' && nextStatus === 'preparing') {
+        try {
+          await notifyBotOrderConfirmed(orderId, estimatedDelay ?? 10)
+        } catch (error) {
+          console.warn('No se pudo avisar al cliente por WhatsApp:', error)
+          botNotifyFailed = true
+          setErrorMessage('Pedido confirmado, pero el bot no pudo avisar el tiempo al cliente. Revisa que el bot este encendido.')
+        }
+      }
+      if (!botNotifyFailed) setErrorMessage(null)
       return true
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo actualizar el estado.'

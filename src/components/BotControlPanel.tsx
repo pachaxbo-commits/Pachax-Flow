@@ -1,6 +1,7 @@
 import { Bot, Power, PowerOff, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { UserRole } from '../types'
+import { botApiUrl, botAdminToken } from '../lib/botApi'
 
 type BotHealth = {
   ok: boolean
@@ -9,9 +10,6 @@ type BotHealth = {
 }
 
 type BotStatus = 'checking' | 'online' | 'offline' | 'error' | 'not_configured'
-
-const botApiUrl = (import.meta.env.VITE_BOT_API_URL || 'http://localhost:3010').replace(/\/$/, '')
-const botAdminToken = import.meta.env.VITE_BOT_ADMIN_TOKEN || 'burgerlab-bot-local-2026-cambia-esto-antes-de-produccion'
 
 export function BotControlPanel({ collapsed, userRole }: { collapsed: boolean; userRole: UserRole | 'demo' }) {
   const canControlBot = userRole === 'admin' || userRole === 'caja' || userRole === 'pedidos' || userRole === 'demo'
