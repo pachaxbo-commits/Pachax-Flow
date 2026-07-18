@@ -922,6 +922,15 @@ export function CajaView({
 
                               <button
                                 type="button"
+                                className="flex-1 flex items-center justify-center gap-1 bg-ink hover:bg-ink/90 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm"
+                                onClick={() => onSetOrderStatus(order.id, 'delivered')}
+                              >
+                                <CheckCircle2 size={12} />
+                                Entregado
+                              </button>
+
+                              <button
+                                type="button"
                                 className="flex items-center justify-center p-1.5 border border-line bg-panel text-muted hover:text-ink rounded-lg text-[10px] font-black transition"
                                 onClick={() => handleEditOrder(order)}
                               >
@@ -1039,17 +1048,6 @@ export function CajaView({
                                 </button>
                               ) : null}
 
-                              {order.status === 'preparing' ? (
-                                <button
-                                  type="button"
-                                  className="flex-1 flex items-center justify-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm"
-                                  onClick={() => onSetOrderStatus(order.id, 'delivered')}
-                                >
-                                  <CheckCircle2 size={12} />
-                                  Entregar
-                                </button>
-                              ) : null}
-
                               {!isPaid && (
                                 <button
                                   type="button"
@@ -1065,6 +1063,15 @@ export function CajaView({
                                   Cobrar
                                 </button>
                               )}
+
+                              <button
+                                type="button"
+                                className="flex-1 flex items-center justify-center gap-1 bg-ink hover:bg-ink/90 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm"
+                                onClick={() => onSetOrderStatus(order.id, 'delivered')}
+                              >
+                                <CheckCircle2 size={12} />
+                                Entregado
+                              </button>
 
                               <button
                                 type="button"
