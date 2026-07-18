@@ -131,17 +131,14 @@ function MainShell({
     try {
       const order = orders.find((currentOrder) => currentOrder.id === orderId)
       await setOrderStatus(orderId, nextStatus, estimatedDelay)
-      let botNotifyFailed = false
       if (order?.orderSource === 'whatsapp' && nextStatus === 'preparing') {
         try {
           await notifyBotOrderConfirmed(orderId, estimatedDelay ?? 10)
         } catch (error) {
           console.warn('No se pudo avisar al cliente por WhatsApp:', error)
-          botNotifyFailed = true
-          setErrorMessage('Pedido confirmado, pero el bot no pudo avisar el tiempo al cliente. Revisa que el bot este encendido.')
         }
       }
-      if (!botNotifyFailed) setErrorMessage(null)
+      setErrorMessage(null)
       return true
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo actualizar el estado.'

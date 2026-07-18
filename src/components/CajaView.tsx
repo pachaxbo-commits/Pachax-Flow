@@ -637,7 +637,7 @@ export function CajaView({
               )}
 
               {/* Tablero Kanban de 3 Columnas */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+              <div className="grid grid-cols-1 xl:grid-cols-2 min-[1600px]:grid-cols-3 gap-5 items-start">
                 
                 {/* COLUMNA 1: PEDIDOS FINALIZADOS */}
                 <div className="space-y-4">
@@ -651,7 +651,7 @@ export function CajaView({
                     </span>
                   </div>
 
-                  <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+                  <div className="space-y-3 overflow-visible min-[1600px]:max-h-[70vh] min-[1600px]:overflow-y-auto min-[1600px]:pr-1">
                     {finalizadosOrders.length === 0 ? (
                       <div className="rounded-2xl border border-dashed border-line p-8 text-center text-xs text-muted font-semibold bg-white/40">
                         No hay pedidos finalizados hoy.
@@ -786,7 +786,7 @@ export function CajaView({
                     })}
                   </div>
 
-                  <div className="space-y-3 max-h-[64vh] overflow-y-auto pr-1">
+                  <div className="space-y-3 overflow-visible min-[1600px]:max-h-[64vh] min-[1600px]:overflow-y-auto min-[1600px]:pr-1">
                     {whatsappOrders.length === 0 ? (
                       <div className="rounded-2xl border border-dashed border-line p-8 text-center text-xs text-muted font-semibold bg-white/40">
                         Sin pedidos activos en esta sección.
@@ -932,10 +932,6 @@ export function CajaView({
                                 type="button"
                                 className="flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition"
                                 onClick={() => {
-                                  if (order.paymentStatus === 'paid') {
-                                    window.alert('Un pedido cobrado requiere devolución antes de poder anularse.')
-                                    return
-                                  }
                                   setCancellingOrder(order)
                                   setCancelReason('')
                                 }}
@@ -975,7 +971,7 @@ export function CajaView({
                     </span>
                   </div>
 
-                  <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+                  <div className="space-y-3 overflow-visible min-[1600px]:max-h-[70vh] min-[1600px]:overflow-y-auto min-[1600px]:pr-1">
                     {localesOrders.length === 0 ? (
                       <div className="rounded-2xl border border-dashed border-line p-8 text-center text-xs text-muted font-semibold bg-white/40">
                         Sin pedidos de caja activos hoy.
@@ -1082,10 +1078,6 @@ export function CajaView({
                                 type="button"
                                 className="flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition"
                                 onClick={() => {
-                                  if (order.paymentStatus === 'paid') {
-                                    window.alert('Un pedido cobrado requiere devolución antes de poder anularse.')
-                                    return
-                                  }
                                   setCancellingOrder(order)
                                   setCancelReason('')
                                 }}

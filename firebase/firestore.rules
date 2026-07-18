@@ -199,7 +199,6 @@ service cloud.firestore {
 
     function isCancelTransition() {
       return resource.data.status in ['pending', 'preparing', 'ready', 'ready_for_pickup', 'ready_for_dispatch', 'out_for_delivery']
-        && resource.data.paymentStatus == 'pending'
         && request.resource.data.status == 'cancelled'
         && request.resource.data.cancelledAt is timestamp
         && request.resource.data.cancelledBy is string
@@ -369,7 +368,9 @@ service cloud.firestore {
               && isValidFulfillment(request.resource.data)
             )
           );
-        allow delete: if false;
+        allow delete: if resource != null
+          && isValidDayId(dayId)
+          && hasRole(restaurantId, ['admin', 'caja']);
       }
     }
   }
