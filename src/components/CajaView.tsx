@@ -287,15 +287,17 @@ export function CajaView({
     change: fastChange,
   })
 
+  const canManagePayments = userRole === 'admin' || userRole === 'caja' || userRole === 'demo'
+  const canManageOrders = userRole === 'admin' || userRole === 'caja' || userRole === 'demo'
+
   // Filtered Orders & Badge count
-  const pendingPaymentCount = useMemo(() => {
-    return orders.filter((order) => {
-      if (userRole === 'pedidos') {
-        return order.createdBy === userId && order.paymentStatus === 'pending' && order.status !== 'cancelled'
-      }
-      return order.paymentStatus === 'pending' && order.status !== 'cancelled'
-    }).length
-  }, [orders, userRole, userId])
+  const pendingPaymentOrders = useMemo(() => {
+    if (!canManagePayments) return []
+    return orders
+      .filter((order) => order.paymentStatus === 'pending' && order.status !== 'cancelled')
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+  }, [orders, canManagePayments])
+  const pendingPaymentCount = pendingPaymentOrders.length
 
   // Escuchador para sonar alerta si entra un nuevo pedido de WhatsApp
   const lastPendingWhatsappSequence = useRef<number>(0)
@@ -627,19 +629,21 @@ export function CajaView({
                       </div>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="px-4 py-2 bg-red-750 hover:bg-red-800 text-white text-xs font-black rounded-xl transition shadow-sm shrink-0"
-                    onClick={async () => {
-                      if (window.confirm(`¿Estás seguro de que deseas ANULAR automáticamente los ${pastPendingOrders.length} pedidos pendientes de días anteriores?`)) {
-                        for (const order of pastPendingOrders) {
-                          await onCancelOrder(order.id, 'Sistema', 'Anulación automática por cambio de día')
+                  {canManageOrders ? (
+                    <button
+                      type="button"
+                      className="px-4 py-2 bg-red-750 hover:bg-red-800 text-white text-xs font-black rounded-xl transition shadow-sm shrink-0"
+                      onClick={async () => {
+                        if (window.confirm(`¿Estás seguro de que deseas ANULAR automáticamente los ${pastPendingOrders.length} pedidos pendientes de días anteriores?`)) {
+                          for (const order of pastPendingOrders) {
+                            await onCancelOrder(order.id, 'Sistema', 'Anulación automática por cambio de día')
+                          }
                         }
-                      }
-                    }}
-                  >
-                    ANULAR TODOS ({pastPendingOrders.length})
-                  </button>
+                      }}
+                    >
+                      ANULAR TODOS ({pastPendingOrders.length})
+                    </button>
+                  ) : null}
                 </div>
               )}
 
@@ -652,12 +656,65 @@ export function CajaView({
                         <span className="font-semibold text-red-800">{new Date(order.createdAt).toLocaleDateString()}</span>
                       </div>
                       <div className="mt-1 truncate text-muted">{order.customerName || order.items.map((item) => item.name).join(', ')}</div>
-                      <div className="mt-2 flex gap-2">
-                        <button type="button" className="flex-1 rounded-lg bg-ink px-2 py-1.5 font-bold text-white" onClick={() => onSetOrderStatus(order.id, 'delivered')}>Entregado</button>
-                        <button type="button" className="flex-1 rounded-lg bg-red-600 px-2 py-1.5 font-bold text-white" onClick={() => onCancelOrder(order.id, 'Sistema', 'Anulado desde pendientes anteriores')}>Anular</button>
-                      </div>
+                      {canManageOrders ? (
+                        <div className="mt-2 flex gap-2">
+                          <button type="button" className="flex-1 rounded-lg bg-ink px-2 py-1.5 font-bold text-white" onClick={() => onSetOrderStatus(order.id, 'delivered')}>Entregado</button>
+                          <button type="button" className="flex-1 rounded-lg bg-red-600 px-2 py-1.5 font-bold text-white" onClick={() => onCancelOrder(order.id, 'Sistema', 'Anulado desde pendientes anteriores')}>Anular</button>
+                        </div>
+                      ) : null}
                     </div>
                   ))}
+                </div>
+              )}
+
+              {pendingPaymentOrders.length > 0 && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 shadow-sm">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-black uppercase tracking-wide text-amber-950">Cobros pendientes</div>
+                      <div className="text-xs font-semibold text-amber-800">
+                        Estos pedidos siguen sin pago aunque ya no aparezcan en las columnas activas.
+                      </div>
+                    </div>
+                    <span className="rounded-full bg-amber-600 px-3 py-1 text-xs font-black text-white">
+                      {pendingPaymentOrders.length}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                    {pendingPaymentOrders.map((order) => (
+                      <div key={order.id} className="rounded-xl border border-amber-100 bg-white p-3 text-xs shadow-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-black text-ink">{order.displayNumber}</span>
+                          <PaymentBadge paymentStatus={order.paymentStatus} paymentMethod={order.paymentMethod} />
+                        </div>
+                        <div className="mt-1 truncate font-semibold text-ink">{order.customerName || 'Cliente general'}</div>
+                        <div className="mt-1 truncate text-muted">{order.items.map((item) => `${item.quantity}x ${item.name}`).join(', ')}</div>
+                        <div className="mt-2 flex items-center justify-between border-t border-dashed border-line pt-2">
+                          <span className="font-black text-ink">{formatCurrency(order.productSubtotal ?? order.total)}</span>
+                          <span className="text-[10px] font-semibold text-muted">{new Date(order.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            type="button"
+                            className="flex-1 rounded-lg bg-emerald-600 px-2 py-1.5 font-bold text-white"
+                            onClick={() => {
+                              setPayingOrder(order)
+                              setFastPayMethod('cash')
+                              setFastCashReceived('')
+                              setFastCashSplit('')
+                            }}
+                          >
+                            Cobrar
+                          </button>
+                          {canManageOrders && order.status !== 'delivered' ? (
+                            <button type="button" className="flex-1 rounded-lg bg-ink px-2 py-1.5 font-bold text-white" onClick={() => onSetOrderStatus(order.id, 'delivered')}>
+                              Entregado
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -734,7 +791,7 @@ export function CajaView({
                               </button>
                               <button
                                 type="button"
-                                className="p-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition"
+                                className={`p-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition ${canManageOrders ? '' : 'hidden'}`}
                                 title="Eliminar permanentemente"
                                 onClick={async () => {
                                   if (window.confirm('¿Estás seguro de que deseas ELIMINAR permanentemente este pedido del sistema? Esta acción no se puede deshacer.')) {
@@ -896,7 +953,7 @@ export function CajaView({
 
                             {/* Acciones para WhatsApp */}
                             <div className="flex flex-wrap gap-1.5 pt-1 border-t border-dashed border-line">
-                              {order.status === 'pending' ? (
+                              {canManageOrders && order.status === 'pending' ? (
                                 confirmingDelayOrderId === order.id ? (
                                   <div className="flex items-center gap-1 bg-[#f8fafc] p-1.5 rounded-xl border border-[#cbd5e1] flex-wrap w-full">
                                     <span className="text-[10px] font-black text-slate-500 px-1">Retraso:</span>
@@ -947,7 +1004,7 @@ export function CajaView({
                                 )
                               ) : null}
 
-                              {!isPaid && (
+                              {canManagePayments && !isPaid && (
                                 <button
                                   type="button"
                                   className="flex-1 flex items-center justify-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm"
@@ -965,7 +1022,7 @@ export function CajaView({
 
                               <button
                                 type="button"
-                                className="flex-1 flex items-center justify-center gap-1 bg-ink hover:bg-ink/90 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm"
+                                className={`flex-1 items-center justify-center gap-1 bg-ink hover:bg-ink/90 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm ${canManageOrders ? 'flex' : 'hidden'}`}
                                 onClick={() => onSetOrderStatus(order.id, 'delivered')}
                               >
                                 <CheckCircle2 size={12} />
@@ -982,7 +1039,7 @@ export function CajaView({
 
                               <button
                                 type="button"
-                                className="flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition"
+                                className={`flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition ${canManageOrders ? '' : 'hidden'}`}
                                 onClick={() => {
                                   setCancellingOrder(order)
                                   setCancelReason('')
@@ -993,7 +1050,7 @@ export function CajaView({
 
                               <button
                                 type="button"
-                                className="flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition"
+                                className={`flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition ${canManageOrders ? '' : 'hidden'}`}
                                 onClick={async () => {
                                   if (window.confirm('¿Estás seguro de que deseas ELIMINAR permanentemente este pedido del sistema? Esta acción no se puede deshacer.')) {
                                     await onDeleteOrder(order.id)
@@ -1080,7 +1137,7 @@ export function CajaView({
 
                             {/* Acciones para Pedido Local */}
                             <div className="flex flex-wrap gap-1.5 pt-1 border-t border-dashed border-line">
-                              {order.status === 'pending' ? (
+                              {canManageOrders && order.status === 'pending' ? (
                                 <button
                                   type="button"
                                   className="flex-1 flex items-center justify-center gap-1 bg-amber-500 hover:bg-amber-600 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm"
@@ -1094,7 +1151,7 @@ export function CajaView({
                                 </button>
                               ) : null}
 
-                              {!isPaid && (
+                              {canManagePayments && !isPaid && (
                                 <button
                                   type="button"
                                   className="flex-1 flex items-center justify-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm"
@@ -1112,7 +1169,7 @@ export function CajaView({
 
                               <button
                                 type="button"
-                                className="flex-1 flex items-center justify-center gap-1 bg-ink hover:bg-ink/90 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm"
+                                className={`flex-1 items-center justify-center gap-1 bg-ink hover:bg-ink/90 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm ${canManageOrders ? 'flex' : 'hidden'}`}
                                 onClick={() => onSetOrderStatus(order.id, 'delivered')}
                               >
                                 <CheckCircle2 size={12} />
@@ -1129,7 +1186,7 @@ export function CajaView({
 
                               <button
                                 type="button"
-                                className="flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition"
+                                className={`flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition ${canManageOrders ? '' : 'hidden'}`}
                                 onClick={() => {
                                   setCancellingOrder(order)
                                   setCancelReason('')
@@ -1140,7 +1197,7 @@ export function CajaView({
 
                               <button
                                 type="button"
-                                className="flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition"
+                                className={`flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition ${canManageOrders ? '' : 'hidden'}`}
                                 onClick={async () => {
                                   if (window.confirm('¿Estás seguro de que deseas ELIMINAR permanentemente este pedido del sistema? Esta acción no se puede deshacer.')) {
                                     await onDeleteOrder(order.id)

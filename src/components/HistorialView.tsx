@@ -200,7 +200,7 @@ export function HistorialView({
           nameLower.startsWith('bbq ')
 
         if (isBurger) {
-          panes += qty
+          panes += 2 * qty
 
           let basePatties = 1
           if (nameLower.includes('doble') || nameLower.includes('double')) {

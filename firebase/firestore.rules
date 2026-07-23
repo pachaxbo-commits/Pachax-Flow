@@ -267,7 +267,7 @@ service cloud.firestore {
         && request.resource.data.displayName is string
         && request.resource.data.role in ['admin', 'caja', 'cocina', 'pedidos']
         && request.resource.data.active is bool;
-      allow delete: if false;
+      allow delete: if hasRole(restaurantId, ['admin']) && request.auth.uid != uid;
     }
 
     match /restaurants/{restaurantId}/catalog/{catalogId}/categories/{categoryId} {
@@ -324,9 +324,10 @@ service cloud.firestore {
               hasRole(restaurantId, ['admin', 'caja'])
               && (
                 (
-                  request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readyAt', 'deliveredAt', 'updatedAt'])
+                  request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readyAt', 'deliveredAt', 'estimatedDelay', 'updatedAt'])
                   && (
-                    isOutForDeliveryTransition()
+                    isPreparingTransition()
+                    || isOutForDeliveryTransition()
                     || isDeliveredTransition()
                   )
                 )

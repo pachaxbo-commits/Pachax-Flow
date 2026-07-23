@@ -6,6 +6,7 @@ import {
   getAuth,
   inMemoryPersistence,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   setPersistence,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
@@ -16,6 +17,7 @@ import {
 import {
   collection,
   connectFirestoreEmulator,
+  deleteDoc,
   doc,
   getDocs,
   initializeFirestore,
@@ -216,4 +218,18 @@ export async function updateRestaurantMember(uid: string, updates: Partial<Pick<
   if (!context) throw new Error('Firebase no esta configurado.')
 
   await updateDoc(doc(context.db, 'restaurants', context.restaurantId, 'members', uid), updates)
+}
+
+export async function sendRestaurantMemberPasswordReset(email: string) {
+  const context = await getFirebaseContext()
+  if (!context) throw new Error('Firebase no esta configurado.')
+
+  await sendPasswordResetEmail(context.auth, email.trim())
+}
+
+export async function deleteRestaurantMemberAccess(uid: string) {
+  const context = await getFirebaseContext()
+  if (!context) throw new Error('Firebase no esta configurado.')
+
+  await deleteDoc(doc(context.db, 'restaurants', context.restaurantId, 'members', uid))
 }

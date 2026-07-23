@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Eye, EyeOff, Pencil, Plus, Power, Trash2, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { formatCurrency } from '../lib/format'
-import { createRestaurantMember, listRestaurantMembers, updateRestaurantMember } from '../lib/firebase'
+import { createRestaurantMember, deleteRestaurantMemberAccess, listRestaurantMembers, sendRestaurantMemberPasswordReset, updateRestaurantMember } from '../lib/firebase'
 import type { CatalogCategory, CatalogCategoryInput, CatalogProductInput, Product, ProductExtra, ProductOption, RestaurantMember, UserRole } from '../types'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { Button } from './ui/Button'
@@ -243,11 +243,15 @@ export function AdminView({
             <Button
               size="sm"
               onClick={async () => {
-                setMemberNotice('')
-                await createRestaurantMember(memberForm)
-                setMemberForm({ email: '', password: '', displayName: '', role: 'caja' })
-                setMemberNotice('Usuario creado correctamente.')
-                await refreshMembers()
+                try {
+                  setMemberNotice('')
+                  await createRestaurantMember(memberForm)
+                  setMemberForm({ email: '', password: '', displayName: '', role: 'caja' })
+                  setMemberNotice('Usuario creado correctamente.')
+                  await refreshMembers()
+                } catch (error) {
+                  setMemberNotice(error instanceof Error ? error.message : 'No se pudo crear el usuario.')
+                }
               }}
             >
               <Plus size={14} />
@@ -286,6 +290,20 @@ export function AdminView({
                       await refreshMembers()
                     }}>
                       {member.active ? 'Activo' : 'Inactivo'}
+                    </button>
+                    <button type="button" className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700" onClick={async () => {
+                      await sendRestaurantMemberPasswordReset(member.email)
+                      setMemberNotice(`Se envio un enlace de contrasena a ${member.email}.`)
+                    }}>
+                      Contrasena
+                    </button>
+                    <button type="button" className="rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700" onClick={async () => {
+                      if (!window.confirm(`Quitar acceso a ${member.email}?`)) return
+                      await deleteRestaurantMemberAccess(member.uid)
+                      setMemberNotice('Acceso eliminado del restaurante.')
+                      await refreshMembers()
+                    }}>
+                      Quitar
                     </button>
                   </div>
                 </div>
