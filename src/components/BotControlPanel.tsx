@@ -1,7 +1,15 @@
 import { Bot, Power, PowerOff, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { UserRole } from '../types'
-import { botApiUrl, botAdminToken, fetchBotHealth, type BotHealth } from '../lib/botApi'
+import {
+  botApiUrl,
+  botAdminToken,
+  fetchBotHealth,
+  saveBotSettings,
+  setBotAcceptingOrders,
+  setBotEnabled as updateBotEnabled,
+  type BotHealth,
+} from '../lib/botApi'
 
 type BotStatus = 'checking' | 'online' | 'offline' | 'error' | 'not_configured'
 
@@ -29,6 +37,11 @@ export function BotControlPanel({ collapsed, userRole }: { collapsed: boolean; u
     return health.acceptingOrders === false ? 'Pedidos pausados temporalmente.' : 'Recibe pedidos automaticamente.'
   }, [health, status])
 
+  const isConnected = Boolean(health?.whatsappConnected)
+  const isEnabled = Boolean(health?.botEnabled)
+  const isAcceptingOrders = health?.acceptingOrders !== false
+  const isAutoReplying = health?.autoRepliesEnabled !== false
+
   async function refreshHealth() {
     if (!botApiUrl || !botAdminToken) {
       setStatus('not_configured')
@@ -46,16 +59,10 @@ export function BotControlPanel({ collapsed, userRole }: { collapsed: boolean; u
     }
   }
 
-  async function setBotEnabled(enabled: boolean) {
+  async function runControl(action: () => Promise<unknown>) {
     try {
       setIsBusy(true)
-      const response = await fetch(`${botApiUrl}/bot/${enabled ? 'on' : 'off'}`, {
-        method: 'POST',
-        headers: {
-          'x-bot-token': botAdminToken,
-        },
-      })
-      if (!response.ok) throw new Error('Bot command failed')
+      await action()
       await refreshHealth()
     } catch {
       setStatus('error')
@@ -91,7 +98,7 @@ export function BotControlPanel({ collapsed, userRole }: { collapsed: boolean; u
   }
 
   return (
-    <div className="rounded-[1.5rem] border border-white/80 bg-white/72 p-4 shadow-card">
+    <div className="rounded-[1.25rem] border border-white/80 bg-white/72 p-3 shadow-card">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm font-semibold text-ink">
           <Bot size={16} className="text-accent" />
@@ -99,35 +106,99 @@ export function BotControlPanel({ collapsed, userRole }: { collapsed: boolean; u
         </div>
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-xl border border-line bg-white text-muted transition hover:text-ink"
+          className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-white text-muted transition hover:text-ink"
           onClick={() => void refreshHealth()}
           title="Actualizar estado"
         >
-          <RefreshCw size={14} />
+          <RefreshCw size={13} />
         </button>
       </div>
-      <div className="mt-3 text-sm font-semibold text-ink">{statusLabel}</div>
-      <div className="mt-1 text-xs leading-5 text-muted">{statusDetail}</div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-success px-3 text-xs font-bold text-white transition hover:bg-[#315941] disabled:opacity-50"
+      <div className="mt-2 text-sm font-semibold text-ink">{statusLabel}</div>
+      <div className="mt-0.5 text-xs leading-4 text-muted">{statusDetail}</div>
+
+      <div className="mt-3 grid gap-2">
+        <StateSwitch
+          active={isEnabled}
           disabled={isBusy}
-          onClick={() => void setBotEnabled(true)}
-        >
-          <Power size={13} />
-          Encender
-        </button>
-        <button
-          type="button"
-          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-white px-3 text-xs font-bold text-ink ring-1 ring-line transition hover:bg-accentWash disabled:opacity-50"
-          disabled={isBusy}
-          onClick={() => void setBotEnabled(false)}
-        >
-          <PowerOff size={13} />
-          Apagar
-        </button>
+          offIcon={PowerOff}
+          offLabel="Apagado"
+          onActivate={() => runControl(() => updateBotEnabled(true))}
+          onDeactivate={() => runControl(() => updateBotEnabled(false))}
+          onIcon={Power}
+          onLabel="Encendido"
+        />
+        <StateSwitch
+          active={isAcceptingOrders}
+          disabled={isBusy || !isConnected || !isEnabled}
+          offIcon={PowerOff}
+          offLabel="Pedidos pausados"
+          onActivate={() => runControl(() => setBotAcceptingOrders(true))}
+          onDeactivate={() => runControl(() => setBotAcceptingOrders(false))}
+          onIcon={Power}
+          onLabel="Recibe pedidos"
+        />
+        <StateSwitch
+          active={isAutoReplying}
+          disabled={isBusy || !isConnected || !isEnabled}
+          offIcon={PowerOff}
+          offLabel="Respuestas pausadas"
+          onActivate={() => runControl(() => saveBotSettings({ autoRepliesEnabled: true }))}
+          onDeactivate={() => runControl(() => saveBotSettings({ autoRepliesEnabled: false }))}
+          onIcon={Power}
+          onLabel="Responde solo"
+        />
       </div>
+    </div>
+  )
+}
+
+function StateSwitch({
+  active,
+  disabled,
+  offIcon: OffIcon,
+  offLabel,
+  onActivate,
+  onDeactivate,
+  onIcon: OnIcon,
+  onLabel,
+}: {
+  active: boolean
+  disabled?: boolean
+  offIcon: typeof Power
+  offLabel: string
+  onActivate: () => Promise<void>
+  onDeactivate: () => Promise<void>
+  onIcon: typeof Power
+  onLabel: string
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-1.5">
+      <button
+        type="button"
+        className={`inline-flex h-8 items-center justify-center gap-1 rounded-lg px-2 text-[11px] font-black transition ${
+          active
+            ? 'bg-success text-white shadow-sm'
+            : 'bg-white text-muted ring-1 ring-line hover:bg-accentWash hover:text-ink'
+        } disabled:cursor-not-allowed disabled:opacity-70`}
+        disabled={disabled || active}
+        onClick={() => void onActivate()}
+      >
+        <OnIcon size={12} />
+        {onLabel}
+      </button>
+      <button
+        type="button"
+        className={`inline-flex h-8 items-center justify-center gap-1 rounded-lg px-2 text-[11px] font-black transition ${
+          !active
+            ? 'bg-[#2a201b] text-white shadow-sm'
+            : 'bg-white text-muted ring-1 ring-line hover:bg-accentWash hover:text-ink'
+        } disabled:cursor-not-allowed disabled:opacity-70`}
+        disabled={disabled || !active}
+        onClick={() => void onDeactivate()}
+      >
+        <OffIcon size={12} />
+        {offLabel}
+      </button>
     </div>
   )
 }

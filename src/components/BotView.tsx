@@ -181,20 +181,36 @@ export function BotView() {
       <div className="grid gap-5 xl:grid-cols-[1fr_1.1fr]">
         <Panel className="p-5">
           <SectionTitle icon={Power} title="Operacion" />
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <ActionButton label="Encender bot" icon={Power} disabled={busy} onClick={() => runAction(() => setBotEnabled(true).then(() => undefined), 'Bot encendido.')} />
-            <ActionButton label="Apagar bot" icon={PowerOff} disabled={busy} onClick={() => runAction(() => setBotEnabled(false).then(() => undefined), 'Bot apagado.')} />
-            <ActionButton
-              label={settings.acceptingOrders ? 'Pausar pedidos' : 'Reanudar pedidos'}
-              icon={settings.acceptingOrders ? PauseCircle : PlayCircle}
+          <div className="mt-4 grid gap-3">
+            <OperationSwitch
+              active={health?.botEnabled === true}
               disabled={busy}
-              onClick={() => runAction(() => setBotAcceptingOrders(!settings.acceptingOrders).then(() => undefined), 'Recepcion de pedidos actualizada.')}
+              offIcon={PowerOff}
+              offLabel="Apagado"
+              onActivate={() => runAction(() => setBotEnabled(true).then(() => undefined), 'Bot encendido.')}
+              onDeactivate={() => runAction(() => setBotEnabled(false).then(() => undefined), 'Bot apagado.')}
+              onIcon={Power}
+              onLabel="Encendido"
             />
-            <ActionButton
-              label={settings.autoRepliesEnabled ? 'Pausar respuestas' : 'Reanudar respuestas'}
-              icon={settings.autoRepliesEnabled ? PauseCircle : PlayCircle}
-              disabled={busy}
-              onClick={() => runAction(() => saveBotSettings({ autoRepliesEnabled: !settings.autoRepliesEnabled }).then(() => undefined), 'Respuestas automaticas actualizadas.')}
+            <OperationSwitch
+              active={settings.acceptingOrders}
+              disabled={busy || health?.botEnabled === false}
+              offIcon={PauseCircle}
+              offLabel="Pausado"
+              onActivate={() => runAction(() => setBotAcceptingOrders(true).then(() => undefined), 'Recepcion de pedidos reanudada.')}
+              onDeactivate={() => runAction(() => setBotAcceptingOrders(false).then(() => undefined), 'Pedidos pausados.')}
+              onIcon={PlayCircle}
+              onLabel="Recibe pedidos"
+            />
+            <OperationSwitch
+              active={settings.autoRepliesEnabled}
+              disabled={busy || health?.botEnabled === false}
+              offIcon={PauseCircle}
+              offLabel="Pausa humana"
+              onActivate={() => runAction(() => saveBotSettings({ autoRepliesEnabled: true }).then(() => undefined), 'Respuestas automaticas reanudadas.')}
+              onDeactivate={() => runAction(() => saveBotSettings({ autoRepliesEnabled: false }).then(() => undefined), 'Respuestas automaticas pausadas.')}
+              onIcon={MessageSquareText}
+              onLabel="Responde solo"
             />
           </div>
         </Panel>
@@ -318,12 +334,72 @@ function SectionTitle({ icon: Icon, title }: { icon: typeof Bot; title: string }
   )
 }
 
-function ActionButton({ icon: Icon, label, disabled, onClick }: { icon: typeof Bot; label: string; disabled?: boolean; onClick: () => void }) {
+function ActionButton({ active, icon: Icon, label, disabled, onClick }: { active?: boolean; icon: typeof Bot; label: string; disabled?: boolean; onClick: () => void }) {
   return (
-    <button type="button" disabled={disabled} onClick={onClick} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white px-3 text-sm font-bold text-ink transition hover:bg-accentWash disabled:opacity-50">
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex h-11 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-80 ${
+        active
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          : 'border-line bg-white text-ink hover:bg-accentWash'
+      }`}
+    >
       <Icon size={16} />
       {label}
     </button>
+  )
+}
+
+function OperationSwitch({
+  active,
+  disabled,
+  offIcon: OffIcon,
+  offLabel,
+  onActivate,
+  onDeactivate,
+  onIcon: OnIcon,
+  onLabel,
+}: {
+  active: boolean
+  disabled?: boolean
+  offIcon: typeof Bot
+  offLabel: string
+  onActivate: () => Promise<void>
+  onDeactivate: () => Promise<void>
+  onIcon: typeof Bot
+  onLabel: string
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <button
+        type="button"
+        disabled={disabled || active}
+        onClick={() => void onActivate()}
+        className={`flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition disabled:cursor-not-allowed ${
+          active
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            : 'border-line bg-white text-ink hover:bg-accentWash disabled:opacity-60'
+        }`}
+      >
+        <OnIcon size={15} />
+        {onLabel}
+      </button>
+      <button
+        type="button"
+        disabled={disabled || !active}
+        onClick={() => void onDeactivate()}
+        className={`flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition disabled:cursor-not-allowed ${
+          !active
+            ? 'border-[#35251f] bg-[#2a201b] text-white'
+            : 'border-line bg-white text-ink hover:bg-accentWash disabled:opacity-60'
+        }`}
+      >
+        <OffIcon size={15} />
+        {offLabel}
+      </button>
+    </div>
   )
 }
 

@@ -211,7 +211,7 @@ function MainShell({
         </div>
       ) : null}
 
-      <div className={`relative grid max-w-none gap-4 ${isSidebarCollapsed ? 'xl:grid-cols-[82px_minmax(0,1fr)]' : 'xl:grid-cols-[240px_minmax(0,1fr)]'}`}>
+      <div className={`relative grid max-w-none gap-4 ${isSidebarCollapsed ? 'xl:grid-cols-[82px_minmax(0,1fr)]' : 'xl:grid-cols-[230px_minmax(0,1fr)]'}`}>
         <TopBar
           availableViews={availableViews}
           collapsed={isSidebarCollapsed}
@@ -222,13 +222,13 @@ function MainShell({
           rightSlot={
             <div className="space-y-3">
               {role !== 'pedidos' ? (
-                <div className="rounded-[1.5rem] border border-white/80 bg-panel/92 p-4 shadow-card">
+                <div className="rounded-[1.25rem] border border-white/80 bg-panel/92 p-3 shadow-card">
                   <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted">
                     <WalletCards size={15} className="text-accent" />
                     Venta del dia
                   </div>
-                  <div className="mt-3 text-3xl font-semibold tracking-tight text-ink">{formatCurrency(dailyTotal)}</div>
-                  <div className="mt-1 text-sm text-muted">
+                  <div className="mt-2 text-2xl font-semibold tracking-tight text-ink">{formatCurrency(dailyTotal)}</div>
+                  <div className="mt-0.5 text-xs text-muted">
                     {activeTodayCount} pedidos activos hoy
                   </div>
                 </div>
@@ -237,26 +237,26 @@ function MainShell({
               <BotControlPanel collapsed={isSidebarCollapsed} userRole={role} />
 
               <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                <div className="rounded-[1.4rem] border border-white/80 bg-white/72 p-4">
+                <div className="rounded-[1.15rem] border border-white/80 bg-white/72 p-3">
                   <div className="flex items-center gap-2 text-sm font-semibold text-ink">
                     <BellRing size={16} className="text-accent" />
                     Pendientes
                   </div>
-                  <div className="mt-2 text-2xl font-semibold">{pendingCount}</div>
+                  <div className="mt-1 text-2xl font-semibold">{pendingCount}</div>
                 </div>
-                <div className="rounded-[1.4rem] border border-white/80 bg-white/72 p-4">
+                <div className="rounded-[1.15rem] border border-white/80 bg-white/72 p-3">
                   <div className="flex items-center gap-2 text-sm font-semibold text-ink">
                     <Clock3 size={16} className="text-accent" />
                     Proximo
                   </div>
-                  <div className="mt-2 text-2xl font-semibold">{nextOrderNumber}</div>
+                  <div className="mt-1 text-2xl font-semibold">{nextOrderNumber}</div>
                 </div>
-                <div className="rounded-[1.4rem] border border-white/80 bg-white/72 p-4">
+                <div className="rounded-[1.15rem] border border-white/80 bg-white/72 p-3">
                   <div className="flex items-center gap-2 text-sm font-semibold text-ink">
                     <Flame size={16} className="text-accent" />
                     Area
                   </div>
-                  <div className="mt-2 text-sm font-semibold text-muted">
+                  <div className="mt-1 text-xs font-semibold text-muted">
                     {view === 'caja' ? 'Tomando pedidos' : view === 'cocina' ? 'Preparacion' : view === 'historial' ? 'Reporte diario' : view === 'bot' ? 'Bot WhatsApp' : 'Menu y productos'}
                   </div>
                 </div>
