@@ -258,9 +258,16 @@ service cloud.firestore {
     }
 
     match /restaurants/{restaurantId}/members/{uid} {
-      allow get: if isSignedIn() && request.auth.uid == uid;
-      allow list: if false;
-      allow create, update, delete: if false;
+      allow get: if isSignedIn() && (request.auth.uid == uid || hasRole(restaurantId, ['admin']));
+      allow list: if hasRole(restaurantId, ['admin']);
+      allow create, update: if hasRole(restaurantId, ['admin'])
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'active', 'createdAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.email is string
+        && request.resource.data.displayName is string
+        && request.resource.data.role in ['admin', 'caja', 'cocina', 'pedidos']
+        && request.resource.data.active is bool;
+      allow delete: if false;
     }
 
     match /restaurants/{restaurantId}/catalog/{catalogId}/categories/{categoryId} {

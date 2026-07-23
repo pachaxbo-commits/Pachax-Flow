@@ -345,6 +345,13 @@ export function CajaView({
     return `${year}-${month}-${day}`
   }
 
+  const isOrderDeliveryDelayed = (order: Order) => {
+    if (order.status === 'delivered' || order.status === 'cancelled') return false
+    if (!order.estimatedDelay) return false
+    const dueAt = new Date(order.createdAt).getTime() + order.estimatedDelay * 60 * 1000
+    return Date.now() > dueAt
+  }
+
   // Pedidos pendientes de días anteriores para alerta
   const pastPendingOrders = useMemo(() => {
     return orders.filter((order) => {
@@ -636,6 +643,24 @@ export function CajaView({
                 </div>
               )}
 
+              {pastPendingOrders.length > 0 && (
+                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {pastPendingOrders.map((order) => (
+                    <div key={order.id} className="rounded-2xl border border-red-100 bg-white p-3 text-xs shadow-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-black text-ink">{order.displayNumber}</span>
+                        <span className="font-semibold text-red-800">{new Date(order.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <div className="mt-1 truncate text-muted">{order.customerName || order.items.map((item) => item.name).join(', ')}</div>
+                      <div className="mt-2 flex gap-2">
+                        <button type="button" className="flex-1 rounded-lg bg-ink px-2 py-1.5 font-bold text-white" onClick={() => onSetOrderStatus(order.id, 'delivered')}>Entregado</button>
+                        <button type="button" className="flex-1 rounded-lg bg-red-600 px-2 py-1.5 font-bold text-white" onClick={() => onCancelOrder(order.id, 'Sistema', 'Anulado desde pendientes anteriores')}>Anular</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Tablero Kanban de 3 Columnas */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
                 
@@ -800,6 +825,9 @@ export function CajaView({
                               <div className="flex items-center gap-1.5">
                                 <span className="text-sm font-black text-ink">{order.displayNumber}</span>
                                 <StatusPill status={order.status} />
+                                {isOrderDeliveryDelayed(order) ? (
+                                  <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[9px] font-black text-red-700">RETRASO DE ENTREGA</span>
+                                ) : null}
                               </div>
                               <span className="text-[10px] text-muted font-semibold">
                                 {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1009,6 +1037,9 @@ export function CajaView({
                               <div className="flex items-center gap-1.5">
                                 <span className="text-sm font-black text-ink">{order.displayNumber}</span>
                                 <StatusPill status={order.status} />
+                                {isOrderDeliveryDelayed(order) ? (
+                                  <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[9px] font-black text-red-700">RETRASO DE ENTREGA</span>
+                                ) : null}
                               </div>
                               <span className="text-[10px] text-muted font-semibold">
                                 {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

@@ -1,7 +1,8 @@
-import { ArrowDown, ArrowUp, Eye, EyeOff, Pencil, Plus, Power, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Eye, EyeOff, Pencil, Plus, Power, Trash2, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { formatCurrency } from '../lib/format'
-import type { CatalogCategory, CatalogCategoryInput, CatalogProductInput, Product, ProductExtra, ProductOption } from '../types'
+import { createRestaurantMember, listRestaurantMembers, updateRestaurantMember } from '../lib/firebase'
+import type { CatalogCategory, CatalogCategoryInput, CatalogProductInput, Product, ProductExtra, ProductOption, RestaurantMember, UserRole } from '../types'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
@@ -106,7 +107,10 @@ export function AdminView({
   const [editingProductId, setEditingProductId] = useState<string | null>(null)
   
   // Estados para pestañas y formularios
-  const [activeAdminTab, setActiveAdminTab] = useState<'products' | 'categories'>('products')
+  const [activeAdminTab, setActiveAdminTab] = useState<'products' | 'categories' | 'users'>('products')
+  const [members, setMembers] = useState<RestaurantMember[]>([])
+  const [memberForm, setMemberForm] = useState({ email: '', password: '', displayName: '', role: 'caja' as UserRole })
+  const [memberNotice, setMemberNotice] = useState('')
   const [showProductForm, setShowProductForm] = useState(false)
   const [showCategoryForm, setShowCategoryForm] = useState(false)
 
@@ -143,6 +147,17 @@ export function AdminView({
   }
 
   const openConfirm = (config: NonNullable<typeof confirmState>) => setConfirmState(config)
+  const refreshMembers = async () => {
+    try {
+      setMembers(await listRestaurantMembers())
+    } catch {
+      setMembers([])
+    }
+  }
+
+  useEffect(() => {
+    if (activeAdminTab === 'users') void refreshMembers()
+  }, [activeAdminTab])
 
   return (
     <section className="space-y-5">
@@ -162,7 +177,7 @@ export function AdminView({
           </div>
         </div>
       </Panel>      {/* Selector de Pestañas de Administración */}
-      <div className="flex gap-2 bg-white/60 p-1.5 rounded-2xl border border-white/80 shadow-insetSoft max-w-md">
+      <div className="flex gap-2 bg-white/60 p-1.5 rounded-2xl border border-white/80 shadow-insetSoft max-w-2xl">
         <button
           type="button"
           className={`flex-1 py-2.5 rounded-xl text-xs font-black tracking-wider transition ${
@@ -194,6 +209,91 @@ export function AdminView({
           CATEGORÍAS
         </button>
       </div>
+
+      <button
+        type="button"
+        className={`rounded-2xl border px-4 py-2 text-xs font-black tracking-wider transition ${
+          activeAdminTab === 'users'
+            ? 'border-ink bg-ink text-white'
+            : 'border-line bg-white/70 text-muted hover:text-ink'
+        }`}
+        onClick={() => setActiveAdminTab('users')}
+      >
+        USUARIOS
+      </button>
+
+      {activeAdminTab === 'users' && (
+        <div className="grid gap-4 xl:grid-cols-[minmax(320px,420px)_1fr]">
+          <Panel className="bg-white p-5 border border-line rounded-2xl space-y-4 shadow-sm">
+            <div>
+              <h3 className="text-lg font-bold text-ink">Crear usuario</h3>
+              <p className="text-xs text-muted">Crea accesos para caja, cocina, pedidos o administracion.</p>
+            </div>
+            <div className="grid gap-3">
+              <input className="rounded-xl border border-line bg-canvas/35 px-3 py-2 text-sm outline-none focus:border-accent" placeholder="Email" value={memberForm.email} onChange={(event) => setMemberForm((curr) => ({ ...curr, email: event.target.value }))} />
+              <input className="rounded-xl border border-line bg-canvas/35 px-3 py-2 text-sm outline-none focus:border-accent" placeholder="Nombre visible" value={memberForm.displayName} onChange={(event) => setMemberForm((curr) => ({ ...curr, displayName: event.target.value }))} />
+              <input className="rounded-xl border border-line bg-canvas/35 px-3 py-2 text-sm outline-none focus:border-accent" placeholder="Contrasena temporal" type="password" value={memberForm.password} onChange={(event) => setMemberForm((curr) => ({ ...curr, password: event.target.value }))} />
+              <select className="rounded-xl border border-line bg-canvas/35 px-3 py-2 text-sm outline-none focus:border-accent" value={memberForm.role} onChange={(event) => setMemberForm((curr) => ({ ...curr, role: event.target.value as UserRole }))}>
+                <option value="caja">Caja</option>
+                <option value="cocina">Cocina</option>
+                <option value="pedidos">Pedidos</option>
+                <option value="admin">Administracion</option>
+              </select>
+            </div>
+            <Button
+              size="sm"
+              onClick={async () => {
+                setMemberNotice('')
+                await createRestaurantMember(memberForm)
+                setMemberForm({ email: '', password: '', displayName: '', role: 'caja' })
+                setMemberNotice('Usuario creado correctamente.')
+                await refreshMembers()
+              }}
+            >
+              <Plus size={14} />
+              Crear usuario
+            </Button>
+            {memberNotice ? <div className="text-xs font-semibold text-success">{memberNotice}</div> : null}
+          </Panel>
+
+          <Panel className="bg-white p-5 border border-line rounded-2xl space-y-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-ink">Usuarios</h3>
+              <button type="button" className="inline-flex items-center gap-2 rounded-xl border border-line bg-panel px-3 py-2 text-xs font-bold text-ink" onClick={() => void refreshMembers()}>
+                <Users size={14} />
+                Actualizar
+              </button>
+            </div>
+            <div className="divide-y divide-line">
+              {members.map((member) => (
+                <div key={member.uid} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold text-ink">{member.displayName}</div>
+                    <div className="break-all text-xs text-muted">{member.email}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select className="rounded-xl border border-line bg-canvas/35 px-2 py-2 text-xs font-semibold" value={member.role} onChange={async (event) => {
+                      await updateRestaurantMember(member.uid, { role: event.target.value as UserRole })
+                      await refreshMembers()
+                    }}>
+                      <option value="caja">Caja</option>
+                      <option value="cocina">Cocina</option>
+                      <option value="pedidos">Pedidos</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    <button type="button" className={`rounded-xl px-3 py-2 text-xs font-bold ${member.active ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`} onClick={async () => {
+                      await updateRestaurantMember(member.uid, { active: !member.active })
+                      await refreshMembers()
+                    }}>
+                      {member.active ? 'Activo' : 'Inactivo'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Panel>
+        </div>
+      )}
 
       {/* PESTAÑA: PRODUCTOS */}
       {activeAdminTab === 'products' && (

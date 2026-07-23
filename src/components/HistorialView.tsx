@@ -22,14 +22,24 @@ function getTodayKey(now = new Date()) {
   return `${year}-${month}-${day}`
 }
 
+function parseDayKeyLocal(dayKey: string) {
+  const [year, month, day] = dayKey.split('-').map(Number)
+  if (!year || !month || !day) return null
+  return new Date(year, month - 1, day)
+}
+
+function getOrderSaleAmount(order: Order) {
+  return order.productSubtotal ?? order.total
+}
+
 
 function isDateInRange(orderDateStr: string | Date | undefined, referenceDayStr: string, range: 'day' | 'week' | 'month') {
   if (!orderDateStr) return false
   const orderDate = new Date(orderDateStr)
   if (isNaN(orderDate.getTime())) return false
 
-  const refDate = new Date(referenceDayStr)
-  if (isNaN(refDate.getTime())) return false
+  const refDate = parseDayKeyLocal(referenceDayStr)
+  if (!refDate || isNaN(refDate.getTime())) return false
 
   const orderMidnight = new Date(orderDate.getFullYear(), orderDate.getMonth(), orderDate.getDate())
   const refMidnight = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate())
@@ -111,8 +121,8 @@ export function HistorialView({
       return isDateInRange(order.createdAt, selectedDayKey, timeRange)
     })
 
-    // Pedidos activos con cobro pendiente en este momento
-    const activePendingPaymentOrders = orders.filter((order) => order.status !== 'cancelled' && order.paymentStatus === 'pending')
+    // Pedidos activos con cobro pendiente creados en el rango seleccionado
+    const activePendingPaymentOrders = activeCreatedOrders.filter((order) => order.paymentStatus === 'pending')
 
     const mostSoldMap = new Map<string, number>()
     activeCreatedOrders.forEach((order) => {
@@ -147,9 +157,9 @@ export function HistorialView({
       },
     )
 
-    const totalSales = activeCreatedOrders.reduce((sum, order) => sum + order.total, 0)
-    const paidSales = activePaidOrders.reduce((sum, order) => sum + order.total, 0)
-    const pendingPaymentTotal = activePendingPaymentOrders.reduce((sum, order) => sum + order.total, 0)
+    const totalSales = activeCreatedOrders.reduce((sum, order) => sum + getOrderSaleAmount(order), 0)
+    const paidSales = activePaidOrders.reduce((sum, order) => sum + getOrderSaleAmount(order), 0)
+    const pendingPaymentTotal = activePendingPaymentOrders.reduce((sum, order) => sum + getOrderSaleAmount(order), 0)
 
     const deliveredCount = activeCreatedOrders.filter((order) => order.status === 'delivered').length
 
@@ -178,42 +188,36 @@ export function HistorialView({
 
     activeCreatedOrders.forEach((order) => {
       order.items.forEach((item) => {
-        const nameLower = item.name.toLowerCase()
+        const nameLower = item.name
+          .normalize('NFD')
+          .replace(/\p{Diacritic}/gu, '')
+          .toLowerCase()
         const qty = item.quantity
 
-        // Si no es una bebida o porción de papas, asumimos que es hamburguesa
-        const isDrinkOrSide = 
-          nameLower.includes('soda') || 
-          nameLower.includes('coca') || 
-          nameLower.includes('agua') || 
-          nameLower.includes('cerveza') || 
-          nameLower.includes('fanta') || 
-          nameLower.includes('sprite') || 
-          nameLower.includes('jugo') || 
-          nameLower.includes('té') || 
-          nameLower.includes('papas') || 
-          nameLower.includes('porción') || 
-          nameLower.includes('adicional')
+        const isBurger =
+          nameLower.includes('burger') ||
+          nameLower.includes('hamburguesa') ||
+          nameLower.startsWith('bbq ')
 
-        if (!isDrinkOrSide) {
-          // Cada hamburguesa lleva 2 panes (las 2 mitades del pan)
-          panes += 2 * qty
+        if (isBurger) {
+          panes += qty
 
-          // Carnes base de la hamburguesa
           let basePatties = 1
           if (nameLower.includes('doble') || nameLower.includes('double')) {
             basePatties = 2
           } else if (nameLower.includes('triple')) {
             basePatties = 3
-          } else if (nameLower.includes('cuadruple') || nameLower.includes('cuádruple')) {
+          } else if (nameLower.includes('cuadruple')) {
             basePatties = 4
           }
 
-          // Carnes extras en los modificadores
           let extraPatties = 0
           if (item.modifiers && item.modifiers.extras) {
             item.modifiers.extras.forEach((extra: any) => {
-              const extraNameLower = extra.name.toLowerCase()
+              const extraNameLower = extra.name
+                .normalize('NFD')
+                .replace(/\p{Diacritic}/gu, '')
+                .toLowerCase()
               if (extraNameLower.includes('carne') || extraNameLower.includes('patty') || extraNameLower.includes('patties')) {
                 extraPatties += 1
               }
@@ -227,7 +231,6 @@ export function HistorialView({
 
     return { panes, carnes }
   }, [orders, selectedDayKey, timeRange])
-
   const exportCsv = () => {
     const csvOrders = selectedDayOrders.filter((order) => order.status !== 'cancelled')
     const summaryRows = [
@@ -320,7 +323,7 @@ export function HistorialView({
           .map((item) => item.modifiers.note)
           .filter(Boolean)
           .join(' | '),
-        String(order.total),
+        String(getOrderSaleAmount(order)),
       ]
     })
 
@@ -635,7 +638,7 @@ export function HistorialView({
                   </div>
 
                   <div className="border-t border-line pt-2.5 flex justify-between items-center">
-                    <span className="text-xs font-black text-ink">Total: {formatCurrency(order.total)}</span>
+                    <span className="text-xs font-black text-ink">Total: {formatCurrency(getOrderSaleAmount(order))}</span>
                     <div className="flex gap-2">
                       {order.status !== 'delivered' && order.status !== 'cancelled' ? (
                         <>

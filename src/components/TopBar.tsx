@@ -118,7 +118,7 @@ export function TopBar({
         <div className={`rounded-[1.5rem] border border-white/80 bg-panel/90 text-sm text-muted shadow-insetSoft ${collapsed ? 'p-3' : 'p-4'}`}>
           <div className="flex items-center gap-2 text-ink">
             <ReceiptText size={16} className="text-accent" />
-            <span className={`font-semibold ${collapsed ? 'hidden' : ''}`}>{userName}</span>
+            <span className={`min-w-0 break-all font-semibold leading-5 ${collapsed ? 'hidden' : ''}`}>{userName}</span>
           </div>
           <p className={`mt-2 leading-6 ${collapsed ? 'hidden' : ''}`}>
             Rol activo: {userRole}. Gestion diaria de Burger Lab.

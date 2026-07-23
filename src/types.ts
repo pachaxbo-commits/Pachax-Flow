@@ -128,6 +128,7 @@ export interface Order {
   cancelledBy?: string
   cancelledReason?: string
   status: OrderStatus
+  estimatedDelay?: number
   items: OrderItem[]
   total: number
   productSubtotal?: number

@@ -69,6 +69,7 @@ function mapDocToOrder(id: string, data: DocumentData): Order {
     cancelledReason: data.cancelledReason,
     paidAt: toIsoDate(data.paidAt),
     paidBy: data.paidBy,
+    estimatedDelay: typeof data.estimatedDelay === 'number' ? data.estimatedDelay : undefined,
     status: (data.status as OrderStatus | undefined) ?? 'pending',
     items: Array.isArray(data.items) ? data.items : [],
     total: Number(data.total ?? 0),
@@ -441,8 +442,8 @@ export class FirestoreOrderRepository {
         }
       }
 
-      const daysToQueryAll = 7
-      const daysToQueryPending = 30
+      const daysToQueryAll = 31
+      const daysToQueryPending = 60
       const now = new Date()
 
       const dayKeysWithFilter: Array<{ dayKey: string; onlyPending: boolean }> = []

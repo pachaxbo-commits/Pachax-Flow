@@ -79,7 +79,7 @@ function MainShell({
     moveProduct,
   } = useCatalogStore()
 
-  const dailyTotal = useMemo(() => orders.reduce((sum, order) => (order.status !== 'cancelled' && order.paymentStatus === 'paid') ? sum + order.total : sum, 0), [orders])
+  const dailyTotal = useMemo(() => orders.reduce((sum, order) => (order.status !== 'cancelled' && order.paymentStatus === 'paid') ? sum + (order.productSubtotal ?? order.total) : sum, 0), [orders])
   const pendingCount = useMemo(() => orders.filter((order) => order.status === 'pending').length, [orders])
   const nextOrderNumber = `#${String(sequence + 1).padStart(3, '0')}`
 

@@ -71,6 +71,7 @@ export function normalizeOrder(raw: Record<string, unknown>): Partial<Order> {
     cancelledReason: typeof raw.cancelledReason === 'string' ? raw.cancelledReason : undefined,
     paidAt: typeof raw.paidAt === 'string' ? raw.paidAt : undefined,
     paidBy: typeof raw.paidBy === 'string' ? raw.paidBy : undefined,
+    estimatedDelay: typeof raw.estimatedDelay === 'number' ? raw.estimatedDelay : undefined,
     payment: {
       method: rawPayment?.method as 'cash' | 'qr' | 'mixed' ?? 'cash',
       cashAmount: paymentStatus === 'pending' ? 0 : Number(rawPayment?.cashAmount ?? raw.total ?? 0),
