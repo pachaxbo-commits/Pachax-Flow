@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AdminView } from './components/AdminView'
 import { CajaView } from './components/CajaView'
 import { BotControlPanel } from './components/BotControlPanel'
+import { BotView } from './components/BotView'
 import { CocinaView } from './components/CocinaView'
 import { HistorialView } from './components/HistorialView'
 import { LoginView } from './components/LoginView'
@@ -15,7 +16,7 @@ import { useCatalogStore } from './store/catalogStore'
 import { useOrdersStore } from './store/appStore'
 import type { CartItem, OrderStatus, PaymentMethod, PaymentSummary, Product, UserRole } from './types'
 
-type View = 'caja' | 'cocina' | 'historial' | 'admin'
+type View = 'caja' | 'cocina' | 'historial' | 'admin' | 'bot'
 
 function getDayKey(value: string | Date = new Date()) {
   const date = value instanceof Date ? value : new Date(value)
@@ -28,15 +29,15 @@ function getDayKey(value: string | Date = new Date()) {
 
 function getAllowedViews(role: UserRole | 'demo'): View[] {
   if (role === 'admin' || role === 'demo') {
-    return ['caja', 'cocina', 'historial', 'admin']
+    return ['caja', 'cocina', 'historial', 'admin', 'bot']
   }
 
   if (role === 'caja') {
-    return ['caja', 'historial']
+    return ['caja', 'historial', 'bot']
   }
 
   if (role === 'pedidos') {
-    return ['caja']
+    return ['caja', 'bot']
   }
 
   return ['cocina']
@@ -256,7 +257,7 @@ function MainShell({
                     Area
                   </div>
                   <div className="mt-2 text-sm font-semibold text-muted">
-                    {view === 'caja' ? 'Tomando pedidos' : view === 'cocina' ? 'Preparacion' : view === 'historial' ? 'Reporte diario' : 'Menu y productos'}
+                    {view === 'caja' ? 'Tomando pedidos' : view === 'cocina' ? 'Preparacion' : view === 'historial' ? 'Reporte diario' : view === 'bot' ? 'Bot WhatsApp' : 'Menu y productos'}
                   </div>
                 </div>
               </div>
@@ -313,6 +314,7 @@ function MainShell({
               products={products}
             />
           ) : null}
+          {view === 'bot' ? <BotView /> : null}
         </main>
       </div>
     </div>

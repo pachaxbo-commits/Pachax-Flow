@@ -1,14 +1,15 @@
-import { Archive, ChefHat, CreditCard, LayoutGrid, Menu, ReceiptText, Settings2, X } from 'lucide-react'
+import { Archive, Bot, ChefHat, CreditCard, LayoutGrid, Menu, ReceiptText, Settings2, X } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import type { UserRole } from '../types'
 
-type View = 'caja' | 'cocina' | 'historial' | 'admin'
+type View = 'caja' | 'cocina' | 'historial' | 'admin' | 'bot'
 
 const items: Array<{ id: View; label: string; subtitle: string; icon: typeof CreditCard }> = [
   { id: 'caja', label: 'Caja', subtitle: 'Cobro y armado', icon: CreditCard },
   { id: 'cocina', label: 'Cocina', subtitle: 'Despacho visual', icon: ChefHat },
   { id: 'historial', label: 'Historial', subtitle: 'Cierre del dia', icon: Archive },
   { id: 'admin', label: 'Administracion', subtitle: 'Menu y productos', icon: Settings2 },
+  { id: 'bot', label: 'Bot WhatsApp', subtitle: 'Control y mensajes', icon: Bot },
 ]
 
 export function TopBar({
