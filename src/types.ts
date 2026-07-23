@@ -142,6 +142,8 @@ export interface Order {
   expectedPaymentMethod: PaymentMethod | null
   qrProofReceived?: boolean
   paymentReviewNote?: string
+  suppressWhatsappDispatchNotice?: boolean
+  forceWhatsappDispatchNotice?: boolean
   paidAt?: string
   paidBy?: string
   orderSource: OrderSource
@@ -170,6 +172,8 @@ export interface CreateOrderInput {
   customerPhone?: string
   deliveryAddress?: string
   createdBy?: string
+  suppressWhatsappDispatchNotice?: boolean
+  forceWhatsappDispatchNotice?: boolean
 }
 
 export interface ConfirmPaymentInput {

@@ -130,7 +130,7 @@ export function CajaView({
     customerPhone?: string
     deliveryAddress?: string
   }) => Promise<void>
-  onSetOrderStatus: (orderId: string, status: OrderStatus, estimatedDelay?: number) => Promise<void>
+  onSetOrderStatus: (orderId: string, status: OrderStatus, estimatedDelay?: number, options?: { suppressWhatsappDispatchNotice?: boolean; forceWhatsappDispatchNotice?: boolean }) => Promise<void>
 }) {
   // Main view mode: either POS catalog or orders list
   const [viewMode, setViewMode] = useState<'new_order' | 'orders_list'>('new_order')
@@ -149,6 +149,33 @@ export function CajaView({
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [deliveryAddress, setDeliveryAddress] = useState('')
+
+  async function handleSetOrderStatus(order: Order, status: OrderStatus, estimatedDelay?: number) {
+    if (status !== 'delivered' || order.orderSource !== 'whatsapp' || order.fulfillmentType !== 'delivery') {
+      await onSetOrderStatus(order.id, status, estimatedDelay)
+      return
+    }
+
+    const delayMinutes = Number(order.estimatedDelay || estimatedDelay || 10)
+    const createdAt = new Date(order.createdAt).getTime()
+    const lateMinutes = Number.isFinite(createdAt)
+      ? Math.max(0, Math.floor((Date.now() - (createdAt + delayMinutes * 60 * 1000)) / 60000))
+      : 0
+
+    if (lateMinutes > 0) {
+      const shouldNotify = window.confirm(`Este delivery esta atrasado ${lateMinutes} min sobre el tiempo estimado. ¿Quieres avisar al cliente que el pedido ya salio?`)
+      await onSetOrderStatus(order.id, status, estimatedDelay, {
+        forceWhatsappDispatchNotice: shouldNotify,
+        suppressWhatsappDispatchNotice: !shouldNotify,
+      })
+      return
+    }
+
+    await onSetOrderStatus(order.id, status, estimatedDelay, {
+      forceWhatsappDispatchNotice: false,
+      suppressWhatsappDispatchNotice: false,
+    })
+  }
 
   // Catalog State
   const visibleCategories = useMemo(
@@ -698,7 +725,7 @@ export function CajaView({
                       <div className="mt-1 truncate text-muted">{order.customerName || order.items.map((item) => item.name).join(', ')}</div>
                       {canManageOrders ? (
                         <div className="mt-2 flex gap-2">
-                          <button type="button" className="flex-1 rounded-lg bg-ink px-2 py-1.5 font-bold text-white" onClick={() => onSetOrderStatus(order.id, 'delivered')}>Entregado</button>
+                          <button type="button" className="flex-1 rounded-lg bg-ink px-2 py-1.5 font-bold text-white" onClick={() => void handleSetOrderStatus(order, 'delivered')}>Entregado</button>
                           <button type="button" className="flex-1 rounded-lg bg-red-600 px-2 py-1.5 font-bold text-white" onClick={() => onCancelOrder(order.id, 'Sistema', 'Anulado desde pendientes anteriores')}>Anular</button>
                         </div>
                       ) : null}
@@ -747,7 +774,7 @@ export function CajaView({
                             Cobrar
                           </button>
                           {canManageOrders && order.status !== 'delivered' ? (
-                            <button type="button" className="flex-1 rounded-lg bg-ink px-2 py-1.5 font-bold text-white" onClick={() => onSetOrderStatus(order.id, 'delivered')}>
+                            <button type="button" className="flex-1 rounded-lg bg-ink px-2 py-1.5 font-bold text-white" onClick={() => void handleSetOrderStatus(order, 'delivered')}>
                               Entregado
                             </button>
                           ) : null}
@@ -1104,7 +1131,7 @@ export function CajaView({
                               <button
                                 type="button"
                                 className={`flex-1 items-center justify-center gap-1 bg-ink hover:bg-ink/90 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm ${canManageOrders ? 'flex' : 'hidden'}`}
-                                onClick={() => onSetOrderStatus(order.id, 'delivered')}
+                                onClick={() => void handleSetOrderStatus(order, 'delivered')}
                               >
                                 <CheckCircle2 size={12} />
                                 Entregado
@@ -1251,7 +1278,7 @@ export function CajaView({
                               <button
                                 type="button"
                                 className={`flex-1 items-center justify-center gap-1 bg-ink hover:bg-ink/90 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm ${canManageOrders ? 'flex' : 'hidden'}`}
-                                onClick={() => onSetOrderStatus(order.id, 'delivered')}
+                                onClick={() => void handleSetOrderStatus(order, 'delivered')}
                               >
                                 <CheckCircle2 size={12} />
                                 Entregado

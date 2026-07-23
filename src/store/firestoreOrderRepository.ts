@@ -90,6 +90,8 @@ function mapDocToOrder(id: string, data: DocumentData): Order {
     customerPhone: data.customerPhone ?? undefined,
     deliveryAddress: data.deliveryAddress ?? undefined,
     createdBy: data.createdBy ?? undefined,
+    suppressWhatsappDispatchNotice: Boolean(data.suppressWhatsappDispatchNotice),
+    forceWhatsappDispatchNotice: Boolean(data.forceWhatsappDispatchNotice),
   }
 }
 
@@ -207,6 +209,8 @@ export class FirestoreOrderRepository {
         customerName: order.customerName ?? '',
         customerPhone: order.customerPhone ?? '',
         deliveryAddress: order.deliveryAddress ?? '',
+        suppressWhatsappDispatchNotice: order.suppressWhatsappDispatchNotice ?? false,
+        forceWhatsappDispatchNotice: order.forceWhatsappDispatchNotice ?? false,
         createdBy: order.createdBy ?? '',
         updatedAt: serverTimestamp(),
       })
@@ -223,7 +227,7 @@ export class FirestoreOrderRepository {
     }
   }
 
-  async setOrderStatus(orderId: string, status: OrderStatus, estimatedDelay?: number) {
+  async setOrderStatus(orderId: string, status: OrderStatus, estimatedDelay?: number, options?: { suppressWhatsappDispatchNotice?: boolean; forceWhatsappDispatchNotice?: boolean }) {
     const firebase = await getFirebaseContext()
 
     if (!firebase) {
@@ -236,7 +240,7 @@ export class FirestoreOrderRepository {
     const previousState = this.state
     const readyAt = readyStatuses.has(status) ? new Date().toISOString() : undefined
     const deliveredAt = status === 'delivered' ? new Date().toISOString() : undefined
-    this.state = updateOrderStatus(this.state, orderId, status, readyAt, deliveredAt)
+    this.state = updateOrderStatus(this.state, orderId, status, readyAt, deliveredAt, options)
     this.emitState()
 
     this.pendingOperations += 1
@@ -249,6 +253,8 @@ export class FirestoreOrderRepository {
         ...(estimatedDelay !== undefined ? { estimatedDelay } : {}),
         ...(readyStatuses.has(status) ? { readyAt: serverTimestamp() } : {}),
         ...(status === 'delivered' ? { deliveredAt: serverTimestamp() } : { deliveredAt: deleteField() }),
+        ...(options?.suppressWhatsappDispatchNotice !== undefined ? { suppressWhatsappDispatchNotice: options.suppressWhatsappDispatchNotice } : {}),
+        ...(options?.forceWhatsappDispatchNotice !== undefined ? { forceWhatsappDispatchNotice: options.forceWhatsappDispatchNotice } : {}),
         updatedAt: serverTimestamp(),
       })
       this.pendingOperations = Math.max(0, this.pendingOperations - 1)
@@ -368,6 +374,8 @@ export class FirestoreOrderRepository {
         customerName: input.customerName ?? '',
         customerPhone: input.customerPhone ?? '',
         deliveryAddress: input.deliveryAddress ?? '',
+        suppressWhatsappDispatchNotice: input.suppressWhatsappDispatchNotice ?? false,
+        forceWhatsappDispatchNotice: input.forceWhatsappDispatchNotice ?? false,
         updatedAt: serverTimestamp(),
       })
       this.pendingOperations = Math.max(0, this.pendingOperations - 1)

@@ -7,7 +7,7 @@ export interface OrdersRepository {
   getStatus(): RepositoryStatus
   subscribeStatus(listener: () => void): () => void
   placeOrder(order: CreateOrderInput): Promise<string>
-  setOrderStatus(orderId: string, status: OrderStatus, estimatedDelay?: number): Promise<void>
+  setOrderStatus(orderId: string, status: OrderStatus, estimatedDelay?: number, options?: { suppressWhatsappDispatchNotice?: boolean; forceWhatsappDispatchNotice?: boolean }): Promise<void>
   cancelOrder(orderId: string, cancelledBy: string, cancelledReason?: string): Promise<void>
   confirmPayment(orderId: string, input: ConfirmPaymentInput): Promise<void>
   updateOrder(orderId: string, input: Omit<CreateOrderInput, 'createdBy'>): Promise<void>
@@ -84,6 +84,8 @@ export function normalizeOrder(raw: Record<string, unknown>): Partial<Order> {
     expectedPaymentMethod: (raw.expectedPaymentMethod as 'cash' | 'qr' | 'mixed' | null) ?? null,
     qrProofReceived: Boolean(raw.qrProofReceived),
     paymentReviewNote: (raw.paymentReviewNote as string) ?? undefined,
+    suppressWhatsappDispatchNotice: Boolean(raw.suppressWhatsappDispatchNotice),
+    forceWhatsappDispatchNotice: Boolean(raw.forceWhatsappDispatchNotice),
     productSubtotal: typeof raw.productSubtotal === 'number' ? raw.productSubtotal : undefined,
     deliveryFee: typeof raw.deliveryFee === 'number' ? raw.deliveryFee : undefined,
     deliveryDistanceKm: typeof raw.deliveryDistanceKm === 'number' ? raw.deliveryDistanceKm : null,
@@ -130,6 +132,7 @@ export function updateOrderStatus(
   status: OrderStatus,
   readyAt?: string,
   deliveredAt?: string,
+  options?: { suppressWhatsappDispatchNotice?: boolean; forceWhatsappDispatchNotice?: boolean },
 ): AppState {
   return {
     ...state,
@@ -142,6 +145,8 @@ export function updateOrderStatus(
             readyAt: readyStatuses.has(status) ? readyAt ?? order.readyAt ?? new Date().toISOString() : order.readyAt,
             deliveredAt:
               status === 'delivered' ? deliveredAt ?? order.deliveredAt ?? new Date().toISOString() : undefined,
+            suppressWhatsappDispatchNotice: options?.suppressWhatsappDispatchNotice ?? order.suppressWhatsappDispatchNotice,
+            forceWhatsappDispatchNotice: options?.forceWhatsappDispatchNotice ?? order.forceWhatsappDispatchNotice,
           }
         : order,
     ),
@@ -217,6 +222,8 @@ export function updateOrderFields(
             customerName: input.customerName ?? '',
             customerPhone: input.customerPhone ?? '',
             deliveryAddress: input.deliveryAddress ?? '',
+            suppressWhatsappDispatchNotice: input.suppressWhatsappDispatchNotice ?? false,
+            forceWhatsappDispatchNotice: input.forceWhatsappDispatchNotice ?? false,
           }
         : order,
     ),
@@ -344,7 +351,7 @@ export function createLocalOrdersRepository(): OrdersRepository {
       this.save(nextState)
       return nextState.orders[0]?.displayNumber ?? `#${String(currentState.sequence + 1).padStart(3, '0')}`
     },
-    async setOrderStatus(orderId, nextStatus, _estimatedDelay) {
+    async setOrderStatus(orderId, nextStatus, _estimatedDelay, options) {
       this.save(
         updateOrderStatus(
           this.read(),
@@ -352,6 +359,7 @@ export function createLocalOrdersRepository(): OrdersRepository {
           nextStatus,
           readyStatuses.has(nextStatus) ? new Date().toISOString() : undefined,
           nextStatus === 'delivered' ? new Date().toISOString() : undefined,
+          options,
         ),
       )
     },
