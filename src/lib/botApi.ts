@@ -30,6 +30,18 @@ export type WhatsappGroup = {
   participants: number
 }
 
+export const BOT_HEALTH_CHANGED_EVENT = 'burgerlab:bot-health-changed'
+
+export function emitBotHealthChanged(health?: BotHealth) {
+  window.dispatchEvent(new CustomEvent(BOT_HEALTH_CHANGED_EVENT, { detail: health }))
+}
+
+export function onBotHealthChanged(listener: (health?: BotHealth) => void) {
+  const handler = (event: Event) => listener((event as CustomEvent<BotHealth | undefined>).detail)
+  window.addEventListener(BOT_HEALTH_CHANGED_EVENT, handler)
+  return () => window.removeEventListener(BOT_HEALTH_CHANGED_EVENT, handler)
+}
+
 export async function fetchBotHealth(): Promise<BotHealth> {
   const response = await fetch(`${botApiUrl}/health`)
   if (!response.ok) throw new Error('Bot health failed')

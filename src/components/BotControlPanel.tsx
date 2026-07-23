@@ -4,7 +4,9 @@ import type { UserRole } from '../types'
 import {
   botApiUrl,
   botAdminToken,
+  emitBotHealthChanged,
   fetchBotHealth,
+  onBotHealthChanged,
   saveBotSettings,
   setBotAcceptingOrders,
   setBotEnabled as updateBotEnabled,
@@ -52,6 +54,7 @@ export function BotControlPanel({ collapsed, userRole }: { collapsed: boolean; u
       setStatus('checking')
       const nextHealth = await fetchBotHealth()
       setHealth(nextHealth)
+      emitBotHealthChanged(nextHealth)
       setStatus('online')
     } catch {
       setHealth(null)
@@ -75,7 +78,18 @@ export function BotControlPanel({ collapsed, userRole }: { collapsed: boolean; u
     if (!canControlBot) return
     void refreshHealth()
     const interval = window.setInterval(() => void refreshHealth(), 30000)
-    return () => window.clearInterval(interval)
+    const unsubscribe = onBotHealthChanged((nextHealth) => {
+      if (nextHealth) {
+        setHealth(nextHealth)
+        setStatus('online')
+      } else {
+        void refreshHealth()
+      }
+    })
+    return () => {
+      window.clearInterval(interval)
+      unsubscribe()
+    }
   }, [canControlBot])
 
   if (!canControlBot) return null

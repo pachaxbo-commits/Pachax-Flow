@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   botApiUrl,
   botAdminToken,
+  emitBotHealthChanged,
   fetchBotHealth,
   fetchBotSettings,
   fetchWhatsappGroups,
@@ -78,6 +79,7 @@ export function BotView() {
         fetchBotSettings(),
       ])
       setHealth(nextHealth)
+      emitBotHealthChanged(nextHealth)
       setSettings(nextSettings)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo consultar el bot.')
@@ -91,6 +93,7 @@ export function BotView() {
       await action()
       setNotice(successMessage)
       await refreshAll()
+      emitBotHealthChanged()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo completar la accion.')
     } finally {

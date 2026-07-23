@@ -29,7 +29,7 @@ import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
 import { StatusPill, SourceBadge, FulfillmentBadge, PaymentBadge } from './ui/StatusPill'
 import { playKitchenNotification } from '../lib/sound'
-import { botApiUrl, botAdminToken, fetchBotHealth, setBotAcceptingOrders } from '../lib/botApi'
+import { botApiUrl, botAdminToken, emitBotHealthChanged, fetchBotHealth, onBotHealthChanged, setBotAcceptingOrders } from '../lib/botApi'
 
 function buildCartItem(product: Product): CartItem {
   return {
@@ -238,7 +238,10 @@ export function CajaView({
     const refresh = async () => {
       try {
         const health = await fetchBotHealth()
-        if (isMounted) setAcceptingWhatsappOrders(health.acceptingOrders !== false)
+        if (isMounted) {
+          setAcceptingWhatsappOrders(health.acceptingOrders !== false)
+          emitBotHealthChanged(health)
+        }
       } catch {
         // El panel lateral ya muestra si el bot no responde.
       }
@@ -246,9 +249,17 @@ export function CajaView({
 
     void refresh()
     const interval = window.setInterval(() => void refresh(), 30000)
+    const unsubscribe = onBotHealthChanged((health) => {
+      if (health) {
+        setAcceptingWhatsappOrders(health.acceptingOrders !== false)
+      } else {
+        void refresh()
+      }
+    })
     return () => {
       isMounted = false
       window.clearInterval(interval)
+      unsubscribe()
     }
   }, [])
 
@@ -465,6 +476,7 @@ export function CajaView({
       const nextValue = !acceptingWhatsappOrders
       await setBotAcceptingOrders(nextValue)
       setAcceptingWhatsappOrders(nextValue)
+      emitBotHealthChanged()
     } catch {
       window.alert('No se pudo actualizar la recepcion de pedidos por WhatsApp. Revisa que el bot este encendido.')
     } finally {
