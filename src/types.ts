@@ -130,6 +130,11 @@ export interface Order {
   status: OrderStatus
   items: OrderItem[]
   total: number
+  productSubtotal?: number
+  deliveryFee?: number
+  deliveryDistanceKm?: number | null
+  deliveryQuoteStatus?: 'not_needed' | 'quoted' | 'missing_location' | 'manual_review'
+  deliveryQuoteNote?: string
   payment: PaymentSummary
   paymentStatus: 'paid' | 'pending'
   paymentMethod: PaymentMethod | null

@@ -837,6 +837,21 @@ export function CajaView({
                                   <span className="text-muted font-semibold">{formatCurrency(item.lineTotal)}</span>
                                 </div>
                               ))}
+                              {order.fulfillmentType === 'delivery' && order.deliveryFee !== undefined ? (
+                                <div className="mt-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] text-amber-950">
+                                  <div className="flex justify-between">
+                                    <span>Productos</span>
+                                    <span className="font-semibold">{formatCurrency(order.productSubtotal ?? order.total - (order.deliveryFee || 0))}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Envio {order.deliveryDistanceKm ? `(${order.deliveryDistanceKm} km)` : ''}</span>
+                                    <span className="font-semibold">{formatCurrency(order.deliveryFee)}</span>
+                                  </div>
+                                  {order.deliveryQuoteNote ? (
+                                    <div className="mt-1 text-[10px] leading-4 text-amber-800">{order.deliveryQuoteNote}</div>
+                                  ) : null}
+                                </div>
+                              ) : null}
                             </div>
 
                             <div className="border-t border-line pt-2 flex justify-between items-center">
