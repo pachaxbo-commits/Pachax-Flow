@@ -19,6 +19,8 @@ import {
   Printer,
   AlertCircle,
   RotateCcw,
+  PauseCircle,
+  PlayCircle,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatCurrency } from '../lib/format'
@@ -27,6 +29,7 @@ import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
 import { StatusPill, SourceBadge, FulfillmentBadge, PaymentBadge } from './ui/StatusPill'
 import { playKitchenNotification } from '../lib/sound'
+import { botApiUrl, botAdminToken, fetchBotHealth, setBotAcceptingOrders } from '../lib/botApi'
 
 function buildCartItem(product: Product): CartItem {
   return {
@@ -178,6 +181,8 @@ export function CajaView({
 
   // Confirm WhatsApp Order Delay State
   const [confirmingDelayOrderId, setConfirmingDelayOrderId] = useState<string | null>(null)
+  const [acceptingWhatsappOrders, setAcceptingWhatsappOrders] = useState(true)
+  const [isTogglingWhatsappOrders, setIsTogglingWhatsappOrders] = useState(false)
 
   // Print ticket and sub-filter state
   const [printedOrder, setPrintedOrder] = useState<Order | null>(null)
@@ -198,6 +203,27 @@ export function CajaView({
       }
     }
   }, [printedOrder])
+
+  useEffect(() => {
+    if (!botApiUrl || !botAdminToken) return
+
+    let isMounted = true
+    const refresh = async () => {
+      try {
+        const health = await fetchBotHealth()
+        if (isMounted) setAcceptingWhatsappOrders(health.acceptingOrders !== false)
+      } catch {
+        // El panel lateral ya muestra si el bot no responde.
+      }
+    }
+
+    void refresh()
+    const interval = window.setInterval(() => void refresh(), 30000)
+    return () => {
+      isMounted = false
+      window.clearInterval(interval)
+    }
+  }, [])
 
   const activeCategory = visibleCategories.some((category) => category.id === selectedCategoryId)
     ? selectedCategoryId
@@ -317,7 +343,7 @@ export function CajaView({
       const prevSequence = lastPendingWhatsappSequence.current
       lastPendingWhatsappSequence.current = highestSequence
 
-      // Alerta sonora solo si es un pedido genuino recién ingresado
+      // Alerta sonora solo si es un pedido genuino reciÃ©n ingresado
       if (highestSequence !== 0 && prevSequence !== 0) {
         const latestOrder = pendingWhatsappOrders.find((o) => o.sequence === highestSequence)
         if (latestOrder && new Date().getTime() - new Date(latestOrder.createdAt).getTime() < 15000) {
@@ -355,7 +381,7 @@ export function CajaView({
     return Date.now() > dueAt
   }
 
-  // Pedidos pendientes de días anteriores para alerta
+  // Pedidos pendientes de dÃ­as anteriores para alerta
   const pastPendingOrders = useMemo(() => {
     return orders.filter((order) => {
       const orderDay = getOrderDayKey(order.createdAt)
@@ -371,7 +397,7 @@ export function CajaView({
       .filter((order) => getOrderDayKey(order.createdAt) === todayKey)
       .filter((order) => order.status === 'delivered' || order.status === 'cancelled')
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 30) // Limitar a los últimos 30 pedidos finalizados del día para mejor rendimiento
+      .slice(0, 30) // Limitar a los Ãºltimos 30 pedidos finalizados del dÃ­a para mejor rendimiento
   }, [orders, todayKey])
 
   const whatsappOrders = useMemo(() => {
@@ -404,6 +430,19 @@ export function CajaView({
 
   const updateItem = (lineId: string, updater: (item: CartItem) => CartItem) => {
     setCartItems((currentItems) => currentItems.map((item) => (item.lineId === lineId ? updater(item) : item)))
+  }
+
+  const handleToggleWhatsappOrders = async () => {
+    try {
+      setIsTogglingWhatsappOrders(true)
+      const nextValue = !acceptingWhatsappOrders
+      await setBotAcceptingOrders(nextValue)
+      setAcceptingWhatsappOrders(nextValue)
+    } catch {
+      window.alert('No se pudo actualizar la recepcion de pedidos por WhatsApp. Revisa que el bot este encendido.')
+    } finally {
+      setIsTogglingWhatsappOrders(false)
+    }
   }
 
   const removeItem = (lineId: string) => {
@@ -580,7 +619,7 @@ export function CajaView({
                     <div className="p-3 flex-1 flex flex-col justify-between space-y-2.5">
                       <div>
                         <h3 className="text-sm font-bold text-white tracking-wide truncate">{product.name}</h3>
-                        <p className="mt-1 text-[11px] leading-relaxed text-slate-400 line-clamp-2 min-h-[32px]">{product.description || 'Sin descripción'}</p>
+                        <p className="mt-1 text-[11px] leading-relaxed text-slate-400 line-clamp-2 min-h-[32px]">{product.description || 'Sin descripciÃ³n'}</p>
                       </div>
                       
                       <div className="flex items-center justify-between gap-2 pt-1">
@@ -604,7 +643,7 @@ export function CajaView({
 
                 {visibleProducts.length === 0 ? (
                   <Panel className="col-span-full border-dashed border-lineStrong bg-white/55 p-8 text-center text-sm text-muted">
-                    No hay productos disponibles en esta categoría.
+                    No hay productos disponibles en esta categorÃ­a.
                   </Panel>
                 ) : null}
               </div>
@@ -615,7 +654,7 @@ export function CajaView({
               <div className="flex items-center justify-between">
                 <div>
                   <h1 className="text-2xl font-black text-ink">Sistema de Pedidos</h1>
-                  <p className="text-xs text-muted">Gestión de comandas y estado de entregas en tiempo real.</p>
+                  <p className="text-xs text-muted">GestiÃ³n de comandas y estado de entregas en tiempo real.</p>
                 </div>
               </div>
 
@@ -624,7 +663,7 @@ export function CajaView({
                   <div className="flex items-center gap-3">
                     <AlertCircle className="text-red-700 shrink-0" size={20} />
                     <div>
-                      <div className="text-sm font-black text-red-950 uppercase tracking-wide">Pedidos pendientes de días anteriores</div>
+                      <div className="text-sm font-black text-red-950 uppercase tracking-wide">Pedidos pendientes de dÃ­as anteriores</div>
                       <div className="text-xs text-red-800 mt-0.5 font-bold">
                         Hay {pastPendingOrders.length} pedido(s) sin entregar o anular de fechas pasadas. Debes gestionarlos o anularlos para limpiar el reporte diario.
                       </div>
@@ -635,9 +674,9 @@ export function CajaView({
                       type="button"
                       className="px-4 py-2 bg-red-750 hover:bg-red-800 text-white text-xs font-black rounded-xl transition shadow-sm shrink-0"
                       onClick={async () => {
-                        if (window.confirm(`¿Estás seguro de que deseas ANULAR automáticamente los ${pastPendingOrders.length} pedidos pendientes de días anteriores?`)) {
+                        if (window.confirm(`Â¿EstÃ¡s seguro de que deseas ANULAR automÃ¡ticamente los ${pastPendingOrders.length} pedidos pendientes de dÃ­as anteriores?`)) {
                           for (const order of pastPendingOrders) {
-                            await onCancelOrder(order.id, 'Sistema', 'Anulación automática por cambio de día')
+                            await onCancelOrder(order.id, 'Sistema', 'AnulaciÃ³n automÃ¡tica por cambio de dÃ­a')
                           }
                         }
                       }}
@@ -805,7 +844,7 @@ export function CajaView({
                                 className={`p-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition ${canManageOrders ? '' : 'hidden'}`}
                                 title="Eliminar permanentemente"
                                 onClick={async () => {
-                                  if (window.confirm('¿Estás seguro de que deseas ELIMINAR permanentemente este pedido del sistema? Esta acción no se puede deshacer.')) {
+                                  if (window.confirm('Â¿EstÃ¡s seguro de que deseas ELIMINAR permanentemente este pedido del sistema? Esta acciÃ³n no se puede deshacer.')) {
                                     await onDeleteOrder(order.id)
                                   }
                                 }}
@@ -822,6 +861,32 @@ export function CajaView({
 
                 {/* COLUMNA 2: PEDIDOS WHATSAPP / DELIVERY */}
                 <div className="space-y-4 lg:order-2">
+                  <div className={`rounded-2xl border p-3 shadow-sm ${
+                    acceptingWhatsappOrders
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                      : 'border-red-200 bg-red-50 text-red-900'
+                  }`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-black uppercase tracking-wider opacity-70">Pedidos por WhatsApp</div>
+                        <div className="mt-0.5 text-sm font-black">
+                          {acceptingWhatsappOrders ? 'Recibiendo pedidos' : 'Pedidos pausados'}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 text-[11px] font-black text-white transition disabled:opacity-60 ${
+                          acceptingWhatsappOrders ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                        }`}
+                        disabled={isTogglingWhatsappOrders}
+                        onClick={() => void handleToggleWhatsappOrders()}
+                      >
+                        {acceptingWhatsappOrders ? <PauseCircle size={14} /> : <PlayCircle size={14} />}
+                        {acceptingWhatsappOrders ? 'Pausar' : 'Reanudar'}
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-4 flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-2">
                       <MessageSquareText size={18} className="text-amber-700" />
@@ -882,7 +947,7 @@ export function CajaView({
                   <div className="space-y-3 overflow-visible lg:max-h-[64vh] lg:overflow-y-auto lg:pr-1">
                     {whatsappOrders.length === 0 ? (
                       <div className="rounded-2xl border border-dashed border-line p-8 text-center text-xs text-muted font-semibold bg-white/40">
-                        Sin pedidos activos en esta sección.
+                        Sin pedidos activos en esta secciÃ³n.
                       </div>
                     ) : (
                       whatsappOrders.map((order) => {
@@ -909,13 +974,13 @@ export function CajaView({
                               </div>
                               {order.customerPhone ? (
                                 <div>
-                                  <span className="font-bold text-muted">Teléfono:</span>{' '}
+                                  <span className="font-bold text-muted">TelÃ©fono:</span>{' '}
                                   <span className="font-semibold text-ink">{order.customerPhone}</span>
                                 </div>
                               ) : null}
                               {order.deliveryAddress ? (
                                 <div>
-                                  <span className="font-bold text-muted">Dirección:</span>{' '}
+                                  <span className="font-bold text-muted">DirecciÃ³n:</span>{' '}
                                   <span className="font-semibold text-ink">{order.deliveryAddress}</span>
                                 </div>
                               ) : null}
@@ -992,7 +1057,7 @@ export function CajaView({
                                       className="bg-slate-400 hover:bg-slate-500 text-white px-1.5 py-1 rounded text-[9px] font-black transition"
                                       onClick={() => setConfirmingDelayOrderId(null)}
                                     >
-                                      Atrás
+                                      AtrÃ¡s
                                     </button>
                                   </div>
                                 ) : (
@@ -1068,7 +1133,7 @@ export function CajaView({
                                 type="button"
                                 className={`flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition ${canManageOrders ? '' : 'hidden'}`}
                                 onClick={async () => {
-                                  if (window.confirm('¿Estás seguro de que deseas ELIMINAR permanentemente este pedido del sistema? Esta acción no se puede deshacer.')) {
+                                  if (window.confirm('Â¿EstÃ¡s seguro de que deseas ELIMINAR permanentemente este pedido del sistema? Esta acciÃ³n no se puede deshacer.')) {
                                     await onDeleteOrder(order.id)
                                   }
                                 }}
@@ -1215,7 +1280,7 @@ export function CajaView({
                                 type="button"
                                 className={`flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition ${canManageOrders ? '' : 'hidden'}`}
                                 onClick={async () => {
-                                  if (window.confirm('¿Estás seguro de que deseas ELIMINAR permanentemente este pedido del sistema? Esta acción no se puede deshacer.')) {
+                                  if (window.confirm('Â¿EstÃ¡s seguro de que deseas ELIMINAR permanentemente este pedido del sistema? Esta acciÃ³n no se puede deshacer.')) {
                                     await onDeleteOrder(order.id)
                                   }
                                 }}
@@ -1236,11 +1301,11 @@ export function CajaView({
         </section>
       </div>
 
-      {/* Botón flotante para reabrir el carrito cuando hay productos y el modal está cerrado */}
+      {/* BotÃ³n flotante para reabrir el carrito cuando hay productos y el modal estÃ¡ cerrado */}
       {cartItems.length > 0 && !showCheckoutModal && (
         <button
           type="button"
-          className="fixed bottom-6 right-6 z-40 bg-accent hover:bg-accent/90 text-white font-black px-6 py-4 rounded-full shadow-2xl flex items-center gap-2 transition transform hover:scale-105 active:scale-95 border border-white/20 xl:hidden"
+          className="fixed bottom-4 right-4 z-40 bg-accent hover:bg-accent/90 text-white font-black px-4 py-3 rounded-full shadow-2xl flex items-center gap-2 transition transform hover:scale-105 active:scale-95 border border-white/20 xl:hidden"
           onClick={() => setShowCheckoutModal(true)}
         >
           <ShoppingBag size={18} />
@@ -1250,21 +1315,21 @@ export function CajaView({
 
       {/* Modal emergente de checkout de doble columna (horizontal y vertical grande) */}
       {(showCheckoutModal || (cartItems.length > 0 && viewMode === 'new_order')) && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm xl:pointer-events-none xl:left-auto xl:right-4 xl:top-5 xl:bottom-5 xl:w-[460px] xl:items-stretch xl:justify-end xl:bg-transparent xl:p-0 xl:backdrop-blur-0 ${showCheckoutModal ? '' : 'hidden xl:flex'}`}>
-          <Panel className="w-full max-w-5xl h-[85vh] bg-[#fffdfb] rounded-[2.2rem] shadow-float overflow-hidden flex flex-col border border-line xl:pointer-events-auto xl:h-full xl:max-w-none xl:rounded-[1.5rem]">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm xl:pointer-events-none xl:left-auto xl:right-4 xl:top-5 xl:bottom-5 xl:w-[420px] xl:items-stretch xl:justify-end xl:bg-transparent xl:p-0 xl:backdrop-blur-0 ${showCheckoutModal ? '' : 'hidden xl:flex'}`}>
+          <Panel className="w-full max-w-5xl h-[85vh] bg-[#fffdfb] rounded-[1.5rem] shadow-float overflow-hidden flex flex-col border border-line xl:pointer-events-auto xl:h-full xl:max-w-none xl:rounded-[1.5rem]">
             
             {/* Cabecera del Modal */}
-            <div className="border-b border-line px-4 py-3 flex items-center justify-between bg-white shrink-0">
+            <div className="border-b border-line px-3 py-2 flex items-center justify-between bg-white shrink-0">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-accent">CONFIRMAR PEDIDO</p>
-                <h2 className="mt-1 text-base font-black text-ink flex items-center gap-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent">CONFIRMAR PEDIDO</p>
+                <h2 className="mt-0.5 text-sm font-black text-ink flex items-center gap-2">
                   <span>Carrito & Datos de Cobro</span>
                   {editingOrderId ? <span className="text-[10px] bg-orange-100 text-orange-900 px-2 py-0.5 rounded-full font-black">EDITANDO PEDIDO</span> : null}
                 </h2>
               </div>
               
               <div className="flex items-center gap-3">
-                <div className="rounded-xl border border-line bg-accentWash px-2.5 py-1.5 text-right shadow-insetSoft flex items-center gap-2">
+                <div className="rounded-lg border border-line bg-accentWash px-2 py-1 text-right shadow-insetSoft flex items-center gap-2">
                   <span className="text-[9px] font-bold uppercase tracking-wider text-muted">Siguiente Ticket:</span>
                   <span className="text-sm font-black text-ink">{nextOrderNumber}</span>
                 </div>
@@ -1280,11 +1345,11 @@ export function CajaView({
             </div>
 
             {/* Dos columnas del modal */}
-              <div className="flex-1 grid grid-cols-1 grid-rows-[minmax(180px,0.75fr)_minmax(360px,1.25fr)] overflow-hidden bg-canvas/30">
+              <div className="flex-1 grid grid-cols-1 grid-rows-[minmax(128px,0.55fr)_minmax(320px,1.45fr)] overflow-hidden bg-canvas/30">
               
               {/* Columna Izquierda: Lista de items en el carrito */}
               <div className="border-b border-line flex flex-col h-full min-h-0 overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+                <div className="flex-1 overflow-y-auto p-2 space-y-2">
                   {cartItems.length === 0 ? (
                     <div className="rounded-[1.4rem] border border-dashed border-lineStrong bg-canvas/60 p-5 text-center">
                       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-accent shadow-insetSoft">
@@ -1314,21 +1379,21 @@ export function CajaView({
                     return (
                       <article
                         key={item.lineId}
-                        className={`rounded-[1.1rem] border bg-white p-3 transition duration-150 ${
+                        className={`rounded-[0.9rem] border bg-white p-2 transition duration-150 ${
                           isExpanded ? 'border-accent/20 shadow-card' : 'border-line'
                         }`}
                       >
-                        <div className="flex items-start gap-4">
+                        <div className="flex items-start gap-2.5">
                           {isImageUrl(product.image) ? (
-                            <img alt={product.name} className="h-12 w-12 rounded-xl object-cover" src={product.image} />
+                            <img alt={product.name} className="h-10 w-10 rounded-lg object-cover" src={product.image} />
                           ) : (
-                            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accentWash text-2xl">{product.image}</div>
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accentWash text-xl">{product.image}</div>
                           )}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
                               <div>
-                                <h3 className="text-xs font-bold text-ink truncate">{product.name}</h3>
-                                <p className="mt-0.5 text-xs text-muted">{formatCurrency(product.price)}</p>
+                                <h3 className="text-[11px] font-bold text-ink truncate">{product.name}</h3>
+                                <p className="mt-0.5 text-[11px] text-muted">{formatCurrency(product.price)}</p>
                               </div>
                               <button
                                 type="button"
@@ -1339,11 +1404,11 @@ export function CajaView({
                               </button>
                             </div>
 
-                            <div className="mt-3 flex items-center justify-between border-t border-line pt-2.5">
+                            <div className="mt-2 flex items-center justify-between border-t border-line pt-2">
                               <div className="flex items-center gap-1">
                                 <button
                                   type="button"
-                                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-panel text-ink transition hover:bg-line active:scale-95"
+                                  className="flex h-6 w-6 items-center justify-center rounded-lg border border-line bg-panel text-ink transition hover:bg-line active:scale-95"
                                   onClick={() =>
                                     updateItem(item.lineId, (currentItem) => ({
                                       ...currentItem,
@@ -1356,7 +1421,7 @@ export function CajaView({
                                 <span className="w-6 text-center text-xs font-semibold text-ink">{item.quantity}</span>
                                 <button
                                   type="button"
-                                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-panel text-ink transition hover:bg-line active:scale-95"
+                                  className="flex h-6 w-6 items-center justify-center rounded-lg border border-line bg-panel text-ink transition hover:bg-line active:scale-95"
                                   onClick={() =>
                                     updateItem(item.lineId, (currentItem) => ({
                                       ...currentItem,
@@ -1372,8 +1437,8 @@ export function CajaView({
                               </div>
                             </div>
 
-                            {/* Botón de Modificadores */}
-                            <div className="mt-2.5 flex justify-between items-center border-t border-dashed border-line pt-2">
+                            {/* BotÃ³n de Modificadores */}
+                            <div className="mt-2 flex justify-between items-center border-t border-dashed border-line pt-2">
                               <button
                                 type="button"
                                 className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold transition ${
@@ -1393,7 +1458,7 @@ export function CajaView({
 
                         {/* Panel de Modificadores expandido */}
                         {isExpanded ? (
-                          <div className="mt-3 space-y-3.5 border-t border-line pt-3">
+                          <div className="mt-2 space-y-2.5 border-t border-line pt-2">
                             {product.extras?.length ? (
                               <div>
                                 <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-muted">Extras</p>
@@ -1405,7 +1470,7 @@ export function CajaView({
                                       <button
                                         key={extra.id}
                                         type="button"
-                                        className={`rounded-full px-2.5 py-1 text-xs transition font-semibold ${
+                                        className={`rounded-full px-2 py-0.5 text-[11px] transition font-semibold ${
                                           isSelected ? 'bg-accent text-white shadow-sm' : 'bg-canvas text-ink hover:bg-accentSoft'
                                         }`}
                                         onClick={() =>
@@ -1442,7 +1507,7 @@ export function CajaView({
                                       <button
                                         key={option.id}
                                         type="button"
-                                        className={`rounded-full px-2.5 py-1 text-xs transition font-semibold ${
+                                        className={`rounded-full px-2 py-0.5 text-[11px] transition font-semibold ${
                                           isSelected ? 'bg-accent text-white shadow-sm' : 'bg-canvas text-ink hover:bg-accentSoft'
                                         }`}
                                         onClick={() =>
@@ -1471,7 +1536,7 @@ export function CajaView({
                                 Observacion para cocina
                               </label>
                               <textarea
-                                className="min-h-16 w-full rounded-xl border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-accent"
+                                className="min-h-12 w-full rounded-xl border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-accent"
                                 placeholder="Ej. salsa aparte, sin cebolla..."
                                 value={item.modifiers.note}
                                 onChange={(event) =>
@@ -1493,25 +1558,25 @@ export function CajaView({
                 </div>
 
                 {/* Subtotal del carrito */}
-                <div className="border-t border-line bg-panel/50 p-4 shrink-0 flex justify-between items-center">
+                <div className="border-t border-line bg-panel/50 px-3 py-2 shrink-0 flex justify-between items-center">
                   <div>
                     <div className="text-[9px] font-black uppercase text-muted tracking-wider">Productos</div>
                     <div className="text-xs font-black text-ink">{totalUnits} unidades</div>
                   </div>
                   <div className="text-right">
                     <div className="text-[9px] font-black uppercase text-muted tracking-wider">Total Carrito</div>
-                    <div className="text-lg font-black text-accent">{formatCurrency(cartTotal)}</div>
+                    <div className="text-base font-black text-accent">{formatCurrency(cartTotal)}</div>
                   </div>
                 </div>
               </div>
 
               {/* Columna Derecha: Formulario de Checkout */}
               <div className="flex flex-col h-full min-h-0 overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
                   
                   {/* Origen de pedido */}
                   {userRole !== 'pedidos' ? (
-                    <div className="rounded-[1.2rem] border border-line bg-white p-3 shadow-sm">
+                    <div className="rounded-[1rem] border border-line bg-white p-2.5 shadow-sm">
                       <div className="text-[10px] font-black uppercase tracking-wider text-muted">Origen</div>
                       <div className="mt-2 grid grid-cols-2 gap-2">
                         {[
@@ -1525,7 +1590,7 @@ export function CajaView({
                             <button
                               key={option.id}
                               type="button"
-                              className={`rounded-[0.9rem] border py-2 text-xs font-black transition flex items-center justify-center gap-1.5 min-h-[40px] ${
+                              className={`rounded-[0.9rem] border py-2 text-xs font-black transition flex items-center justify-center gap-1.5 min-h-[36px] ${
                                 isActive
                                   ? option.id === 'local'
                                     ? 'border-[#3b82f6] bg-[#3b82f6] text-white shadow-sm'
@@ -1551,7 +1616,7 @@ export function CajaView({
                   ) : null}
 
                   {/* Modalidad de entrega */}
-                  <div className="rounded-[1.2rem] border border-line bg-white p-3 shadow-sm">
+                  <div className="rounded-[1rem] border border-line bg-white p-2.5 shadow-sm">
                     <div className="text-[10px] font-black uppercase tracking-wider text-muted">Entrega</div>
                     <div className="mt-2 grid grid-cols-2 gap-2">
                     {(() => {
@@ -1583,7 +1648,7 @@ export function CajaView({
                           <button
                             key={option.id}
                             type="button"
-                            className={`rounded-[0.9rem] border py-2 text-xs font-black transition flex flex-col items-center justify-center gap-0.5 min-h-[44px] ${
+                            className={`rounded-[0.9rem] border py-2 text-xs font-black transition flex flex-col items-center justify-center gap-0.5 min-h-[38px] ${
                               isActive ? activeStyles : 'border-line bg-panel/80 text-ink hover:bg-panel'
                             }`}
                             onClick={() => setFulfillmentType(option.id)}
@@ -1609,11 +1674,11 @@ export function CajaView({
                   </div>
 
                   {/* Datos de Contacto */}
-                  <div className="rounded-[1.2rem] border border-line bg-white p-3 shadow-sm space-y-2.5">
+                  <div className="rounded-[1rem] border border-line bg-white p-2.5 shadow-sm space-y-2.5">
                     <div className="text-[10px] font-black uppercase tracking-wider text-muted">Datos de Contacto</div>
                     <div>
                       <input
-                        className={`w-full rounded-[0.9rem] border bg-canvas/35 px-3 py-2.5 text-xs text-ink outline-none transition focus:border-accent ${
+                        className={`w-full rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
                           customerName.trim() === ''
                             ? 'border-red-300 focus:border-red-500'
                             : 'border-line'
@@ -1630,17 +1695,17 @@ export function CajaView({
                     {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') ? (
                       <div>
                         <input
-                          className={`w-full rounded-[0.9rem] border bg-canvas/35 px-3 py-2.5 text-xs text-ink outline-none transition focus:border-accent ${
+                          className={`w-full rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
                             (orderSource === 'whatsapp' || fulfillmentType === 'delivery') && customerPhone.trim() === ''
                               ? 'border-red-300 focus:border-red-500'
                               : 'border-line'
                           }`}
-                          placeholder="Teléfono"
+                          placeholder="TelÃ©fono"
                           value={customerPhone}
                           onChange={(event) => setCustomerPhone(event.target.value)}
                         />
                         {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') && customerPhone.trim() === '' ? (
-                          <span className="text-[9px] text-red-500 font-bold mt-0.5 block px-1">Teléfono es obligatorio</span>
+                          <span className="text-[9px] text-red-500 font-bold mt-0.5 block px-1">TelÃ©fono es obligatorio</span>
                         ) : null}
                       </div>
                     ) : null}
@@ -1648,24 +1713,24 @@ export function CajaView({
                     {fulfillmentType === 'delivery' ? (
                       <div>
                         <textarea
-                          className={`w-full min-h-[48px] rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
+                          className={`w-full min-h-[42px] rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
                             fulfillmentType === 'delivery' && deliveryAddress.trim() === ''
                               ? 'border-red-300 focus:border-red-500'
                               : 'border-line'
                           }`}
-                          placeholder="Dirección completa de entrega"
+                          placeholder="DirecciÃ³n completa de entrega"
                           value={deliveryAddress}
                           onChange={(event) => setDeliveryAddress(event.target.value)}
                         />
                         {fulfillmentType === 'delivery' && deliveryAddress.trim() === '' ? (
-                          <span className="text-[9px] text-red-500 font-bold mt-0.5 block px-1">Dirección es obligatoria</span>
+                          <span className="text-[9px] text-red-500 font-bold mt-0.5 block px-1">DirecciÃ³n es obligatoria</span>
                         ) : null}
                       </div>
                     ) : null}
                   </div>
 
                   {/* Estado de Pago */}
-                  <div className="rounded-[1.2rem] border border-line bg-white p-3 shadow-sm">
+                  <div className="rounded-[1rem] border border-line bg-white p-2.5 shadow-sm">
                     <div className="text-[10px] font-black uppercase tracking-wider text-muted">Estado de Pago</div>
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       {[
@@ -1678,7 +1743,7 @@ export function CajaView({
                           <button
                             key={option.id}
                             type="button"
-                            className={`rounded-[0.9rem] border py-2 text-xs font-black transition min-h-[40px] ${
+                            className={`rounded-[0.9rem] border py-2 text-xs font-black transition min-h-[36px] ${
                               isActive
                                 ? option.id === 'paid'
                                   ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm'
@@ -1701,8 +1766,8 @@ export function CajaView({
                     </div>
 
                     {paymentStatus === 'paid' ? (
-                      <div className="mt-3 border-t border-dashed border-line pt-3">
-                        <div className="text-[10px] font-black uppercase tracking-wider text-muted">Método de Pago</div>
+                      <div className="mt-2.5 border-t border-dashed border-line pt-2.5">
+                        <div className="text-[10px] font-black uppercase tracking-wider text-muted">MÃ©todo de Pago</div>
                         <div className="mt-2 grid grid-cols-3 gap-2">
                           {[
                             { id: 'cash', label: 'Efectivo', icon: Coins },
@@ -1716,7 +1781,7 @@ export function CajaView({
                               <button
                                 key={option.id}
                                 type="button"
-                                className={`rounded-[0.8rem] border py-1.5 text-xs font-black transition flex flex-col items-center justify-center gap-0.5 min-h-[44px] ${
+                                className={`rounded-[0.8rem] border py-1.5 text-xs font-black transition flex flex-col items-center justify-center gap-0.5 min-h-[38px] ${
                                   isActive ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm' : 'border-line bg-panel/80 text-ink hover:bg-panel'
                                 }`}
                                 onClick={() => setPaymentMethod(option.id as PaymentMethod)}
@@ -1729,7 +1794,7 @@ export function CajaView({
                         </div>
 
                         {paymentMethod === 'cash' ? (
-                          <div className="mt-3 space-y-2">
+                          <div className="mt-2.5 space-y-2">
                             <label className="block">
                               <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-muted">Recibido</div>
                               <input
@@ -1743,7 +1808,7 @@ export function CajaView({
                               />
                               {cashReceived < cartTotal ? (
                                 <span className="text-[9px] text-red-500 font-bold mt-1 block px-1">
-                                  Pago insuficiente (Mínimo: {formatCurrency(cartTotal)})
+                                  Pago insuficiente (MÃ­nimo: {formatCurrency(cartTotal)})
                                 </span>
                               ) : null}
                             </label>
@@ -1755,7 +1820,7 @@ export function CajaView({
                         ) : null}
 
                         {paymentMethod === 'mixed' ? (
-                          <div className="mt-3 space-y-2">
+                          <div className="mt-2.5 space-y-2">
                             <div className="grid grid-cols-2 gap-2">
                               <label className="block">
                                 <div className="mb-1 text-[9px] font-black uppercase tracking-wider text-muted">Efectivo</div>
@@ -1793,7 +1858,7 @@ export function CajaView({
                               />
                               {cashReceived < cashAmount ? (
                                 <span className="text-[9px] text-red-500 font-bold mt-1 block px-1">
-                                  Efectivo insuficiente (Mínimo: {formatCurrency(cashAmount)})
+                                  Efectivo insuficiente (MÃ­nimo: {formatCurrency(cashAmount)})
                                 </span>
                               ) : null}
                             </label>
@@ -1813,8 +1878,8 @@ export function CajaView({
                       </div>
                     ) : (
                       /* Expected payment method selection for pending orders */
-                      <div className="mt-3 border-t border-dashed border-line pt-3">
-                        <div className="text-[10px] font-black uppercase tracking-wider text-muted">Método Esperado</div>
+                      <div className="mt-2.5 border-t border-dashed border-line pt-2.5">
+                        <div className="text-[10px] font-black uppercase tracking-wider text-muted">MÃ©todo Esperado</div>
                         <div className="mt-2 grid grid-cols-3 gap-2">
                           {[
                             { id: 'cash', label: 'Efectivo', icon: Coins },
@@ -1828,7 +1893,7 @@ export function CajaView({
                               <button
                                 key={option.id}
                                 type="button"
-                                className={`rounded-[0.8rem] border py-1.5 text-xs font-black transition flex flex-col items-center justify-center gap-0.5 min-h-[44px] ${
+                                className={`rounded-[0.8rem] border py-1.5 text-xs font-black transition flex flex-col items-center justify-center gap-0.5 min-h-[38px] ${
                                   isActive ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm' : 'border-line bg-panel/80 text-ink hover:bg-panel'
                                 }`}
                                 onClick={() => setExpectedPaymentMethod(option.id as PaymentMethod)}
@@ -1945,7 +2010,7 @@ export function CajaView({
                       className="px-4 rounded-xl border border-orange-200 bg-orange-50 hover:bg-orange-100 transition text-xs font-bold text-orange-950"
                       onClick={handleDiscardEdit}
                     >
-                      Descartar Edición
+                      Descartar EdiciÃ³n
                     </button>
                   )}
 
@@ -1969,14 +2034,14 @@ export function CajaView({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-[2.2rem] border border-line bg-white p-6 shadow-float space-y-4">
             <div>
-              <h3 className="text-xl font-bold text-ink">Registrar Cobro Rápido</h3>
+              <h3 className="text-xl font-bold text-ink">Registrar Cobro RÃ¡pido</h3>
               <p className="text-sm text-muted">
-                Pedido {payingOrder.displayNumber} · Total: <span className="font-extrabold text-ink">{formatCurrency(payingOrder.total)}</span>
+                Pedido {payingOrder.displayNumber} Â· Total: <span className="font-extrabold text-ink">{formatCurrency(payingOrder.total)}</span>
               </p>
             </div>
 
             <div className="space-y-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Método de Pago Realizado</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">MÃ©todo de Pago Realizado</div>
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { id: 'cash', label: 'Efectivo' },
@@ -2107,14 +2172,14 @@ export function CajaView({
           <div className="w-full max-w-md rounded-[2.2rem] border border-line bg-white p-6 shadow-float space-y-4">
             <div>
               <h3 className="text-xl font-bold text-ink">Anular Pedido</h3>
-              <p className="text-sm text-muted">¿Está seguro que desea anular el pedido {cancellingOrder.displayNumber}?</p>
+              <p className="text-sm text-muted">Â¿EstÃ¡ seguro que desea anular el pedido {cancellingOrder.displayNumber}?</p>
             </div>
 
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-muted">Motivo de Anulación</label>
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-muted">Motivo de AnulaciÃ³n</label>
               <textarea
                 className="w-full min-h-20 rounded-[1.2rem] border border-line bg-canvas/35 px-3 py-2 text-sm text-ink outline-none transition focus:border-accent"
-                placeholder="Ej. Cliente desistió del pedido, error al ingresar items..."
+                placeholder="Ej. Cliente desistiÃ³ del pedido, error al ingresar items..."
                 value={cancelReason}
                 onChange={(event) => setCancelReason(event.target.value)}
               />
@@ -2133,7 +2198,7 @@ export function CajaView({
                   }
                 }}
               >
-                Confirmar Anulación
+                Confirmar AnulaciÃ³n
               </button>
               <button
                 type="button"
@@ -2147,7 +2212,7 @@ export function CajaView({
         </div>
       ) : null}
 
-      {/* Estilos para impresión térmica y división de tickets */}
+      {/* Estilos para impresiÃ³n tÃ©rmica y divisiÃ³n de tickets */}
       <style>{`
         @media print {
           @page {
@@ -2177,7 +2242,7 @@ export function CajaView({
         }
       `}</style>
 
-      {/* Recibo térmico dual (Cliente + Cocina) */}
+      {/* Recibo tÃ©rmico dual (Cliente + Cocina) */}
       {printedOrder ? (
         <div id="print-section" className="hidden print:block text-black font-mono text-[10px] p-1 leading-normal bg-white w-[76mm]">
           {/* Ticket de Cliente */}
@@ -2205,7 +2270,7 @@ export function CajaView({
                     )}
                     {item.modifiers.options.length > 0 && (
                       <div className="text-[8px] text-gray-600 ml-2">
-                         + Opción: {item.modifiers.options.join(', ')}
+                         + OpciÃ³n: {item.modifiers.options.join(', ')}
                       </div>
                     )}
                     {item.modifiers.note && (
@@ -2227,7 +2292,7 @@ export function CajaView({
                   <span>{formatCurrency(printedOrder.total)}</span>
                </div>
                <div className="flex justify-between">
-                  <span>Método:</span>
+                  <span>MÃ©todo:</span>
                   <span>{printedOrder.payment?.method === 'qr' ? 'Pago QR' : printedOrder.payment?.method === 'mixed' ? 'Mixto' : 'Efectivo'}</span>
                </div>
                <div className="flex justify-between">
@@ -2237,7 +2302,7 @@ export function CajaView({
             </div>
             
             <div className="text-center text-[8px] mt-4 border-t border-black border-dotted pt-1">
-               ¡Muchas gracias por su preferencia!
+               Â¡Muchas gracias por su preferencia!
             </div>
           </div>
 
@@ -2265,7 +2330,7 @@ export function CajaView({
                     )}
                     {item.modifiers.options.length > 0 && (
                       <div className="text-[9px] text-gray-700 ml-2 font-medium">
-                         Opción: {item.modifiers.options.join(', ')}
+                         OpciÃ³n: {item.modifiers.options.join(', ')}
                       </div>
                     )}
                     {item.modifiers.note && (

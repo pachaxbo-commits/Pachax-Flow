@@ -1,13 +1,7 @@
 import { Bot, Power, PowerOff, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { UserRole } from '../types'
-import { botApiUrl, botAdminToken } from '../lib/botApi'
-
-type BotHealth = {
-  ok: boolean
-  botEnabled: boolean
-  whatsappConnected: boolean
-}
+import { botApiUrl, botAdminToken, fetchBotHealth, type BotHealth } from '../lib/botApi'
 
 type BotStatus = 'checking' | 'online' | 'offline' | 'error' | 'not_configured'
 
@@ -31,7 +25,8 @@ export function BotControlPanel({ collapsed, userRole }: { collapsed: boolean; u
     if (status === 'offline' || status === 'error') return 'Inicia el bot local o revisa el servidor.'
     if (!health) return 'Consultando estado...'
     if (!health.whatsappConnected) return 'Escanea el QR para conectar WhatsApp.'
-    return health.botEnabled ? 'Responde pedidos automaticamente.' : 'No respondera mensajes nuevos.'
+    if (!health.botEnabled) return 'No respondera mensajes nuevos.'
+    return health.acceptingOrders === false ? 'Pedidos pausados temporalmente.' : 'Recibe pedidos automaticamente.'
   }, [health, status])
 
   async function refreshHealth() {
@@ -42,9 +37,7 @@ export function BotControlPanel({ collapsed, userRole }: { collapsed: boolean; u
 
     try {
       setStatus('checking')
-      const response = await fetch(`${botApiUrl}/health`)
-      if (!response.ok) throw new Error('Bot health failed')
-      const nextHealth = await response.json() as BotHealth
+      const nextHealth = await fetchBotHealth()
       setHealth(nextHealth)
       setStatus('online')
     } catch {
