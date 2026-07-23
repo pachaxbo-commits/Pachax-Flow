@@ -197,6 +197,14 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'deliveredAt', 'updatedAt']);
     }
 
+    function isUndoLocalDeliveredTransition() {
+      return resource.data.status == 'delivered'
+        && resource.data.orderSource == 'local'
+        && request.resource.data.status == 'preparing'
+        && !('deliveredAt' in request.resource.data)
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'deliveredAt', 'updatedAt']);
+    }
+
     function isCancelTransition() {
       return resource.data.status in ['pending', 'preparing', 'ready', 'ready_for_pickup', 'ready_for_dispatch', 'out_for_delivery']
         && request.resource.data.status == 'cancelled'
@@ -329,6 +337,7 @@ service cloud.firestore {
                     isPreparingTransition()
                     || isOutForDeliveryTransition()
                     || isDeliveredTransition()
+                    || isUndoLocalDeliveredTransition()
                   )
                 )
                 || (

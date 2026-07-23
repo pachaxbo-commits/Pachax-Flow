@@ -82,6 +82,8 @@ export function normalizeOrder(raw: Record<string, unknown>): Partial<Order> {
     paymentStatus,
     paymentMethod: paymentStatus === 'pending' ? null : paymentMethod,
     expectedPaymentMethod: (raw.expectedPaymentMethod as 'cash' | 'qr' | 'mixed' | null) ?? null,
+    qrProofReceived: Boolean(raw.qrProofReceived),
+    paymentReviewNote: (raw.paymentReviewNote as string) ?? undefined,
     productSubtotal: typeof raw.productSubtotal === 'number' ? raw.productSubtotal : undefined,
     deliveryFee: typeof raw.deliveryFee === 'number' ? raw.deliveryFee : undefined,
     deliveryDistanceKm: typeof raw.deliveryDistanceKm === 'number' ? raw.deliveryDistanceKm : null,
@@ -139,7 +141,7 @@ export function updateOrderStatus(
             status,
             readyAt: readyStatuses.has(status) ? readyAt ?? order.readyAt ?? new Date().toISOString() : order.readyAt,
             deliveredAt:
-              status === 'delivered' ? deliveredAt ?? order.deliveredAt ?? new Date().toISOString() : order.deliveredAt,
+              status === 'delivered' ? deliveredAt ?? order.deliveredAt ?? new Date().toISOString() : undefined,
           }
         : order,
     ),

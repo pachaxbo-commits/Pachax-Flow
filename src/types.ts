@@ -140,6 +140,8 @@ export interface Order {
   paymentStatus: 'paid' | 'pending'
   paymentMethod: PaymentMethod | null
   expectedPaymentMethod: PaymentMethod | null
+  qrProofReceived?: boolean
+  paymentReviewNote?: string
   paidAt?: string
   paidBy?: string
   orderSource: OrderSource

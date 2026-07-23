@@ -1,6 +1,7 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   onSnapshot,
@@ -247,7 +248,7 @@ export class FirestoreOrderRepository {
         status,
         ...(estimatedDelay !== undefined ? { estimatedDelay } : {}),
         ...(readyStatuses.has(status) ? { readyAt: serverTimestamp() } : {}),
-        ...(status === 'delivered' ? { deliveredAt: serverTimestamp() } : {}),
+        ...(status === 'delivered' ? { deliveredAt: serverTimestamp() } : { deliveredAt: deleteField() }),
         updatedAt: serverTimestamp(),
       })
       this.pendingOperations = Math.max(0, this.pendingOperations - 1)

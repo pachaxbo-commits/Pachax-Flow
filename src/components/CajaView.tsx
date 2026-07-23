@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   Printer,
   AlertCircle,
+  RotateCcw,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatCurrency } from '../lib/format'
@@ -722,7 +723,7 @@ export function CajaView({
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
                 
                 {/* COLUMNA 1: PEDIDOS FINALIZADOS */}
-                <div className="space-y-4">
+                <div className="space-y-4 lg:order-3">
                   <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-2">
                       <CheckCircle2 size={18} className="text-emerald-700" />
@@ -789,6 +790,16 @@ export function CajaView({
                               >
                                 <Printer size={13} />
                               </button>
+                              {canManageOrders && order.orderSource === 'local' && order.status === 'delivered' ? (
+                                <button
+                                  type="button"
+                                  className="p-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
+                                  title="Deshacer entregado"
+                                  onClick={() => onSetOrderStatus(order.id, 'preparing')}
+                                >
+                                  <RotateCcw size={13} />
+                                </button>
+                              ) : null}
                               <button
                                 type="button"
                                 className={`p-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition ${canManageOrders ? '' : 'hidden'}`}
@@ -810,7 +821,7 @@ export function CajaView({
                 </div>
 
                 {/* COLUMNA 2: PEDIDOS WHATSAPP / DELIVERY */}
-                <div className="space-y-4">
+                <div className="space-y-4 lg:order-2">
                   <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-4 flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-2">
                       <MessageSquareText size={18} className="text-amber-700" />
@@ -912,6 +923,11 @@ export function CajaView({
                                 <SourceBadge source={order.orderSource} />
                                 <FulfillmentBadge type={order.fulfillmentType} tableInfo={order.tableInfo} />
                                 <PaymentBadge paymentStatus={order.paymentStatus} paymentMethod={order.paymentMethod} />
+                                {order.qrProofReceived ? (
+                                  <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                    QR por revisar
+                                  </span>
+                                ) : null}
                               </div>
                             </div>
 
@@ -1068,8 +1084,8 @@ export function CajaView({
                   </div>
                 </div>
 
-                {/* COLUMNA 3: PEDIDOS LOCALES ACTIVES */}
-                <div className="space-y-4">
+                {/* COLUMNA 3: PEDIDOS LOCALES ACTIVOS */}
+                <div className="space-y-4 lg:order-1">
                   <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-2xl p-4 flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-2">
                       <Store size={18} className="text-blue-700" />
@@ -2166,11 +2182,9 @@ export function CajaView({
         <div id="print-section" className="hidden print:block text-black font-mono text-[10px] p-1 leading-normal bg-white w-[76mm]">
           {/* Ticket de Cliente */}
           <div className="print-page w-full flex flex-col items-center">
-            <div className="text-center font-bold text-base tracking-wider mb-0.5">BURGUER LAB</div>
-            <div className="text-center text-[8px] text-gray-500 mb-2">Comandero & WhatsApp Bot</div>
+            <div className="text-center font-bold text-xl tracking-wider mb-2">{printedOrder.displayNumber}</div>
             
             <div className="border-t border-b border-black border-dashed py-1 w-full text-left space-y-0.5 text-[9px]">
-              <div><b>Ticket:</b> {printedOrder.displayNumber}</div>
               <div><b>Fecha:</b> {new Date(printedOrder.createdAt).toLocaleString('es-ES')}</div>
               <div><b>Cliente:</b> {printedOrder.customerName || 'Cliente General'}</div>
               <div><b>Origen:</b> {printedOrder.orderSource === 'whatsapp' ? 'PEDIDO WHATSAPP' : 'PEDIDO LOCAL'}</div>
@@ -2229,7 +2243,6 @@ export function CajaView({
 
           {/* Ticket de Cocina */}
           <div className="print-page w-full flex flex-col items-center mt-8">
-            <div className="text-center font-bold text-sm tracking-wider mb-0.5">COMANDA DE COCINA</div>
             <div className="text-center font-bold text-base bg-black text-white px-2 py-0.5 rounded mb-2">
               {printedOrder.displayNumber}
             </div>
@@ -2264,9 +2277,6 @@ export function CajaView({
               ))}
             </div>
             
-            <div className="text-center text-[8px] mt-4 border-t border-black border-dotted pt-1">
-               Burguer Lab Cocina
-            </div>
           </div>
         </div>
       ) : null}
