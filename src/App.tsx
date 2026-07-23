@@ -17,6 +17,15 @@ import type { CartItem, OrderStatus, PaymentMethod, PaymentSummary, Product, Use
 
 type View = 'caja' | 'cocina' | 'historial' | 'admin'
 
+function getDayKey(value: string | Date = new Date()) {
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function getAllowedViews(role: UserRole | 'demo'): View[] {
   if (role === 'admin' || role === 'demo') {
     return ['caja', 'cocina', 'historial', 'admin']
@@ -79,8 +88,11 @@ function MainShell({
     moveProduct,
   } = useCatalogStore()
 
-  const dailyTotal = useMemo(() => orders.reduce((sum, order) => (order.status !== 'cancelled' && order.paymentStatus === 'paid') ? sum + (order.productSubtotal ?? order.total) : sum, 0), [orders])
-  const pendingCount = useMemo(() => orders.filter((order) => order.status === 'pending').length, [orders])
+  const todayKey = useMemo(() => getDayKey(), [])
+  const todayOrders = useMemo(() => orders.filter((order) => getDayKey(order.createdAt) === todayKey), [orders, todayKey])
+  const dailyTotal = useMemo(() => todayOrders.reduce((sum, order) => (order.status !== 'cancelled' && order.paymentStatus === 'paid') ? sum + (order.productSubtotal ?? order.total) : sum, 0), [todayOrders])
+  const activeTodayCount = useMemo(() => todayOrders.filter((order) => order.status !== 'cancelled').length, [todayOrders])
+  const pendingCount = useMemo(() => todayOrders.filter((order) => order.status === 'pending').length, [todayOrders])
   const nextOrderNumber = `#${String(sequence + 1).padStart(3, '0')}`
 
   useEffect(() => {
@@ -216,7 +228,7 @@ function MainShell({
                   </div>
                   <div className="mt-3 text-3xl font-semibold tracking-tight text-ink">{formatCurrency(dailyTotal)}</div>
                   <div className="mt-1 text-sm text-muted">
-                    {orders.filter((order) => order.status !== 'cancelled').length} pedidos activos
+                    {activeTodayCount} pedidos activos hoy
                   </div>
                 </div>
               ) : null}
