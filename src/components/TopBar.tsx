@@ -47,7 +47,7 @@ export function TopBar({
           </div>
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-accent">Comandero</p>
-            <h1 className="font-serif text-lg text-ink">Pachax POS</h1>
+            <h1 className="font-serif text-lg text-ink">Burger Lab</h1>
           </div>
         </div>
         <button
