@@ -31,6 +31,9 @@ import { StatusPill, SourceBadge, FulfillmentBadge, PaymentBadge } from './ui/St
 import { playKitchenNotification } from '../lib/sound'
 import { botApiUrl, botAdminToken, emitBotHealthChanged, fetchBotHealth, onBotHealthChanged, setBotAcceptingOrders } from '../lib/botApi'
 
+const DEFAULT_PREP_DELAY = 10
+const DEMAND_STORAGE_KEY = 'burgerlab:demand-delay'
+
 function buildCartItem(product: Product): CartItem {
   return {
     lineId: crypto.randomUUID(),
@@ -130,12 +133,18 @@ export function CajaView({
     customerPhone?: string
     deliveryAddress?: string
   }) => Promise<void>
-  onSetOrderStatus: (orderId: string, status: OrderStatus, estimatedDelay?: number, options?: { suppressWhatsappDispatchNotice?: boolean; forceWhatsappDispatchNotice?: boolean }) => Promise<void>
+  onSetOrderStatus: (orderId: string, status: OrderStatus, estimatedDelay?: number, options?: { suppressWhatsappDispatchNotice?: boolean; forceWhatsappDispatchNotice?: boolean }) => Promise<boolean | void>
 }) {
   // Main view mode: either POS catalog or orders list
   const [viewMode, setViewMode] = useState<'new_order' | 'orders_list'>('new_order')
   const [showCheckoutModal, setShowCheckoutModal] = useState(false)
-  const [globalDelay, setGlobalDelay] = useState<number>(10)
+  const [globalDelay, setGlobalDelay] = useState<number>(DEFAULT_PREP_DELAY)
+  const [demandDelayUntil, setDemandDelayUntil] = useState('')
+  const [demandModalDelay, setDemandModalDelay] = useState<number | null>(null)
+  const [demandDurationMinutes, setDemandDurationMinutes] = useState(30)
+  const [pauseOrdersModalOpen, setPauseOrdersModalOpen] = useState(false)
+  const [pauseReason, setPauseReason] = useState('Nos estamos retrasando')
+  const [pauseDurationMinutes, setPauseDurationMinutes] = useState(30)
   // Edit Order State
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
 
@@ -215,6 +224,34 @@ export function CajaView({
   const [printedOrder, setPrintedOrder] = useState<Order | null>(null)
   const [whatsappSubFilter, setWhatsappSubFilter] = useState<'all' | 'pending' | 'paid'>('all')
 
+  const demandDelayActive = Boolean(demandDelayUntil && new Date(demandDelayUntil).getTime() > Date.now())
+
+  function clearDemandDelay() {
+    window.localStorage.removeItem(DEMAND_STORAGE_KEY)
+    setDemandDelayUntil('')
+    setGlobalDelay(DEFAULT_PREP_DELAY)
+  }
+
+  function openDemandDelayModal(minutes: number) {
+    if (minutes <= DEFAULT_PREP_DELAY) {
+      clearDemandDelay()
+      return
+    }
+
+    setDemandModalDelay(minutes)
+    setDemandDurationMinutes(30)
+  }
+
+  function applyDemandDelay() {
+    if (!demandModalDelay) return
+    const until = new Date(Date.now() + demandDurationMinutes * 60 * 1000).toISOString()
+    const payload = { minutes: demandModalDelay, until }
+    window.localStorage.setItem(DEMAND_STORAGE_KEY, JSON.stringify(payload))
+    setGlobalDelay(demandModalDelay)
+    setDemandDelayUntil(until)
+    setDemandModalDelay(null)
+  }
+
   useEffect(() => {
     if (printedOrder) {
       const clearPrintedOrder = () => setPrintedOrder(null)
@@ -230,6 +267,33 @@ export function CajaView({
       }
     }
   }, [printedOrder])
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(DEMAND_STORAGE_KEY)
+      if (!raw) return
+      const saved = JSON.parse(raw) as { minutes?: number; until?: string }
+      const untilMs = new Date(saved.until || '').getTime()
+      if (Number.isFinite(untilMs) && untilMs > Date.now() && saved.minutes && saved.minutes > DEFAULT_PREP_DELAY) {
+        setGlobalDelay(saved.minutes)
+        setDemandDelayUntil(saved.until || '')
+      } else {
+        clearDemandDelay()
+      }
+    } catch {
+      clearDemandDelay()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!demandDelayUntil) return undefined
+    const interval = window.setInterval(() => {
+      if (new Date(demandDelayUntil).getTime() <= Date.now()) {
+        clearDemandDelay()
+      }
+    }, 15000)
+    return () => window.clearInterval(interval)
+  }, [demandDelayUntil])
 
   useEffect(() => {
     if (!botApiUrl || !botAdminToken) return
@@ -471,14 +535,38 @@ export function CajaView({
   }
 
   const handleToggleWhatsappOrders = async () => {
+    if (acceptingWhatsappOrders) {
+      setPauseOrdersModalOpen(true)
+      return
+    }
+
     try {
       setIsTogglingWhatsappOrders(true)
-      const nextValue = !acceptingWhatsappOrders
-      await setBotAcceptingOrders(nextValue)
-      setAcceptingWhatsappOrders(nextValue)
+      await setBotAcceptingOrders(true)
+      setAcceptingWhatsappOrders(true)
       emitBotHealthChanged()
     } catch {
       window.alert('No se pudo actualizar la recepcion de pedidos por WhatsApp. Revisa que el bot este encendido.')
+    } finally {
+      setIsTogglingWhatsappOrders(false)
+    }
+  }
+
+  const confirmPauseWhatsappOrders = async () => {
+    try {
+      setIsTogglingWhatsappOrders(true)
+      const endOfDay = new Date()
+      endOfDay.setHours(23, 0, 0, 0)
+      const pausedUntil =
+        pauseDurationMinutes === -1
+          ? endOfDay.toISOString()
+          : new Date(Date.now() + pauseDurationMinutes * 60 * 1000).toISOString()
+      await setBotAcceptingOrders(false, { pausedUntil, pauseReason })
+      setAcceptingWhatsappOrders(false)
+      setPauseOrdersModalOpen(false)
+      emitBotHealthChanged()
+    } catch {
+      window.alert('No se pudo pausar la recepcion de pedidos por WhatsApp. Revisa que el bot este encendido.')
     } finally {
       setIsTogglingWhatsappOrders(false)
     }
@@ -938,8 +1026,15 @@ export function CajaView({
 
                   {/* Control de Retraso General para WhatsApp */}
                   <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-2.5 flex items-center justify-between gap-2 shadow-sm text-amber-900">
-                    <div className="text-[10px] font-black uppercase tracking-wider">Retraso General:</div>
-                    <div className="flex gap-1">
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-black uppercase tracking-wider">Retraso General:</div>
+                      {demandDelayActive ? (
+                        <div className="mt-0.5 text-[10px] font-semibold text-amber-800">
+                          Activo hasta {new Date(demandDelayUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-1">
                       {[10, 15, 20, 25, 30].map((mins) => {
                         const isActive = globalDelay === mins
                         return (
@@ -949,12 +1044,21 @@ export function CajaView({
                             className={`px-2 py-1 rounded-lg text-[10px] font-black transition ${
                               isActive ? 'bg-amber-600 text-white shadow-sm' : 'bg-white hover:bg-amber-100 border border-amber-200 text-amber-950'
                             }`}
-                            onClick={() => setGlobalDelay(mins)}
+                            onClick={() => openDemandDelayModal(mins)}
                           >
                             {mins}m
                           </button>
                         )
                       })}
+                      {demandDelayActive ? (
+                        <button
+                          type="button"
+                          className="rounded-lg border border-line bg-white px-2 py-1 text-[10px] font-black text-ink transition hover:bg-line"
+                          onClick={clearDemandDelay}
+                        >
+                          Normal
+                        </button>
+                      ) : null}
                     </div>
                   </div>
 
@@ -2252,6 +2356,98 @@ export function CajaView({
       ) : null}
 
       {/* Estilos para impresiÃ³n tÃ©rmica y divisiÃ³n de tickets */}
+      {demandModalDelay ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs font-black uppercase tracking-[0.22em] text-accent">Gran demanda</div>
+                <h2 className="mt-2 text-2xl font-black text-ink">Aumentar tiempo de preparacion</h2>
+                <p className="mt-2 text-sm font-semibold leading-6 text-muted">Los pedidos nuevos de WhatsApp usaran este tiempo mientras dure la configuracion.</p>
+              </div>
+              <button type="button" className="grid h-10 w-10 place-items-center rounded-full border border-line bg-panel text-ink transition hover:bg-line" onClick={() => setDemandModalDelay(null)}>
+                <Ban size={18} />
+              </button>
+            </div>
+            <div className="mt-5">
+              <div className="text-sm font-black text-ink">Tiempo de preparacion</div>
+              <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+                {[15, 20, 25, 30, 35].map((mins) => (
+                  <button key={mins} type="button" className={`rounded-2xl px-3 py-3 text-sm font-black transition ${demandModalDelay === mins ? 'bg-accent text-white shadow-sm' : 'bg-line/60 text-ink hover:bg-accentWash'}`} onClick={() => setDemandModalDelay(mins)}>
+                    {mins} min
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-6">
+              <div className="text-sm font-black text-ink">Se aplicara durante</div>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {[
+                  { label: '15 min', value: 15 },
+                  { label: '30 min', value: 30 },
+                  { label: '1 hora', value: 60 },
+                  { label: '2 horas', value: 120 },
+                ].map((option) => (
+                  <button key={option.value} type="button" className={`rounded-2xl px-3 py-3 text-sm font-black transition ${demandDurationMinutes === option.value ? 'bg-accent text-white shadow-sm' : 'bg-line/60 text-ink hover:bg-accentWash'}`} onClick={() => setDemandDurationMinutes(option.value)}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              <Button tone="secondary" onClick={() => setDemandModalDelay(null)}>Cancelar</Button>
+              <Button onClick={applyDemandDelay}>Aplicar horario</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pauseOrdersModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs font-black uppercase tracking-[0.22em] text-accent">WhatsApp</div>
+                <h2 className="mt-2 text-2xl font-black text-ink">Pausar pedidos</h2>
+                <p className="mt-2 text-sm font-semibold leading-6 text-muted">Mientras este pausado, el bot avisara que no estamos recibiendo pedidos por WhatsApp.</p>
+              </div>
+              <button type="button" className="grid h-10 w-10 place-items-center rounded-full border border-line bg-panel text-ink transition hover:bg-line" onClick={() => setPauseOrdersModalOpen(false)}>
+                <Ban size={18} />
+              </button>
+            </div>
+            <div className="mt-5">
+              <div className="text-sm font-black text-ink">Cual es la razon</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {['Nos estamos retrasando', 'Evento o emergencia', 'Otro'].map((reason) => (
+                  <button key={reason} type="button" className={`rounded-2xl px-4 py-3 text-sm font-black transition ${pauseReason === reason ? 'bg-accent text-white shadow-sm' : 'bg-line/60 text-ink hover:bg-accentWash'}`} onClick={() => setPauseReason(reason)}>
+                    {reason}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-6">
+              <div className="text-sm font-black text-ink">Por cuanto tiempo</div>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {[
+                  { label: 'Media hora', value: 30 },
+                  { label: 'Hora', value: 60 },
+                  { label: 'Dos horas', value: 120 },
+                  { label: 'Final del dia', value: -1 },
+                ].map((option) => (
+                  <button key={option.value} type="button" className={`rounded-2xl px-3 py-3 text-sm font-black transition ${pauseDurationMinutes === option.value ? 'bg-accent text-white shadow-sm' : 'bg-line/60 text-ink hover:bg-accentWash'}`} onClick={() => setPauseDurationMinutes(option.value)}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              <Button tone="secondary" onClick={() => setPauseOrdersModalOpen(false)}>No pausar</Button>
+              <Button disabled={isTogglingWhatsappOrders} onClick={() => void confirmPauseWhatsappOrders()}>Pausar pedidos</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <style>{`
         @media print {
           @page {
@@ -2277,6 +2473,12 @@ export function CajaView({
           .print-page {
             page-break-after: always;
             break-after: page;
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          .print-page:last-child {
+            page-break-after: auto;
+            break-after: auto;
           }
         }
       `}</style>
@@ -2291,7 +2493,6 @@ export function CajaView({
             <div className="border-t border-b border-black border-dashed py-1 w-full text-left space-y-0.5 text-[9px]">
               <div><b>Fecha:</b> {new Date(printedOrder.createdAt).toLocaleString('es-ES')}</div>
               <div><b>Cliente:</b> {printedOrder.customerName || 'Cliente General'}</div>
-              <div><b>Origen:</b> {printedOrder.orderSource === 'whatsapp' ? 'PEDIDO WHATSAPP' : 'PEDIDO LOCAL'}</div>
               <div><b>Entrega:</b> {printedOrder.fulfillmentType === 'table' ? `Mesa: ${printedOrder.tableInfo}` : printedOrder.fulfillmentType === 'pickup' ? 'Retiro en Local' : 'Delivery'}</div>
             </div>
             
@@ -2346,7 +2547,7 @@ export function CajaView({
           </div>
 
           {/* Ticket de Cocina */}
-          <div className="print-page w-full flex flex-col items-center mt-8">
+          <div className="print-page w-full flex flex-col items-center">
             <div className="text-center font-bold text-base bg-black text-white px-2 py-0.5 rounded mb-2">
               {printedOrder.displayNumber}
             </div>
@@ -2354,7 +2555,6 @@ export function CajaView({
             <div className="border-t border-b border-black border-dashed py-1 w-full text-left space-y-0.5 text-[9px]">
               <div><b>Fecha:</b> {new Date(printedOrder.createdAt).toLocaleString('es-ES')}</div>
               <div><b>Cliente:</b> {printedOrder.customerName || 'Cliente General'}</div>
-              <div><b>Origen:</b> {printedOrder.orderSource === 'whatsapp' ? 'WHATSAPP' : 'LOCAL'}</div>
               <div><b>Entrega:</b> {printedOrder.fulfillmentType === 'table' ? `Mesa: ${printedOrder.tableInfo}` : printedOrder.fulfillmentType === 'pickup' ? 'Retiro en Local' : 'Delivery'}</div>
             </div>
             

@@ -140,10 +140,15 @@ function MainShell({
       return false
     }
   }
-  const handleAdvanceStatus = async (orderId: string, nextStatus: OrderStatus, estimatedDelay?: number) => {
+  const handleAdvanceStatus = async (
+    orderId: string,
+    nextStatus: OrderStatus,
+    estimatedDelay?: number,
+    options?: { suppressWhatsappDispatchNotice?: boolean; forceWhatsappDispatchNotice?: boolean },
+  ) => {
     try {
       const order = orders.find((currentOrder) => currentOrder.id === orderId)
-      await setOrderStatus(orderId, nextStatus, estimatedDelay)
+      await setOrderStatus(orderId, nextStatus, estimatedDelay, options)
       if (order?.orderSource === 'whatsapp' && nextStatus === 'preparing') {
         try {
           await notifyBotOrderConfirmed(orderId, estimatedDelay ?? 10)
@@ -282,7 +287,7 @@ function MainShell({
               onCancelOrder={handleCancelOrder}
               onDeleteOrder={deleteOrder}
               onUpdateOrder={updateOrder}
-              onSetOrderStatus={setOrderStatus}
+              onSetOrderStatus={handleAdvanceStatus}
             />
           ) : null}
           {view === 'cocina' ? <CocinaView orders={orders} onAdvanceStatus={handleAdvanceStatus} /> : null}

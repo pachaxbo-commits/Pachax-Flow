@@ -103,6 +103,8 @@ service cloud.firestore {
           'customerName',
           'customerPhone',
           'deliveryAddress',
+          'suppressWhatsappDispatchNotice',
+          'forceWhatsappDispatchNotice',
           'createdBy',
           'paidAt',
           'paidBy'
@@ -125,6 +127,8 @@ service cloud.firestore {
         && (!('customerName' in request.resource.data) || request.resource.data.customerName is string)
         && (!('customerPhone' in request.resource.data) || request.resource.data.customerPhone is string)
         && (!('deliveryAddress' in request.resource.data) || request.resource.data.deliveryAddress is string)
+        && (!('suppressWhatsappDispatchNotice' in request.resource.data) || request.resource.data.suppressWhatsappDispatchNotice is bool)
+        && (!('forceWhatsappDispatchNotice' in request.resource.data) || request.resource.data.forceWhatsappDispatchNotice is bool)
         && (!('createdBy' in request.resource.data) || request.resource.data.createdBy is string)
         && isValidPayment(request.resource.data.payment, request.resource.data.total, request.resource.data.paymentStatus)
         && isValidFulfillment(request.resource.data)
@@ -194,7 +198,12 @@ service cloud.firestore {
       return resource.data.status in ['pending', 'preparing', 'ready', 'ready_for_pickup', 'ready_for_dispatch', 'out_for_delivery']
         && request.resource.data.status == 'delivered'
         && request.resource.data.deliveredAt is timestamp
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'deliveredAt', 'updatedAt']);
+        && (
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'deliveredAt', 'updatedAt'])
+          || request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'deliveredAt', 'suppressWhatsappDispatchNotice', 'forceWhatsappDispatchNotice', 'updatedAt'])
+        )
+        && (!('suppressWhatsappDispatchNotice' in request.resource.data) || request.resource.data.suppressWhatsappDispatchNotice is bool)
+        && (!('forceWhatsappDispatchNotice' in request.resource.data) || request.resource.data.forceWhatsappDispatchNotice is bool);
     }
 
     function isUndoLocalDeliveredTransition() {
@@ -332,7 +341,7 @@ service cloud.firestore {
               hasRole(restaurantId, ['admin', 'caja'])
               && (
                 (
-                  request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readyAt', 'deliveredAt', 'estimatedDelay', 'updatedAt'])
+                  request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readyAt', 'deliveredAt', 'estimatedDelay', 'suppressWhatsappDispatchNotice', 'forceWhatsappDispatchNotice', 'updatedAt'])
                   && (
                     isPreparingTransition()
                     || isOutForDeliveryTransition()

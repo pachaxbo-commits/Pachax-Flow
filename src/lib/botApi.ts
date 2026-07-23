@@ -7,10 +7,14 @@ export type BotHealth = {
   acceptingOrders?: boolean
   autoRepliesEnabled?: boolean
   whatsappConnected: boolean
+  acceptingOrdersPausedUntil?: string
+  acceptingOrdersPauseReason?: string
 }
 
 export type BotSettings = {
   acceptingOrders: boolean
+  acceptingOrdersPausedUntil: string
+  acceptingOrdersPauseReason: string
   autoRepliesEnabled: boolean
   deliveryGroupName: string
   deliveryGroupId: string
@@ -48,12 +52,14 @@ export async function fetchBotHealth(): Promise<BotHealth> {
   return response.json()
 }
 
-export async function setBotAcceptingOrders(accepting: boolean) {
+export async function setBotAcceptingOrders(accepting: boolean, options?: { pausedUntil?: string; pauseReason?: string }) {
   const response = await fetch(`${botApiUrl}/orders/accepting/${accepting ? 'on' : 'off'}`, {
     method: 'POST',
     headers: {
+      'Content-Type': 'application/json',
       'x-bot-token': botAdminToken,
     },
+    body: JSON.stringify(options || {}),
   })
 
   if (!response.ok) {

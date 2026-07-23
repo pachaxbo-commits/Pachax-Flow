@@ -109,8 +109,13 @@ export function useOrdersStore() {
         tableInfo,
       })
     },
-    async setOrderStatus(orderId: string, status: OrderStatus, estimatedDelay?: number) {
-      await getOrdersRepository().setOrderStatus(orderId, status, estimatedDelay)
+    async setOrderStatus(
+      orderId: string,
+      status: OrderStatus,
+      estimatedDelay?: number,
+      options?: { suppressWhatsappDispatchNotice?: boolean; forceWhatsappDispatchNotice?: boolean },
+    ) {
+      await getOrdersRepository().setOrderStatus(orderId, status, estimatedDelay, options)
     },
     async cancelOrder(orderId: string, cancelledBy: string, cancelledReason?: string) {
       await getOrdersRepository().cancelOrder(orderId, cancelledBy, cancelledReason)

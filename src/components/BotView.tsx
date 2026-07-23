@@ -36,6 +36,8 @@ import { Panel } from './ui/Panel'
 
 const emptySettings: BotSettings = {
   acceptingOrders: true,
+  acceptingOrdersPausedUntil: '',
+  acceptingOrdersPauseReason: '',
   autoRepliesEnabled: true,
   deliveryGroupName: '',
   deliveryGroupId: '',
