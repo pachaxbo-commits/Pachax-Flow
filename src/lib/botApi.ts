@@ -15,6 +15,8 @@ export type BotSettings = {
   acceptingOrders: boolean
   acceptingOrdersPausedUntil: string
   acceptingOrdersPauseReason: string
+  pickupOnlyMode: boolean
+  pickupOnlyMessage: string
   autoRepliesEnabled: boolean
   deliveryGroupName: string
   deliveryGroupId: string

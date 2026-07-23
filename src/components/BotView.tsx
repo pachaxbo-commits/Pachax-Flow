@@ -12,6 +12,7 @@ import {
   QrCode,
   RefreshCw,
   Save,
+  ShoppingBag,
   Users,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -38,6 +39,8 @@ const emptySettings: BotSettings = {
   acceptingOrders: true,
   acceptingOrdersPausedUntil: '',
   acceptingOrdersPauseReason: '',
+  pickupOnlyMode: false,
+  pickupOnlyMessage: '',
   autoRepliesEnabled: true,
   deliveryGroupName: '',
   deliveryGroupId: '',
@@ -208,6 +211,16 @@ export function BotView() {
               onLabel="Recibe pedidos"
             />
             <OperationSwitch
+              active={settings.pickupOnlyMode}
+              disabled={busy || health?.botEnabled === false || !settings.acceptingOrders}
+              offIcon={PowerOff}
+              offLabel="Delivery normal"
+              onActivate={() => runAction(() => saveBotSettings({ pickupOnlyMode: true }).then(() => undefined), 'Modo solo recojo activado.')}
+              onDeactivate={() => runAction(() => saveBotSettings({ pickupOnlyMode: false }).then(() => undefined), 'Delivery reactivado.')}
+              onIcon={ShoppingBag}
+              onLabel="Solo recojo"
+            />
+            <OperationSwitch
               active={settings.autoRepliesEnabled}
               disabled={busy || health?.botEnabled === false}
               offIcon={PauseCircle}
@@ -314,6 +327,7 @@ export function BotView() {
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <TextArea label="Mensaje fuera de horario" value={settings.closedMessage} onChange={(value) => setSettings({ ...settings, closedMessage: value })} />
           <TextArea label="Mensaje pedidos pausados" value={settings.pausedOrdersMessage} onChange={(value) => setSettings({ ...settings, pausedOrdersMessage: value })} />
+          <TextArea label="Mensaje solo recojo" value={settings.pickupOnlyMessage} onChange={(value) => setSettings({ ...settings, pickupOnlyMessage: value })} />
           <TextArea label="Mensaje pago QR" value={settings.qrPaymentMessage} onChange={(value) => setSettings({ ...settings, qrPaymentMessage: value })} />
           <TextArea label="Mensaje delivery/tarifario" value={settings.deliveryPricingMessage} onChange={(value) => setSettings({ ...settings, deliveryPricingMessage: value })} />
           <TextArea label="Mensaje intervencion humana" value={settings.humanHelpMessage} onChange={(value) => setSettings({ ...settings, humanHelpMessage: value })} />

@@ -1,4 +1,4 @@
-import { Bot, Power, PowerOff, RefreshCw } from 'lucide-react'
+import { Bot, Power, PowerOff, RefreshCw, ShoppingBag } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { UserRole } from '../types'
 import {
@@ -6,11 +6,13 @@ import {
   botAdminToken,
   emitBotHealthChanged,
   fetchBotHealth,
+  fetchBotSettings,
   onBotHealthChanged,
   saveBotSettings,
   setBotAcceptingOrders,
   setBotEnabled as updateBotEnabled,
   type BotHealth,
+  type BotSettings,
 } from '../lib/botApi'
 
 type BotStatus = 'checking' | 'online' | 'offline' | 'error' | 'not_configured'
@@ -18,6 +20,7 @@ type BotStatus = 'checking' | 'online' | 'offline' | 'error' | 'not_configured'
 export function BotControlPanel({ collapsed, userRole }: { collapsed: boolean; userRole: UserRole | 'demo' }) {
   const canControlBot = userRole === 'admin' || userRole === 'caja' || userRole === 'pedidos' || userRole === 'demo'
   const [health, setHealth] = useState<BotHealth | null>(null)
+  const [settings, setSettings] = useState<BotSettings | null>(null)
   const [status, setStatus] = useState<BotStatus>('checking')
   const [isBusy, setIsBusy] = useState(false)
 
@@ -36,13 +39,15 @@ export function BotControlPanel({ collapsed, userRole }: { collapsed: boolean; u
     if (!health) return 'Consultando estado...'
     if (!health.whatsappConnected) return 'Escanea el QR para conectar WhatsApp.'
     if (!health.botEnabled) return 'No respondera mensajes nuevos.'
-    return health.acceptingOrders === false ? 'Pedidos pausados temporalmente.' : 'Recibe pedidos automaticamente.'
-  }, [health, status])
+    if (health.acceptingOrders === false) return 'Pedidos pausados temporalmente.'
+    return settings?.pickupOnlyMode ? 'Solo pedidos para recojo.' : 'Recibe pedidos automaticamente.'
+  }, [health, settings, status])
 
   const isConnected = Boolean(health?.whatsappConnected)
   const isEnabled = Boolean(health?.botEnabled)
   const isAcceptingOrders = health?.acceptingOrders !== false
   const isAutoReplying = health?.autoRepliesEnabled !== false
+  const isPickupOnly = settings?.pickupOnlyMode === true
 
   async function refreshHealth() {
     if (!botApiUrl || !botAdminToken) {
@@ -52,8 +57,9 @@ export function BotControlPanel({ collapsed, userRole }: { collapsed: boolean; u
 
     try {
       setStatus('checking')
-      const nextHealth = await fetchBotHealth()
+      const [nextHealth, nextSettings] = await Promise.all([fetchBotHealth(), fetchBotSettings()])
       setHealth(nextHealth)
+      setSettings(nextSettings)
       emitBotHealthChanged(nextHealth)
       setStatus('online')
     } catch {
@@ -150,6 +156,16 @@ export function BotControlPanel({ collapsed, userRole }: { collapsed: boolean; u
           onDeactivate={() => runControl(() => setBotAcceptingOrders(false))}
           onIcon={Power}
           onLabel="Recibe pedidos"
+        />
+        <StateSwitch
+          active={isPickupOnly}
+          disabled={isBusy || !isConnected || !isEnabled || !isAcceptingOrders}
+          offIcon={PowerOff}
+          offLabel="Delivery normal"
+          onActivate={() => runControl(() => saveBotSettings({ pickupOnlyMode: true }))}
+          onDeactivate={() => runControl(() => saveBotSettings({ pickupOnlyMode: false }))}
+          onIcon={ShoppingBag}
+          onLabel="Solo recojo"
         />
         <StateSwitch
           active={isAutoReplying}
