@@ -1,6 +1,7 @@
 import {
   Bot,
   CheckCircle2,
+  Clock3,
   KeyRound,
   LoaderCircle,
   MessageSquareText,
@@ -55,6 +56,8 @@ export function BotView() {
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [qrLoading, setQrLoading] = useState(false)
+  const [sessionMessage, setSessionMessage] = useState('')
 
   const isConfigured = Boolean(botApiUrl && botAdminToken)
   const statusLabel = useMemo(() => {
@@ -95,9 +98,67 @@ export function BotView() {
     }
   }
 
+  async function showQr() {
+    try {
+      setBusy(true)
+      setQrLoading(true)
+      setError('')
+      setSessionMessage('')
+      setQrDataUrl('')
+
+      const nextHealth = await fetchBotHealth()
+      setHealth(nextHealth)
+
+      if (nextHealth.whatsappConnected) {
+        setQrDataUrl('')
+        setSessionMessage('Sesion iniciada con exito. El bot ya esta conectado a WhatsApp.')
+        setNotice('WhatsApp conectado correctamente.')
+        return
+      }
+
+      const qr = await fetchWhatsappQr()
+      setQrDataUrl(qr.qrDataUrl || '')
+      setSessionMessage('Escanea este QR desde WhatsApp. Cuando inicie sesion, el QR se ocultara automaticamente al actualizar.')
+      setNotice('QR listo para escanear.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No hay QR disponible todavia.')
+      await refreshAll()
+    } finally {
+      setBusy(false)
+      setQrLoading(false)
+    }
+  }
+
+  async function closeWhatsappSession() {
+    if (!window.confirm('Esto cerrara la sesion actual de WhatsApp y pedira iniciar con QR nuevamente. Continuar?')) return
+    await runAction(async () => {
+      setQrDataUrl('')
+      setSessionMessage('')
+      await logoutWhatsappSession()
+    }, 'Sesion cerrada con exito. Inicia sesion otra vez para que el bot funcione.')
+    setSessionMessage('Sesion cerrada con exito. Espera unos segundos, luego toca Mostrar QR para conectar el numero.')
+  }
+
   useEffect(() => {
     void refreshAll()
   }, [])
+
+  useEffect(() => {
+    if (!qrDataUrl || health?.whatsappConnected) return undefined
+
+    const timer = window.setInterval(async () => {
+      const nextHealth = await fetchBotHealth().catch(() => null)
+      if (!nextHealth) return
+      setHealth(nextHealth)
+      if (nextHealth.whatsappConnected) {
+        setQrDataUrl('')
+        setSessionMessage('Sesion iniciada con exito. El bot ya esta conectado a WhatsApp.')
+        setNotice('WhatsApp conectado correctamente.')
+      }
+    }, 3000)
+
+    return () => window.clearInterval(timer)
+  }, [qrDataUrl, health?.whatsappConnected])
 
   return (
     <div className="space-y-5">
@@ -140,24 +201,44 @@ export function BotView() {
 
         <Panel className="p-5">
           <SectionTitle icon={QrCode} title="Sesion de WhatsApp" />
+          <div className="mt-4 rounded-2xl border border-line bg-white p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`grid h-11 w-11 place-items-center rounded-2xl ${health?.whatsappConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                  {health?.whatsappConnected ? <CheckCircle2 size={21} /> : <QrCode size={21} />}
+                </div>
+                <div>
+                  <div className="text-sm font-black text-ink">
+                    {health?.whatsappConnected ? '1 sesion activa' : 'Sin sesion activa'}
+                  </div>
+                  <div className="mt-0.5 text-xs font-semibold text-muted">
+                    {health?.whatsappConnected ? 'WhatsApp conectado. El bot puede responder mensajes.' : 'Conecta el numero del bot escaneando un QR.'}
+                  </div>
+                </div>
+              </div>
+              <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-black ${health?.whatsappConnected ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                {health?.whatsappConnected ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}
+                {health?.whatsappConnected ? 'Sesion iniciada' : 'Esperando QR'}
+              </span>
+            </div>
+            {sessionMessage ? (
+              <div className="mt-3 rounded-xl border border-accent/20 bg-accentWash px-3 py-2 text-sm font-semibold text-ink">
+                {sessionMessage}
+              </div>
+            ) : null}
+          </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <ActionButton
-              label="Ver QR"
+              label={health?.whatsappConnected ? 'Sesion activa' : 'Mostrar QR'}
               icon={QrCode}
-              disabled={busy}
-              onClick={() => runAction(async () => {
-                const qr = await fetchWhatsappQr()
-                setQrDataUrl(qr.qrDataUrl || '')
-              }, 'QR consultado.')}
+              disabled={busy || health?.whatsappConnected}
+              onClick={() => void showQr()}
             />
             <ActionButton
               label="Cerrar sesion"
               icon={KeyRound}
               disabled={busy}
-              onClick={() => {
-                if (!window.confirm('Esto cerrara la sesion actual de WhatsApp y pedira un QR nuevo. Continuar?')) return
-                void runAction(() => logoutWhatsappSession().then(() => undefined), 'Sesion cerrada. Espera unos segundos y consulta el QR.')
-              }}
+              onClick={() => void closeWhatsappSession()}
             />
             <ActionButton
               label="Leer grupos"
@@ -168,9 +249,20 @@ export function BotView() {
               }, 'Grupos actualizados.')}
             />
           </div>
-          {qrDataUrl ? (
-            <div className="mt-4 rounded-2xl border border-line bg-white p-4">
+          {(qrLoading || qrDataUrl) && !health?.whatsappConnected ? (
+            <div className="mt-4 overflow-hidden rounded-2xl border border-line bg-white p-4 transition-all duration-300">
+              {qrLoading ? (
+                <div className="grid min-h-72 place-items-center text-sm font-bold text-muted">
+                  <LoaderCircle className="mb-3 animate-spin text-accent" size={28} />
+                  Generando QR...
+                </div>
+              ) : null}
+              {qrDataUrl ? (
+                <>
+                  <div className="mb-3 text-center text-xs font-black uppercase tracking-[0.16em] text-muted">QR de inicio de sesion</div>
               <img alt="QR WhatsApp" className="mx-auto max-h-72 rounded-xl" src={qrDataUrl} />
+                </>
+              ) : null}
             </div>
           ) : null}
         </Panel>
