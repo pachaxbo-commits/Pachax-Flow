@@ -265,7 +265,9 @@ export class FirestoreOrderRepository {
         status,
         ...(estimatedDelay !== undefined ? { estimatedDelay } : {}),
         ...(readyStatuses.has(status) ? { readyAt: serverTimestamp() } : {}),
-        ...(status === 'delivered' ? { deliveredAt: serverTimestamp() } : { deliveredAt: deleteField() }),
+        ...(status === 'delivered'
+          ? { deliveredAt: serverTimestamp() }
+          : { deliveredAt: deleteField(), whatsappDispatchSentAt: deleteField() }),
         ...(options?.suppressWhatsappDispatchNotice !== undefined ? { suppressWhatsappDispatchNotice: options.suppressWhatsappDispatchNotice } : {}),
         ...(options?.forceWhatsappDispatchNotice !== undefined ? { forceWhatsappDispatchNotice: options.forceWhatsappDispatchNotice } : {}),
         updatedAt: serverTimestamp(),

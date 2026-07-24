@@ -150,7 +150,7 @@ function MainShell({
     try {
       const order = orders.find((currentOrder) => currentOrder.id === orderId)
       await setOrderStatus(orderId, nextStatus, estimatedDelay, options)
-      if (order?.orderSource === 'whatsapp' && nextStatus === 'preparing') {
+      if (order?.orderSource === 'whatsapp' && nextStatus === 'preparing' && order?.status !== 'delivered') {
         try {
           await notifyBotOrderConfirmed(orderId, estimatedDelay ?? 10)
         } catch (error) {
