@@ -811,6 +811,9 @@ function QuickExtrasConfig({
   const [name, setName] = useState('')
   const [price, setPrice] = useState<string>('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [editingExtraId, setEditingExtraId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editPrice, setEditPrice] = useState('')
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -838,6 +841,28 @@ function QuickExtrasConfig({
   const handleDelete = async (id: string) => {
     try {
       await onSaveQuickExtras(quickExtras.filter((x) => x.id !== id))
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const startEdit = (extra: ProductExtra) => {
+    setEditingExtraId(extra.id)
+    setEditName(extra.name)
+    setEditPrice(String(extra.price))
+  }
+
+  const handleSaveEdit = async (id: string) => {
+    if (!editName.trim()) return
+    const parsedPrice = parseFloat(editPrice) || 0
+    if (parsedPrice < 0) return
+
+    try {
+      const updatedList = quickExtras.map((x) =>
+        x.id === id ? { ...x, name: editName.trim(), price: parsedPrice } : x
+      )
+      await onSaveQuickExtras(updatedList)
+      setEditingExtraId(null)
     } catch (err) {
       console.error(err)
     }
@@ -899,25 +924,79 @@ function QuickExtrasConfig({
             </div>
           ) : (
             <div className="grid gap-2 max-h-[400px] overflow-y-auto pr-1">
-              {quickExtras.map((extra) => (
-                <div
-                  key={extra.id}
-                  className="flex items-center justify-between rounded-xl border border-line bg-canvas/20 px-4 py-2.5 hover:bg-canvas/40 transition"
-                >
-                  <div>
-                    <div className="font-semibold text-xs text-ink">{extra.name}</div>
-                    <div className="text-[10px] text-muted font-medium">Precio: {formatCurrency(extra.price)}</div>
-                  </div>
-                  
-                  <button
-                    type="button"
-                    className="p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg transition"
-                    onClick={() => handleDelete(extra.id)}
+              {quickExtras.map((extra) => {
+                const isEditing = editingExtraId === extra.id
+
+                if (isEditing) {
+                  return (
+                    <div
+                      key={extra.id}
+                      className="flex items-center gap-3 rounded-xl border border-accent bg-accentWash/20 px-3 py-2 transition"
+                    >
+                      <div className="flex-1 grid grid-cols-2 gap-2">
+                        <input
+                          className="rounded-lg border border-line bg-white px-2 py-1 text-xs text-ink outline-none focus:border-accent"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          step="any"
+                          className="rounded-lg border border-line bg-white px-2 py-1 text-xs text-ink outline-none focus:border-accent"
+                          value={editPrice}
+                          onChange={(e) => setEditPrice(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          className="px-2 py-1 h-7 text-[10px] rounded-lg"
+                          onClick={() => handleSaveEdit(extra.id)}
+                        >
+                          Guardar
+                        </Button>
+                        <Button
+                          size="sm"
+                          tone="secondary"
+                          className="px-2 py-1 h-7 text-[10px] rounded-lg"
+                          onClick={() => setEditingExtraId(null)}
+                        >
+                          X
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div
+                    key={extra.id}
+                    className="flex items-center justify-between rounded-xl border border-line bg-canvas/20 px-4 py-2.5 hover:bg-canvas/40 transition"
                   >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
+                    <div>
+                      <div className="font-semibold text-xs text-ink">{extra.name}</div>
+                      <div className="text-[10px] text-muted font-medium">Precio: {formatCurrency(extra.price)}</div>
+                    </div>
+                    
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        className="p-1.5 border border-line bg-white text-muted hover:text-ink rounded-lg transition"
+                        onClick={() => startEdit(extra)}
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className="p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg transition"
+                        onClick={() => handleDelete(extra.id)}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>

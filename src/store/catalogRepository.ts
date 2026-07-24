@@ -1,4 +1,4 @@
-import { buildDemoCatalogState, demoCategories, demoProducts } from '../data/catalog'
+import { buildDemoCatalogState, demoCategories, demoProducts, demoQuickExtras } from '../data/catalog'
 import type {
   CatalogCategory,
   CatalogCategoryInput,
@@ -387,6 +387,7 @@ export function createLocalCatalogRepository(): CatalogRepository {
       persist({
         categories: demoCategories,
         products: demoProducts,
+        quickExtras: demoQuickExtras,
         lastUpdatedAt: Date.now(),
       })
 

@@ -72,7 +72,20 @@ function mapDocToOrder(id: string, data: DocumentData): Order {
     paidBy: data.paidBy,
     estimatedDelay: typeof data.estimatedDelay === 'number' ? data.estimatedDelay : undefined,
     status: (data.status as OrderStatus | undefined) ?? 'pending',
-    items: Array.isArray(data.items) ? data.items : [],
+    items: Array.isArray(data.items)
+      ? data.items.map((item: any) => ({
+          id: item.id || Math.random().toString(),
+          name: String(item.name || ''),
+          basePrice: Number(item.basePrice || 0),
+          quantity: Number(item.quantity || 1),
+          lineTotal: Number(item.lineTotal || 0),
+          modifiers: {
+            extras: Array.isArray(item.modifiers?.extras) ? item.modifiers.extras : [],
+            options: Array.isArray(item.modifiers?.options) ? item.modifiers.options : [],
+            note: String(item.modifiers?.note || ''),
+          },
+        }))
+      : [],
     total: Number(data.total ?? 0),
     productSubtotal: typeof data.productSubtotal === 'number' ? data.productSubtotal : undefined,
     deliveryFee: typeof data.deliveryFee === 'number' ? data.deliveryFee : undefined,

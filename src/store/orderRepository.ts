@@ -99,6 +99,20 @@ export function normalizeOrder(raw: Record<string, unknown>): Partial<Order> {
     customerPhone: (raw.customerPhone as string) ?? undefined,
     deliveryAddress: (raw.deliveryAddress as string) ?? undefined,
     createdBy: (raw.createdBy as string) ?? undefined,
+    items: Array.isArray(raw.items)
+      ? raw.items.map((item: any) => ({
+          id: item.id || Math.random().toString(),
+          name: String(item.name || ''),
+          basePrice: Number(item.basePrice || 0),
+          quantity: Number(item.quantity || 1),
+          lineTotal: Number(item.lineTotal || 0),
+          modifiers: {
+            extras: Array.isArray(item.modifiers?.extras) ? item.modifiers.extras : [],
+            options: Array.isArray(item.modifiers?.options) ? item.modifiers.options : [],
+            note: String(item.modifiers?.note || ''),
+          },
+        }))
+      : [],
   }
 }
 

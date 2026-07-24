@@ -389,7 +389,7 @@ export class FirestoreCatalogRepository implements CatalogRepository {
             const data = docSnap.data()
             this.state = {
               ...this.state,
-              quickExtras: Array.isArray(data.list) ? data.list : demoQuickExtras,
+              quickExtras: Array.isArray(data.list) && data.list.length > 0 ? data.list : demoQuickExtras,
               lastUpdatedAt: Date.now(),
             }
           } else {

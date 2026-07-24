@@ -1063,9 +1063,26 @@ export function CajaView({
 
                           <div className="border-t border-dashed border-line pt-2 text-[11px] text-ink/90 space-y-1">
                             {order.items.map((item) => (
-                              <div key={item.id} className="flex justify-between">
-                                <span>{item.quantity}x {item.name}</span>
-                                <span>{formatCurrency(item.lineTotal)}</span>
+                              <div key={item.id} className="space-y-0.5">
+                                <div className="flex justify-between">
+                                  <span>{item.quantity}x {item.name}</span>
+                                  <span>{formatCurrency(item.lineTotal)}</span>
+                                </div>
+                                {item.modifiers?.extras?.length > 0 && (
+                                  <div className="text-[10px] text-accent font-semibold pl-3 animate-fadeIn">
+                                    + Extras: {item.modifiers.extras.map((e: any) => e.name).join(', ')}
+                                  </div>
+                                )}
+                                {item.modifiers?.options?.length > 0 && (
+                                  <div className="text-[10px] text-muted pl-3">
+                                    + Opciones: {item.modifiers.options.join(', ')}
+                                  </div>
+                                )}
+                                {item.modifiers?.note && (
+                                  <div className="text-[10px] text-red-600 font-bold pl-3">
+                                    Obs: {item.modifiers.note}
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -1202,9 +1219,26 @@ export function CajaView({
 
                             <div className="border-t border-dashed border-line pt-2 text-[11px] text-ink/90 space-y-1">
                               {order.items.map((item) => (
-                                <div key={item.id} className="flex justify-between">
-                                  <span>{item.quantity}x {item.name}</span>
-                                  <span className="text-muted font-semibold">{formatCurrency(item.lineTotal)}</span>
+                                <div key={item.id} className="space-y-0.5">
+                                  <div className="flex justify-between">
+                                    <span>{item.quantity}x {item.name}</span>
+                                    <span className="text-muted font-semibold">{formatCurrency(item.lineTotal)}</span>
+                                  </div>
+                                  {item.modifiers?.extras?.length > 0 && (
+                                    <div className="text-[10px] text-accent font-semibold pl-3 animate-fadeIn">
+                                      + Extras: {item.modifiers.extras.map((e: any) => e.name).join(', ')}
+                                    </div>
+                                  )}
+                                  {item.modifiers?.options?.length > 0 && (
+                                    <div className="text-[10px] text-muted pl-3">
+                                      + Opciones: {item.modifiers.options.join(', ')}
+                                    </div>
+                                  )}
+                                  {item.modifiers?.note && (
+                                    <div className="text-[10px] text-red-600 font-bold pl-3">
+                                      Obs: {item.modifiers.note}
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                               {order.fulfillmentType === 'delivery' && order.deliveryFee !== undefined ? (
@@ -1401,9 +1435,26 @@ export function CajaView({
 
                             <div className="border-t border-dashed border-line pt-2 text-[11px] text-ink/90 space-y-1">
                               {order.items.map((item) => (
-                                <div key={item.id} className="flex justify-between">
-                                  <span>{item.quantity}x {item.name}</span>
-                                  <span className="text-muted font-semibold">{formatCurrency(item.lineTotal)}</span>
+                                <div key={item.id} className="space-y-0.5">
+                                  <div className="flex justify-between">
+                                    <span>{item.quantity}x {item.name}</span>
+                                    <span className="text-muted font-semibold">{formatCurrency(item.lineTotal)}</span>
+                                  </div>
+                                  {item.modifiers?.extras?.length > 0 && (
+                                    <div className="text-[10px] text-accent font-semibold pl-3 animate-fadeIn">
+                                      + Extras: {item.modifiers.extras.map((e: any) => e.name).join(', ')}
+                                    </div>
+                                  )}
+                                  {item.modifiers?.options?.length > 0 && (
+                                    <div className="text-[10px] text-muted pl-3">
+                                      + Opciones: {item.modifiers.options.join(', ')}
+                                    </div>
+                                  )}
+                                  {item.modifiers?.note && (
+                                    <div className="text-[10px] text-red-600 font-bold pl-3">
+                                      Obs: {item.modifiers.note}
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
