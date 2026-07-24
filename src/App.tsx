@@ -118,7 +118,7 @@ function MainShell({
     cartItems: CartItem[]
     productsById: Map<string, Product>
     payment: PaymentSummary
-    paymentStatus: 'paid' | 'pending'
+    paymentStatus: 'paid' | 'pending' | 'gift'
     paymentMethod: PaymentMethod | null
     expectedPaymentMethod: PaymentMethod | null
     orderSource: 'local' | 'whatsapp'
