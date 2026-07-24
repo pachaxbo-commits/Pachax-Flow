@@ -60,7 +60,7 @@ function normalizeProduct(id: string, data: DocumentData): Product {
     sortOrder: Number(data.sortOrder ?? 0),
     isActive: Boolean(data.isActive ?? true),
     isVisible: Boolean(data.isVisible ?? true),
-    extras: Array.isArray(data.extras) ? data.extras : [],
+    extras: Array.isArray(data.extras) ? data.extras.filter((extra) => !isRemovedExtra(extra)) : [],
     options: Array.isArray(data.options) ? data.options : [],
   }
 }
