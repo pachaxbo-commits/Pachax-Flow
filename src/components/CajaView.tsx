@@ -1665,25 +1665,27 @@ export function CajaView({
                             <span className="text-xs font-bold text-ink">{formatCurrency(lineTotal)}</span>
                           </div>
 
-                          {/* Toggle modificadores */}
-                          <div className="mt-1 flex justify-between items-center border-t border-dashed border-line pt-1">
-                            <button
-                              type="button"
-                              className={`flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-bold transition ${isExpanded ? 'bg-accentWash text-accent' : 'bg-panel text-muted hover:text-ink'}`}
-                              onClick={() => setExpandedLineId(isExpanded ? null : item.lineId)}
-                            >
-                              <span>Modificadores</span>
-                              <ChevronDown size={11} className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                            </button>
-                            {hasModifiers && !isExpanded ? (
-                              <span className="text-[9px] text-accent font-black bg-accentWash px-2 py-0.5 rounded-md">Configurado</span>
-                            ) : null}
-                          </div>
+                          {/* Toggle modificadores — solo para hamburguesas */}
+                          {product.categoryId === 'hamburguesas' ? (
+                            <div className="mt-1 flex justify-between items-center border-t border-dashed border-line pt-1">
+                              <button
+                                type="button"
+                                className={`flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-bold transition ${isExpanded ? 'bg-accentWash text-accent' : 'bg-panel text-muted hover:text-ink'}`}
+                                onClick={() => setExpandedLineId(isExpanded ? null : item.lineId)}
+                              >
+                                <span>Modificadores</span>
+                                <ChevronDown size={11} className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                              </button>
+                              {hasModifiers && !isExpanded ? (
+                                <span className="text-[9px] text-accent font-black bg-accentWash px-2 py-0.5 rounded-md">Configurado</span>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
 
-                      {/* Panel expandido */}
-                      {isExpanded ? (
+                      {/* Panel expandido — solo para hamburguesas */}
+                      {isExpanded && product.categoryId === 'hamburguesas' ? (
                         <div className="mt-2 space-y-2.5 border-t border-line pt-2">
                           {product.options?.length ? (
                             <div>
