@@ -51,6 +51,10 @@ export function TopBar({
             <h1 className="font-serif text-lg text-ink">Burger Lab</h1>
           </div>
         </div>
+
+        {/* Controles del bot y retraso inyectados por portal */}
+        <div id="portal-header-controls" className="hidden md:flex items-center gap-3 shrink-0"></div>
+
         <button
           className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/80 bg-panel/80 text-muted transition hover:bg-white hover:text-ink"
           onClick={() => setMobileMenuOpen((open) => !open)}

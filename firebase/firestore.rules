@@ -118,7 +118,7 @@ service cloud.firestore {
         && isValidOrderItems(request.resource.data.items)
         && request.resource.data.total is number
         && request.resource.data.total >= 0
-        && request.resource.data.paymentStatus in ['paid', 'pending']
+        && request.resource.data.paymentStatus in ['paid', 'pending', 'gift']
         && (request.resource.data.paymentMethod == null || request.resource.data.paymentMethod in ['cash', 'qr', 'mixed'])
         && (request.resource.data.expectedPaymentMethod == null || request.resource.data.expectedPaymentMethod in ['cash', 'qr', 'mixed'])
         && request.resource.data.orderSource in ['local', 'whatsapp']
@@ -360,9 +360,6 @@ service cloud.firestore {
                 || (
                   resource.data.status == 'pending'
                   && request.resource.data.status == 'pending'
-                  && request.resource.data.paymentStatus == resource.data.paymentStatus
-                  && request.resource.data.paymentMethod == resource.data.paymentMethod
-                  && request.resource.data.payment == resource.data.payment
                   && request.resource.data.id == resource.data.id
                   && request.resource.data.sequence == resource.data.sequence
                   && request.resource.data.displayNumber == resource.data.displayNumber
@@ -370,6 +367,8 @@ service cloud.firestore {
                   && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
                   && request.resource.data.get('orderSource', '') == resource.data.get('orderSource', '')
                   && isValidFulfillment(request.resource.data)
+                  && request.resource.data.paymentStatus in ['paid', 'pending', 'gift']
+                  && isValidPayment(request.resource.data.payment, request.resource.data.total, request.resource.data.paymentStatus)
                 )
               )
             )

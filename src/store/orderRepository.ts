@@ -60,9 +60,10 @@ function migrateFulfillmentType(order: Record<string, unknown>): FulfillmentType
 }
 
 export function normalizeOrder(raw: Record<string, unknown>): Partial<Order> {
-  const paymentStatus = (raw.paymentStatus as 'paid' | 'pending') ?? 'paid'
+  const paymentStatus = (raw.paymentStatus as 'paid' | 'pending' | 'gift') ?? 'paid'
   const rawPayment = raw.payment as Record<string, unknown> | undefined
   const paymentMethod = (raw.paymentMethod as 'cash' | 'qr' | 'mixed' | null) ?? (rawPayment?.method as 'cash' | 'qr' | 'mixed' || null)
+  const isPendingOrGift = paymentStatus === 'pending' || paymentStatus === 'gift'
   return {
     readyAt: typeof raw.readyAt === 'string' ? raw.readyAt : undefined,
     deliveredAt: typeof raw.deliveredAt === 'string' ? raw.deliveredAt : undefined,
@@ -74,13 +75,13 @@ export function normalizeOrder(raw: Record<string, unknown>): Partial<Order> {
     estimatedDelay: typeof raw.estimatedDelay === 'number' ? raw.estimatedDelay : undefined,
     payment: {
       method: rawPayment?.method as 'cash' | 'qr' | 'mixed' ?? 'cash',
-      cashAmount: paymentStatus === 'pending' ? 0 : Number(rawPayment?.cashAmount ?? raw.total ?? 0),
-      qrAmount: paymentStatus === 'pending' ? 0 : Number(rawPayment?.qrAmount ?? 0),
-      cashReceived: paymentStatus === 'pending' ? 0 : Number(rawPayment?.cashReceived ?? raw.total ?? 0),
-      change: paymentStatus === 'pending' ? 0 : Number(rawPayment?.change ?? 0),
+      cashAmount: isPendingOrGift ? 0 : Number(rawPayment?.cashAmount ?? raw.total ?? 0),
+      qrAmount: isPendingOrGift ? 0 : Number(rawPayment?.qrAmount ?? 0),
+      cashReceived: isPendingOrGift ? 0 : Number(rawPayment?.cashReceived ?? raw.total ?? 0),
+      change: isPendingOrGift ? 0 : Number(rawPayment?.change ?? 0),
     },
     paymentStatus,
-    paymentMethod: paymentStatus === 'pending' ? null : paymentMethod,
+    paymentMethod: isPendingOrGift ? null : paymentMethod,
     expectedPaymentMethod: (raw.expectedPaymentMethod as 'cash' | 'qr' | 'mixed' | null) ?? null,
     qrProofReceived: Boolean(raw.qrProofReceived),
     paymentReviewNote: (raw.paymentReviewNote as string) ?? undefined,

@@ -137,7 +137,7 @@ export interface Order {
   deliveryQuoteStatus?: 'not_needed' | 'quoted' | 'missing_location' | 'manual_review'
   deliveryQuoteNote?: string
   payment: PaymentSummary
-  paymentStatus: 'paid' | 'pending'
+  paymentStatus: 'paid' | 'pending' | 'gift'
   paymentMethod: PaymentMethod | null
   expectedPaymentMethod: PaymentMethod | null
   qrProofReceived?: boolean
@@ -162,7 +162,7 @@ export interface CreateOrderInput {
   items: OrderItem[]
   total: number
   payment: PaymentSummary
-  paymentStatus: 'paid' | 'pending'
+  paymentStatus: 'paid' | 'pending' | 'gift'
   paymentMethod: PaymentMethod | null
   expectedPaymentMethod: PaymentMethod | null
   orderSource: OrderSource

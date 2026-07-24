@@ -14,6 +14,7 @@ import {
   QrCode,
   Shuffle,
   AlertCircle,
+  Gift,
 } from 'lucide-react'
 import type { FulfillmentType, OrderSource, OrderStatus } from '../../types'
 
@@ -113,7 +114,16 @@ export function FulfillmentBadge({ type, tableInfo }: { type: FulfillmentType; t
   )
 }
 
-export function PaymentBadge({ paymentStatus, paymentMethod }: { paymentStatus: 'paid' | 'pending'; paymentMethod?: string | null }) {
+export function PaymentBadge({ paymentStatus, paymentMethod }: { paymentStatus: 'paid' | 'pending' | 'gift'; paymentMethod?: string | null }) {
+  if (paymentStatus === 'gift') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-xl bg-purple-50 border border-purple-250 px-3.5 py-1 text-xs font-black uppercase tracking-wider text-purple-850">
+        <Gift size={13} className="shrink-0" />
+        REGALO
+      </span>
+    )
+  }
+
   if (paymentStatus === 'paid') {
     const method = paymentMethod || 'cash'
     let Icon = Coins

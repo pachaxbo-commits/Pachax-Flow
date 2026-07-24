@@ -29,6 +29,7 @@ function parseDayKeyLocal(dayKey: string) {
 }
 
 function getOrderSaleAmount(order: Order) {
+  if (order.paymentStatus === 'gift') return 0
   return order.productSubtotal ?? order.total
 }
 

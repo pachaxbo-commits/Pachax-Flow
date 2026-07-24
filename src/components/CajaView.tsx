@@ -1,4 +1,4 @@
-﻿import {
+import {
   ChevronDown,
   CookingPot,
   LoaderCircle,
@@ -21,8 +21,10 @@
   RotateCcw,
   PauseCircle,
   PlayCircle,
+  X,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { formatCurrency } from '../lib/format'
 import type { CartItem, CatalogCategory, PaymentMethod, PaymentSummary, Product, Order, OrderStatus, FulfillmentType } from '../types'
 import { Button } from './ui/Button'
@@ -211,8 +213,9 @@ export function CajaView({
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Checkout Payment State
-  const [paymentStatus, setPaymentStatus] = useState<'paid' | 'pending'>('paid')
+  const [paymentStatus, setPaymentStatus] = useState<'paid' | 'pending' | 'gift'>('paid')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>('cash')
+  const [portalElement, setPortalElement] = useState<HTMLElement | null>(null)
   const [expectedPaymentMethod, setExpectedPaymentMethod] = useState<PaymentMethod | null>(null)
   const [tableInfo, setTableInfo] = useState('')
   const [cashReceivedInput, setCashReceivedInput] = useState('')
@@ -310,6 +313,15 @@ export function CajaView({
   }, [demandDelayUntil])
 
   useEffect(() => {
+    const el = document.getElementById('portal-header-controls')
+    setPortalElement(el)
+    const timer = setTimeout(() => {
+      setPortalElement(document.getElementById('portal-header-controls'))
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [viewMode])
+
+  useEffect(() => {
     if (!botApiUrl || !botAdminToken) return
 
     let isMounted = true
@@ -383,8 +395,9 @@ export function CajaView({
   const cashAmount = paymentMethod === 'cash' ? cartTotal : paymentMethod === 'mixed' ? mixedCashAmount : 0
   const effectiveCashReceived = cashReceivedInput.trim() === '' ? cashAmount : cashReceived
   const change = paymentMethod === 'cash' || paymentMethod === 'mixed' ? Math.max(0, effectiveCashReceived - cashAmount) : 0
+  const isPendingOrGift = paymentStatus === 'pending' || paymentStatus === 'gift'
   const isPaymentValid =
-    paymentStatus === 'pending'
+    isPendingOrGift
       ? cartTotal > 0
       : paymentMethod === 'qr'
         ? cartTotal > 0
@@ -396,17 +409,15 @@ export function CajaView({
 
   const isDeliveryInfoValid =
     fulfillmentType === 'delivery'
-      ? customerPhone.trim() !== '' && deliveryAddress.trim() !== ''
-      : orderSource === 'whatsapp'
-        ? customerPhone.trim() !== ''
-        : true
+      ? deliveryAddress.trim() !== ''
+      : true
 
   const buildPaymentSummary = (): PaymentSummary => ({
     method: paymentMethod || 'cash',
-    cashAmount: paymentStatus === 'pending' ? 0 : cashAmount,
-    qrAmount: paymentStatus === 'pending' ? 0 : qrAmount,
-    cashReceived: paymentStatus === 'pending' ? 0 : (paymentMethod === 'qr' ? 0 : effectiveCashReceived),
-    change: paymentStatus === 'pending' ? 0 : change,
+    cashAmount: isPendingOrGift ? 0 : cashAmount,
+    qrAmount: isPendingOrGift ? 0 : qrAmount,
+    cashReceived: isPendingOrGift ? 0 : (paymentMethod === 'qr' ? 0 : effectiveCashReceived),
+    change: isPendingOrGift ? 0 : change,
   })
 
   // Fast payment modal computations
@@ -660,8 +671,79 @@ export function CajaView({
     setShowCheckoutModal(false)
   }
 
+  const controlsContent = (
+    <div className="flex flex-wrap items-center gap-2">
+      {/* Botón de Pausar/Reanudar y Delivery/Solo Recojo */}
+      <div className="flex items-center rounded-xl border border-line bg-white p-1 gap-1 shadow-sm shrink-0">
+        <button
+          type="button"
+          className={`px-2 py-1 rounded-lg text-[10px] font-black transition flex items-center gap-1 min-h-[26px] ${
+            acceptingWhatsappOrders
+              ? 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100'
+              : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+          }`}
+          disabled={isTogglingWhatsappOrders}
+          onClick={() => void handleToggleWhatsappOrders()}
+          title={acceptingWhatsappOrders ? 'Pausar pedidos por WhatsApp' : 'Reanudar pedidos por WhatsApp'}
+        >
+          {acceptingWhatsappOrders ? <PauseCircle size={12} /> : <PlayCircle size={12} />}
+          <span>{acceptingWhatsappOrders ? 'BOT ACTIVO' : 'BOT PAUSADO'}</span>
+        </button>
+        
+        <button
+          type="button"
+          className={`px-2 py-1 rounded-lg text-[10px] font-black transition flex items-center gap-1 min-h-[26px] ${
+            pickupOnlyMode
+              ? 'bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200'
+              : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+          }`}
+          disabled={isTogglingWhatsappOrders || !acceptingWhatsappOrders}
+          onClick={() => void handleTogglePickupOnly()}
+          title={pickupOnlyMode ? 'Cambiar a delivery activo' : 'Cambiar a solo recojo'}
+        >
+          <ShoppingBag size={12} />
+          <span>{pickupOnlyMode ? 'SOLO RECOJO' : 'DELIVERY ACTIVO'}</span>
+        </button>
+      </div>
+
+      {/* Retraso general */}
+      <div className="flex items-center rounded-xl border border-line bg-white p-1 gap-1 shadow-sm text-ink shrink-0">
+        <span className="text-[9px] font-black text-muted px-1.5 uppercase tracking-wider">Retraso:</span>
+        <div className="flex gap-0.5">
+          {[10, 15, 20, 25, 30].map((mins) => {
+            const isActive = globalDelay === mins
+            return (
+              <button
+                key={mins}
+                type="button"
+                className={`px-1.5 py-0.5 rounded text-[10px] font-black transition ${
+                  isActive
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'bg-panel hover:bg-line text-ink'
+                }`}
+                onClick={() => openDemandDelayModal(mins)}
+              >
+                {mins}m
+              </button>
+            )
+          })}
+        </div>
+        {demandDelayActive ? (
+          <button
+            type="button"
+            className="ml-1 text-[10px] font-black border border-line bg-panel hover:bg-line px-1.5 py-0.5 rounded transition shrink-0"
+            onClick={clearDemandDelay}
+          >
+            Normal
+          </button>
+        ) : null}
+      </div>
+    </div>
+  )
+
   return (
-    <div className={`space-y-4 ${cartItems.length > 0 && viewMode === 'new_order' ? 'lg:pr-[430px]' : ''}`}>
+    <div className={`space-y-4 ${showCheckoutModal && viewMode === 'new_order' ? 'lg:pr-[430px]' : ''}`}>
+      {portalElement ? createPortal(controlsContent, portalElement) : null}
       {/* Top View Mode Switcher */}
       <div className="flex flex-wrap justify-between items-center gap-4 border-b border-line pb-4">
         <div className="flex gap-2 bg-white/60 p-1.5 rounded-2xl border border-white/80 shadow-insetSoft">
@@ -707,6 +789,13 @@ export function CajaView({
             <span>COBROS PENDIENTES ({pendingPaymentCount})</span>
           </button>
         ) : null}
+
+        {/* Fallback rendering of bot/delay controls in desktop */}
+        {!portalElement && (
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            {controlsContent}
+          </div>
+        )}
       </div>
 
       {/* Responsive layout selector for mobile */}
@@ -1022,47 +1111,6 @@ export function CajaView({
 
                 {/* COLUMNA 2: PEDIDOS WHATSAPP / DELIVERY */}
                 <div className="space-y-4 lg:order-2">
-                  <div className={`rounded-2xl border p-3 shadow-sm ${
-                    acceptingWhatsappOrders
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-                      : 'border-red-200 bg-red-50 text-red-900'
-                  }`}>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-[10px] font-black uppercase tracking-wider opacity-70">Pedidos por WhatsApp</div>
-                        <div className="mt-0.5 text-sm font-black">
-                          {acceptingWhatsappOrders ? 'Recibiendo pedidos' : 'Pedidos pausados'}
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                        <button
-                          type="button"
-                          className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-xl px-3 text-[11px] font-black text-white transition disabled:opacity-60 ${
-                            acceptingWhatsappOrders ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'
-                          }`}
-                          disabled={isTogglingWhatsappOrders}
-                          onClick={() => void handleToggleWhatsappOrders()}
-                        >
-                          {acceptingWhatsappOrders ? <PauseCircle size={14} /> : <PlayCircle size={14} />}
-                          {acceptingWhatsappOrders ? 'Pausar' : 'Reanudar'}
-                        </button>
-                        <button
-                          type="button"
-                          className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-xl px-3 text-[11px] font-black transition disabled:opacity-60 ${
-                            pickupOnlyMode
-                              ? 'bg-amber-600 text-white hover:bg-amber-700'
-                              : 'border border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50'
-                          }`}
-                          disabled={isTogglingWhatsappOrders || !acceptingWhatsappOrders}
-                          onClick={() => void handleTogglePickupOnly()}
-                        >
-                          <ShoppingBag size={14} />
-                          {pickupOnlyMode ? 'Solo recojo' : 'Delivery activo'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
                   <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-4 flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-2">
                       <MessageSquareText size={18} className="text-amber-700" />
@@ -1071,44 +1119,6 @@ export function CajaView({
                     <span className="bg-amber-600 text-white rounded-full text-xs px-2.5 py-0.5 font-bold">
                       {whatsappOrders.length}
                     </span>
-                  </div>
-
-                  {/* Control de Retraso General para WhatsApp */}
-                  <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-2.5 flex items-center justify-between gap-2 shadow-sm text-amber-900">
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-black uppercase tracking-wider">Retraso General:</div>
-                      {demandDelayActive ? (
-                        <div className="mt-0.5 text-[10px] font-semibold text-amber-800">
-                          Activo hasta {new Date(demandDelayUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap justify-end gap-1">
-                      {[10, 15, 20, 25, 30].map((mins) => {
-                        const isActive = globalDelay === mins
-                        return (
-                          <button
-                            key={mins}
-                            type="button"
-                            className={`px-2 py-1 rounded-lg text-[10px] font-black transition ${
-                              isActive ? 'bg-amber-600 text-white shadow-sm' : 'bg-white hover:bg-amber-100 border border-amber-200 text-amber-950'
-                            }`}
-                            onClick={() => openDemandDelayModal(mins)}
-                          >
-                            {mins}m
-                          </button>
-                        )
-                      })}
-                      {demandDelayActive ? (
-                        <button
-                          type="button"
-                          className="rounded-lg border border-line bg-white px-2 py-1 text-[10px] font-black text-ink transition hover:bg-line"
-                          onClick={clearDemandDelay}
-                        >
-                          Normal
-                        </button>
-                      ) : null}
-                    </div>
                   </div>
 
                   {/* Subfiltros de Pago para WhatsApp */}
@@ -1497,7 +1507,7 @@ export function CajaView({
       {cartItems.length > 0 && !showCheckoutModal && (
         <button
           type="button"
-          className="fixed bottom-4 right-4 z-40 bg-accent hover:bg-accent/90 text-white font-black px-4 py-3 rounded-full shadow-2xl flex items-center gap-2 transition transform hover:scale-105 active:scale-95 border border-white/20 lg:hidden"
+          className="fixed bottom-4 right-4 z-40 bg-accent hover:bg-accent/90 text-white font-black px-4 py-3 rounded-full shadow-2xl flex items-center gap-2 transition transform hover:scale-105 active:scale-95 border border-white/20"
           onClick={() => setShowCheckoutModal(true)}
         >
           <ShoppingBag size={18} />
@@ -1506,8 +1516,8 @@ export function CajaView({
       )}
 
       {/* Modal emergente de checkout de doble columna (horizontal y vertical grande) */}
-      {(showCheckoutModal || (cartItems.length > 0 && viewMode === 'new_order')) && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm lg:pointer-events-none lg:left-auto lg:right-4 lg:top-5 lg:bottom-5 lg:w-[400px] xl:w-[420px] lg:items-stretch lg:justify-end lg:bg-transparent lg:p-0 lg:backdrop-blur-0 ${showCheckoutModal ? '' : 'hidden lg:flex'}`}>
+      {showCheckoutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm lg:pointer-events-none lg:left-auto lg:right-4 lg:top-5 lg:bottom-5 lg:w-[400px] xl:w-[420px] lg:items-stretch lg:justify-end lg:bg-transparent lg:p-0 lg:backdrop-blur-0">
           <Panel className="w-full max-w-5xl h-[85vh] bg-[#fffdfb] rounded-[1.5rem] shadow-float overflow-hidden flex flex-col border border-line lg:pointer-events-auto lg:h-full lg:max-w-none lg:rounded-[1.5rem]">
             
             {/* Cabecera del Modal */}
@@ -1528,16 +1538,16 @@ export function CajaView({
                 
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-xl text-xs font-black bg-panel hover:bg-line transition text-ink lg:hidden"
+                  className="px-4 py-2 rounded-xl text-xs font-black bg-panel hover:bg-line transition text-ink"
                   onClick={() => setShowCheckoutModal(false)}
                 >
-                  Seguir Agregando
+                  Cerrar
                 </button>
               </div>
             </div>
 
             {/* Dos columnas del modal */}
-              <div className="flex-1 grid grid-cols-1 grid-rows-[minmax(128px,0.55fr)_minmax(320px,1.45fr)] overflow-hidden bg-canvas/30">
+            <div className="flex-1 grid grid-cols-1 grid-rows-[1.25fr_minmax(180px,0.75fr)] min-h-0 overflow-hidden bg-canvas/30">
               
               {/* Columna Izquierda: Lista de items en el carrito */}
               <div className="border-b border-line flex flex-col h-full min-h-0 overflow-hidden">
@@ -1715,7 +1725,7 @@ export function CajaView({
                 </div>
 
                 {/* Subtotal del carrito */}
-                <div className="border-t border-line bg-panel/50 px-3 py-2 shrink-0 flex justify-between items-center">
+                <div className="border-t border-line bg-panel px-3 py-2 shrink-0 flex justify-between items-center shadow-[0_-4px_12px_rgba(0,0,0,0.03)]">
                   <div>
                     <div className="text-[9px] font-black uppercase text-muted tracking-wider">Productos</div>
                     <div className="text-xs font-black text-ink">{totalUnits} unidades</div>
@@ -1845,18 +1855,11 @@ export function CajaView({
                     {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') ? (
                       <div>
                         <input
-                          className={`w-full rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
-                            (orderSource === 'whatsapp' || fulfillmentType === 'delivery') && customerPhone.trim() === ''
-                              ? 'border-red-300 focus:border-red-500'
-                              : 'border-line'
-                          }`}
-                          placeholder="Telefono"
+                          className="w-full rounded-[0.9rem] border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent"
+                          placeholder="Telefono (opcional)"
                           value={customerPhone}
                           onChange={(event) => setCustomerPhone(event.target.value)}
                         />
-                        {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') && customerPhone.trim() === '' ? (
-                          <span className="text-[9px] text-red-500 font-bold mt-0.5 block px-1">Telefono es obligatorio</span>
-                        ) : null}
                       </div>
                     ) : null}
 
@@ -1882,10 +1885,11 @@ export function CajaView({
                   {/* Estado de Pago */}
                   <div className="rounded-[1rem] border border-line bg-white p-2.5 shadow-sm">
                     <div className="text-[10px] font-black uppercase tracking-wider text-muted">Estado de Pago</div>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div className="mt-2 grid grid-cols-3 gap-2">
                       {[
                         { id: 'paid', label: 'Pagado' },
                         { id: 'pending', label: 'Pendiente' },
+                        { id: 'gift', label: 'Regalo' },
                       ].map((option) => {
                         const isActive = paymentStatus === option.id
 
@@ -1897,12 +1901,14 @@ export function CajaView({
                               isActive
                                 ? option.id === 'paid'
                                   ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm'
-                                  : 'border-[#ef4444] bg-[#ef4444] text-white shadow-sm'
+                                  : option.id === 'pending'
+                                    ? 'border-[#ef4444] bg-[#ef4444] text-white shadow-sm'
+                                    : 'border-[#8b5cf6] bg-[#8b5cf6] text-white shadow-sm'
                                 : 'border-line bg-panel/80 text-ink hover:bg-panel'
                             }`}
                             onClick={() => {
-                              setPaymentStatus(option.id as 'paid' | 'pending')
-                              if (option.id === 'pending') {
+                              setPaymentStatus(option.id as 'paid' | 'pending' | 'gift')
+                              if (option.id === 'pending' || option.id === 'gift') {
                                 setPaymentMethod(null)
                               } else {
                                 setPaymentMethod('cash')
@@ -2359,7 +2365,7 @@ export function CajaView({
                 <p className="mt-2 text-sm font-semibold leading-6 text-muted">Los pedidos nuevos de WhatsApp usaran este tiempo mientras dure la configuracion.</p>
               </div>
               <button type="button" className="grid h-10 w-10 place-items-center rounded-full border border-line bg-panel text-ink transition hover:bg-line" onClick={() => setDemandModalDelay(null)}>
-                <Ban size={18} />
+                <X size={18} />
               </button>
             </div>
             <div className="mt-5">
@@ -2405,7 +2411,7 @@ export function CajaView({
                 <p className="mt-2 text-sm font-semibold leading-6 text-muted">Mientras este pausado, el bot avisara que no estamos recibiendo pedidos por WhatsApp.</p>
               </div>
               <button type="button" className="grid h-10 w-10 place-items-center rounded-full border border-line bg-panel text-ink transition hover:bg-line" onClick={() => setPauseOrdersModalOpen(false)}>
-                <Ban size={18} />
+                <X size={18} />
               </button>
             </div>
             <div className="mt-5">
