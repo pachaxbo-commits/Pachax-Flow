@@ -299,6 +299,11 @@ service cloud.firestore {
       allow delete: if hasRole(restaurantId, ['admin']);
     }
 
+    match /restaurants/{restaurantId}/catalog/{catalogId}/settings/{settingId} {
+      allow read: if isActiveMember(restaurantId);
+      allow create, update, delete: if hasRole(restaurantId, ['admin']);
+    }
+
     match /restaurants/{restaurantId}/days/{dayId} {
       allow read: if isActiveMember(restaurantId) && isValidDayId(dayId);
       allow create: if hasRole(restaurantId, ['admin', 'caja', 'pedidos']) && isValidDayId(dayId) && isValidDayCreate(restaurantId, dayId);

@@ -94,6 +94,7 @@ export function CajaView({
   categories,
   products,
   orders,
+  quickExtras,
   userRole,
   userId,
   userName,
@@ -107,6 +108,7 @@ export function CajaView({
   nextOrderNumber: string
   categories: CatalogCategory[]
   products: Product[]
+  quickExtras: ProductExtra[]
   orders: Order[]
   userRole: string
   userId: string
@@ -1696,6 +1698,102 @@ export function CajaView({
                                 </div>
                               </div>
                             ) : null}
+
+                            {/* Extras Rápidos */}
+                            <div className="space-y-1.5">
+                              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted">Adicionales / Extras</p>
+                              {(() => {
+                                const uniqueExtras: ProductExtra[] = []
+                                const seenIds = new Set<string>()
+                                ;[...(product.extras || []), ...quickExtras].forEach((extra) => {
+                                  if (!seenIds.has(extra.id)) {
+                                    seenIds.add(extra.id)
+                                    uniqueExtras.push(extra)
+                                  }
+                                })
+
+                                if (uniqueExtras.length === 0) {
+                                  return <div className="text-[10px] text-muted italic">Sin extras disponibles</div>
+                                }
+
+                                return (
+                                  <div className="grid gap-1.5 sm:grid-cols-2">
+                                    {uniqueExtras.map((extra) => {
+                                      const count = selectedExtras.filter((x) => x.id === extra.id).length
+
+                                      return (
+                                        <div key={extra.id} className="flex items-center justify-between bg-canvas/30 px-2 py-1 rounded-xl border border-line">
+                                          <div className="flex flex-col min-w-0">
+                                            <span className="text-[11px] font-semibold text-ink truncate">{extra.name}</span>
+                                            <span className="text-[9px] text-muted font-bold">{formatCurrency(extra.price)}</span>
+                                          </div>
+                                          <div className="flex items-center gap-1.5 shrink-0">
+                                            {count > 0 ? (
+                                              <>
+                                                <button
+                                                  type="button"
+                                                  className="flex h-5 w-5 items-center justify-center rounded-md border border-line bg-panel text-ink hover:bg-line transition active:scale-90"
+                                                  onClick={() => {
+                                                    updateItem(item.lineId, (currentItem) => {
+                                                      const idx = currentItem.modifiers.extras.findIndex((x) => x.id === extra.id)
+                                                      if (idx === -1) return currentItem
+                                                      const nextExtras = [...currentItem.modifiers.extras]
+                                                      nextExtras.splice(idx, 1)
+                                                      return {
+                                                        ...currentItem,
+                                                        modifiers: {
+                                                          ...currentItem.modifiers,
+                                                          extras: nextExtras,
+                                                        },
+                                                      }
+                                                    })
+                                                  }}
+                                                >
+                                                  <Minus size={10} />
+                                                </button>
+                                                <span className="w-3 text-center text-[11px] font-black text-ink">{count}</span>
+                                                <button
+                                                  type="button"
+                                                  className="flex h-5 w-5 items-center justify-center rounded-md border border-line bg-panel text-ink hover:bg-line transition active:scale-90"
+                                                  onClick={() => {
+                                                    updateItem(item.lineId, (currentItem) => ({
+                                                      ...currentItem,
+                                                      modifiers: {
+                                                        ...currentItem.modifiers,
+                                                        extras: [...currentItem.modifiers.extras, extra],
+                                                      },
+                                                    }))
+                                                  }}
+                                                >
+                                                  <Plus size={10} />
+                                                </button>
+                                              </>
+                                            ) : (
+                                              <button
+                                                type="button"
+                                                className="flex h-5 px-2 items-center justify-center rounded-md border border-accent bg-accentWash text-[10px] font-black text-accent hover:bg-accent hover:text-white transition active:scale-95"
+                                                onClick={() => {
+                                                  updateItem(item.lineId, (currentItem) => ({
+                                                    ...currentItem,
+                                                    modifiers: {
+                                                      ...currentItem.modifiers,
+                                                      extras: [...currentItem.modifiers.extras, extra],
+                                                    },
+                                                  }))
+                                                }}
+                                              >
+                                                <Plus size={10} className="mr-0.5" />
+                                                Agregar
+                                              </button>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                )
+                              })()}
+                            </div>
 
                             <div>
                               <label className="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-muted">

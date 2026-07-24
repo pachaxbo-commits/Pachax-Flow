@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { CatalogCategoryInput, CatalogProductInput, Product } from '../types'
+import type { CatalogCategoryInput, CatalogProductInput, Product, ProductExtra } from '../types'
 import { getCatalogRepository } from './catalogRepositoryFactory'
 
 function getSnapshot() {
@@ -66,6 +66,9 @@ export function useCatalogStore() {
     },
     initializeDemoCatalog() {
       return getCatalogRepository().initializeDemoCatalog()
+    },
+    saveQuickExtras(list: ProductExtra[]) {
+      return getCatalogRepository().saveQuickExtras(list)
     },
   }
 }

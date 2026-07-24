@@ -196,9 +196,9 @@ export function CocinaView({
 
                     {item.modifiers.extras.length || item.modifiers.options.length ? (
                       <div className="mt-3 flex flex-wrap gap-1.5">
-                        {item.modifiers.extras.map((extra) => (
+                        {item.modifiers.extras.map((extra, idx) => (
                           <span
-                            key={extra.id}
+                            key={`${extra.id}-${idx}`}
                             className="rounded-lg border border-accent/10 bg-accentWash px-2.5 py-1 text-xs font-extrabold tracking-wide text-accent"
                           >
                             + {emphasizeText(extra.name)}

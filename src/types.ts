@@ -67,6 +67,7 @@ export interface Product {
 export interface CatalogState {
   categories: CatalogCategory[]
   products: Product[]
+  quickExtras?: ProductExtra[]
   lastUpdatedAt: number
 }
 

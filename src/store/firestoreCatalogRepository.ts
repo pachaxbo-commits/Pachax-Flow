@@ -73,6 +73,7 @@ export class FirestoreCatalogRepository implements CatalogRepository {
   private lastProductsFromCache = true
   private unsubscribeCategories: Unsubscribe | null = null
   private unsubscribeProducts: Unsubscribe | null = null
+  private unsubscribeQuickExtras: Unsubscribe | null = null
 
   constructor() {
     window.addEventListener('online', this.handleNetworkChange)
@@ -92,8 +93,10 @@ export class FirestoreCatalogRepository implements CatalogRepository {
   destroy() {
     this.unsubscribeCategories?.()
     this.unsubscribeProducts?.()
+    this.unsubscribeQuickExtras?.()
     this.unsubscribeCategories = null
     this.unsubscribeProducts = null
+    this.unsubscribeQuickExtras = null
     window.removeEventListener('online', this.handleNetworkChange)
     window.removeEventListener('offline', this.handleNetworkChange)
     this.listeners.clear()
@@ -375,6 +378,30 @@ export class FirestoreCatalogRepository implements CatalogRepository {
         (snapshot) => this.handleProductsSnapshot(snapshot),
         (error) => this.handleSnapshotError(error),
       )
+
+      const quickExtrasDoc = doc(firebase.db, 'restaurants', firebase.restaurantId, 'catalog', 'current', 'settings', 'quick_extras')
+      this.unsubscribeQuickExtras = onSnapshot(
+        quickExtrasDoc,
+        { includeMetadataChanges: true },
+        (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data()
+            this.state = {
+              ...this.state,
+              quickExtras: Array.isArray(data.list) ? data.list : [],
+              lastUpdatedAt: Date.now(),
+            }
+          } else {
+            this.state = {
+              ...this.state,
+              quickExtras: [],
+              lastUpdatedAt: Date.now(),
+            }
+          }
+          this.emitState()
+        },
+        (error) => this.handleSnapshotError(error),
+      )
     } catch (error) {
       this.handleSnapshotError(error as FirestoreError)
     }
@@ -507,5 +534,17 @@ export class FirestoreCatalogRepository implements CatalogRepository {
   private setStatus(status: RepositoryStatus) {
     this.status = status
     this.statusListeners.forEach((listener) => listener())
+  }
+
+  async saveQuickExtras(list: ProductExtra[]) {
+    const firebase = await getFirebaseContext()
+    if (!firebase) {
+      throw new Error('Firebase no esta configurado.')
+    }
+    const quickExtrasDoc = doc(firebase.db, 'restaurants', firebase.restaurantId, 'catalog', 'current', 'settings', 'quick_extras')
+    await setDoc(quickExtrasDoc, {
+      list,
+      updatedAt: serverTimestamp(),
+    })
   }
 }

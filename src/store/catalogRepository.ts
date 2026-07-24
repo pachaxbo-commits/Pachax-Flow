@@ -29,6 +29,7 @@ export interface CatalogRepository {
   deleteProduct(productId: string): Promise<void>
   moveProduct(productId: string, direction: 'up' | 'down'): Promise<void>
   initializeDemoCatalog(): Promise<boolean>
+  saveQuickExtras(list: ProductExtra[]): Promise<void>
   destroy?(): void
 }
 
@@ -389,6 +390,13 @@ export function createLocalCatalogRepository(): CatalogRepository {
       })
 
       return true
+    },
+    async saveQuickExtras(list) {
+      persist({
+        ...currentState,
+        quickExtras: list,
+        lastUpdatedAt: Date.now(),
+      })
     },
   }
 }

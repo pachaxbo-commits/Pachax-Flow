@@ -65,6 +65,8 @@ function emptyProductForm(categoryId = '') {
 export function AdminView({
   categories,
   products,
+  quickExtras,
+  onSaveQuickExtras,
   onCreateCategory,
   onUpdateCategory,
   onSetCategoryVisibility,
@@ -81,6 +83,8 @@ export function AdminView({
 }: {
   categories: CatalogCategory[]
   products: Product[]
+  quickExtras: ProductExtra[]
+  onSaveQuickExtras: (list: ProductExtra[]) => Promise<void>
   onCreateCategory: (input: CatalogCategoryInput) => Promise<void>
   onUpdateCategory: (categoryId: string, updates: Partial<CatalogCategoryInput>) => Promise<void>
   onSetCategoryVisibility: (categoryId: string, isVisible: boolean) => Promise<void>
@@ -107,7 +111,7 @@ export function AdminView({
   const [editingProductId, setEditingProductId] = useState<string | null>(null)
   
   // Estados para pestañas y formularios
-  const [activeAdminTab, setActiveAdminTab] = useState<'products' | 'categories' | 'users'>('products')
+  const [activeAdminTab, setActiveAdminTab] = useState<'products' | 'categories' | 'users' | 'quick_extras'>('products')
   const [members, setMembers] = useState<RestaurantMember[]>([])
   const [memberForm, setMemberForm] = useState({ email: '', password: '', displayName: '', role: 'caja' as UserRole })
   const [memberNotice, setMemberNotice] = useState('')
@@ -207,6 +211,19 @@ export function AdminView({
           }}
         >
           CATEGORÍAS
+        </button>
+        <button
+          type="button"
+          className={`flex-1 py-2.5 rounded-xl text-xs font-black tracking-wider transition ${
+            activeAdminTab === 'quick_extras'
+              ? 'bg-ink text-white shadow-card'
+              : 'text-muted hover:text-ink'
+          }`}
+          onClick={() => {
+            setActiveAdminTab('quick_extras')
+          }}
+        >
+          EXTRAS RÁPIDOS
         </button>
       </div>
 
@@ -757,6 +774,13 @@ export function AdminView({
         </div>
       )}
 
+      {activeAdminTab === 'quick_extras' && (
+        <QuickExtrasConfig
+          quickExtras={quickExtras}
+          onSaveQuickExtras={onSaveQuickExtras}
+        />
+      )}
+
       <ConfirmDialog
         open={Boolean(confirmState)}
         title={confirmState?.title ?? ''}
@@ -774,5 +798,130 @@ export function AdminView({
         }}
       />
     </section>
+  )
+}
+
+function QuickExtrasConfig({
+  quickExtras,
+  onSaveQuickExtras,
+}: {
+  quickExtras: ProductExtra[]
+  onSaveQuickExtras: (list: ProductExtra[]) => Promise<void>
+}) {
+  const [name, setName] = useState('')
+  const [price, setPrice] = useState<string>('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    const parsedPrice = parseFloat(price) || 0
+    if (parsedPrice < 0) return
+
+    setIsSubmitting(true)
+    try {
+      const newExtra: ProductExtra = {
+        id: `extra-${Date.now()}`,
+        name: name.trim(),
+        price: parsedPrice,
+      }
+      await onSaveQuickExtras([...quickExtras, newExtra])
+      setName('')
+      setPrice('')
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      await onSaveQuickExtras(quickExtras.filter((x) => x.id !== id))
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  return (
+    <Panel className="border-white/80 bg-white/70 p-5 space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-bold text-ink">Extras Rápidos Globales</h3>
+          <p className="text-xs text-muted">Configura ingredientes o agregados rápidos que se podrán sumar con cantidad (+/-) a cualquier producto en el carrito.</p>
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_2fr] items-start">
+        {/* Formulario de creación */}
+        <form onSubmit={handleAdd} className="bg-white p-5 border border-line rounded-2xl space-y-4 shadow-sm">
+          <h4 className="text-sm font-black text-ink uppercase tracking-wider">Nuevo Extra Rápido</h4>
+          
+          <div className="space-y-3">
+            <label className="block">
+              <span className="text-[10px] font-black uppercase text-muted tracking-wider">Nombre del extra</span>
+              <input
+                className="mt-1 w-full rounded-xl border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none focus:border-accent"
+                placeholder="Ej. Tocineta, Huevo, Queso Extra"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-[10px] font-black uppercase text-muted tracking-wider">Precio (Bs. o $)</span>
+              <input
+                type="number"
+                step="any"
+                className="mt-1 w-full rounded-xl border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none focus:border-accent"
+                placeholder="Ej. 5"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                required
+              />
+            </label>
+          </div>
+
+          <Button type="submit" disabled={isSubmitting} className="w-full">
+            <Plus size={14} />
+            {isSubmitting ? 'Guardando...' : 'Agregar Extra'}
+          </Button>
+        </form>
+
+        {/* Listado de extras */}
+        <div className="bg-white p-5 border border-line rounded-2xl shadow-sm space-y-4">
+          <h4 className="text-sm font-black text-ink uppercase tracking-wider">Listado de Extras ({quickExtras.length})</h4>
+          
+          {quickExtras.length === 0 ? (
+            <div className="p-6 text-center text-xs text-muted border border-dashed border-line rounded-xl bg-canvas/20">
+              No hay extras rápidos configurados todavía.
+            </div>
+          ) : (
+            <div className="grid gap-2 max-h-[400px] overflow-y-auto pr-1">
+              {quickExtras.map((extra) => (
+                <div
+                  key={extra.id}
+                  className="flex items-center justify-between rounded-xl border border-line bg-canvas/20 px-4 py-2.5 hover:bg-canvas/40 transition"
+                >
+                  <div>
+                    <div className="font-semibold text-xs text-ink">{extra.name}</div>
+                    <div className="text-[10px] text-muted font-medium">Precio: {formatCurrency(extra.price)}</div>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    className="p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg transition"
+                    onClick={() => handleDelete(extra.id)}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </Panel>
   )
 }

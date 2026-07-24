@@ -73,7 +73,7 @@ function MainShell({
     deleteOrder,
   } = useOrdersStore()
   const {
-    state: { categories, products },
+    state: { categories, products, quickExtras },
     createCategory,
     updateCategory,
     setCategoryVisibility,
@@ -87,6 +87,7 @@ function MainShell({
     setProductAvailability,
     deleteProduct,
     moveProduct,
+    saveQuickExtras,
   } = useCatalogStore()
 
   const todayKey = useMemo(() => getDayKey(), [])
@@ -280,6 +281,7 @@ function MainShell({
               onSubmitOrder={handleSubmitOrder}
               products={products}
               orders={orders}
+              quickExtras={quickExtras ?? []}
               userRole={role}
               userId={userId}
               userName={userName}
@@ -317,6 +319,8 @@ function MainShell({
               onUpdateCategory={updateCategory}
               onUpdateProduct={updateProduct}
               products={products}
+              quickExtras={quickExtras ?? []}
+              onSaveQuickExtras={saveQuickExtras}
             />
           ) : null}
           {view === 'bot' ? <BotView /> : null}
