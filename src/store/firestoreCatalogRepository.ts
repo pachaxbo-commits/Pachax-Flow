@@ -29,6 +29,12 @@ import { buildDefaultCatalogState, createRepositoryStatus, type CatalogRepositor
 
 type Listener = () => void
 
+const REMOVED_EXTRA_NAMES = new Set(['salsa golf', 'salsa bbq'])
+
+function isRemovedExtra(extra: { name?: unknown }): boolean {
+  return REMOVED_EXTRA_NAMES.has(String(extra?.name ?? '').toLowerCase())
+}
+
 function normalizeCategory(id: string, data: DocumentData): CatalogCategory {
   return {
     id,
@@ -388,23 +394,15 @@ export class FirestoreCatalogRepository implements CatalogRepository {
           if (docSnap.exists()) {
             const data = docSnap.data()
             const rawList = Array.isArray(data.list) ? data.list : demoQuickExtras
-            const filteredList = rawList.filter((extra: any) => {
-              const nameLower = String(extra.name || '').toLowerCase()
-              return nameLower !== 'salsa golf' && nameLower !== 'salsa bbq'
-            })
             this.state = {
               ...this.state,
-              quickExtras: filteredList,
+              quickExtras: rawList.filter((extra: ProductExtra) => !isRemovedExtra(extra)),
               lastUpdatedAt: Date.now(),
             }
           } else {
-            const filteredList = demoQuickExtras.filter((extra: any) => {
-              const nameLower = String(extra.name || '').toLowerCase()
-              return nameLower !== 'salsa golf' && nameLower !== 'salsa bbq'
-            })
             this.state = {
               ...this.state,
-              quickExtras: filteredList,
+              quickExtras: demoQuickExtras.filter((extra) => !isRemovedExtra(extra)),
               lastUpdatedAt: Date.now(),
             }
           }
