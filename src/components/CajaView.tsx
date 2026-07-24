@@ -1571,652 +1571,576 @@ export function CajaView({
       {/* Modal emergente de checkout de doble columna (horizontal y vertical grande) */}
       {showCheckoutModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm lg:pointer-events-none lg:left-auto lg:right-4 lg:top-5 lg:bottom-5 lg:w-[400px] xl:w-[420px] lg:items-stretch lg:justify-end lg:bg-transparent lg:p-0 lg:backdrop-blur-0">
-          <Panel className="w-full max-w-5xl h-[85vh] bg-[#fffdfb] rounded-[1.5rem] shadow-float overflow-hidden flex flex-col border border-line lg:pointer-events-auto lg:h-full lg:max-w-none lg:rounded-[1.5rem]">
-            
-            {/* Cabecera del Modal */}
-            <div className="border-b border-line px-3 py-2 flex items-center justify-between bg-white shrink-0">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent">CONFIRMAR PEDIDO</p>
-                <h2 className="mt-0.5 text-sm font-black text-ink flex items-center gap-2">
-                  <span>Carrito & Datos de Cobro</span>
-                  {editingOrderId ? <span className="text-[10px] bg-orange-100 text-orange-900 px-2 py-0.5 rounded-full font-black">EDITANDO PEDIDO</span> : null}
-                </h2>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg border border-line bg-accentWash px-2 py-1 text-right shadow-insetSoft flex items-center gap-2">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted">Siguiente Ticket:</span>
-                  <span className="text-sm font-black text-ink">{nextOrderNumber}</span>
+          <Panel className="w-full max-w-xl h-[92vh] bg-[#fffdfb] rounded-[1.5rem] shadow-float overflow-hidden flex flex-col border border-line lg:pointer-events-auto lg:h-full lg:max-w-none lg:rounded-[1.5rem]">
+
+            {/* Header compacto */}
+            <div className="border-b border-line px-3 py-1.5 flex items-center justify-between bg-white shrink-0">
+              <div className="flex items-center gap-2.5">
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-accent">CONFIRMAR PEDIDO</p>
+                <div className="rounded-md border border-line bg-accentWash px-2 py-0.5 flex items-center gap-1 shadow-insetSoft">
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted">TICKET</span>
+                  <span className="text-xs font-black text-ink">{nextOrderNumber}</span>
                 </div>
-                
-                <button
-                  type="button"
-                  className="px-4 py-2 rounded-xl text-xs font-black bg-panel hover:bg-line transition text-ink"
-                  onClick={() => setShowCheckoutModal(false)}
-                >
-                  Cerrar
-                </button>
+                {editingOrderId ? <span className="text-[9px] bg-orange-100 text-orange-900 px-2 py-0.5 rounded-full font-black">EDITANDO</span> : null}
               </div>
+              <button
+                type="button"
+                className="rounded-full p-1.5 text-muted hover:bg-line transition"
+                onClick={() => setShowCheckoutModal(false)}
+              >
+                <X size={16} />
+              </button>
             </div>
 
-            {/* Dos columnas del modal */}
-            <div className="flex-1 grid grid-cols-1 grid-rows-[1.25fr_minmax(180px,0.75fr)] min-h-0 overflow-hidden bg-canvas/30">
-              
-              {/* Columna Izquierda: Lista de items en el carrito */}
-              <div className="border-b border-line flex flex-col h-full min-h-0 overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                  {cartItems.length === 0 ? (
-                    <div className="rounded-[1.4rem] border border-dashed border-lineStrong bg-canvas/60 p-5 text-center">
-                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-accent shadow-insetSoft">
-                        <CookingPot size={24} />
-                      </div>
-                      <h3 className="mt-4 text-sm font-bold text-ink">Todavia no hay productos</h3>
-                      <p className="mt-1 text-xs text-muted">
-                        Agrega productos para armar el pedido.
-                      </p>
+            {/* Cuerpo scrollable — cart items + checkout form todo junto */}
+            <div className="flex-1 overflow-y-auto min-h-0">
+
+              {/* Items del carrito */}
+              <div className="p-2 space-y-2">
+                {cartItems.length === 0 ? (
+                  <div className="rounded-[1.4rem] border border-dashed border-lineStrong bg-canvas/60 p-5 text-center">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-accent shadow-insetSoft">
+                      <CookingPot size={22} />
                     </div>
-                  ) : null}
+                    <h3 className="mt-3 text-sm font-bold text-ink">Sin productos</h3>
+                    <p className="mt-1 text-xs text-muted">Agrega productos para armar el pedido.</p>
+                  </div>
+                ) : null}
 
-                  {cartItems.map((item) => {
-                    const product = productsById.get(item.productId)
+                {cartItems.map((item) => {
+                  const product = productsById.get(item.productId)
+                  if (!product) return null
 
-                    if (!product) {
-                      return null
-                    }
+                  const selectedExtras = item.modifiers.extras
+                  const selectedOptions = item.modifiers.options
+                  const extrasTotal = selectedExtras.reduce((sum, extra) => sum + extra.price, 0)
+                  const lineTotal = (product.price + extrasTotal) * item.quantity
+                  const isExpanded = expandedLineId === item.lineId
+                  const hasModifiers = selectedExtras.length > 0 || selectedOptions.length > 0 || Boolean(item.modifiers.note)
 
-                    const selectedExtras = item.modifiers.extras
-                    const selectedOptions = item.modifiers.options
-                    const extrasTotal = selectedExtras.reduce((sum, extra) => sum + extra.price, 0)
-                    const lineTotal = (product.price + extrasTotal) * item.quantity
-                    const isExpanded = expandedLineId === item.lineId
-                    const hasModifiers = selectedExtras.length > 0 || selectedOptions.length > 0 || Boolean(item.modifiers.note)
+                  return (
+                    <article
+                      key={item.lineId}
+                      className={`rounded-[0.9rem] border bg-white p-2 transition duration-150 ${isExpanded ? 'border-accent/20 shadow-card' : 'border-line'}`}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        {isImageUrl(product.image) ? (
+                          <img alt={product.name} className="h-10 w-10 rounded-lg object-cover shrink-0" src={product.image} />
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accentWash text-xl shrink-0">{product.image}</div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <h3 className="text-[11px] font-bold text-ink truncate">{product.name}</h3>
+                              <p className="mt-0.5 text-[11px] text-muted">{formatCurrency(product.price)}</p>
+                            </div>
+                            <button
+                              type="button"
+                              className="rounded-full p-1.5 text-muted transition hover:bg-accentWash hover:text-accent shrink-0"
+                              onClick={() => removeItem(item.lineId)}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
 
-                    return (
-                      <article
-                        key={item.lineId}
-                        className={`rounded-[0.9rem] border bg-white p-2 transition duration-150 ${
-                          isExpanded ? 'border-accent/20 shadow-card' : 'border-line'
-                        }`}
-                      >
-                        <div className="flex items-start gap-2.5">
-                          {isImageUrl(product.image) ? (
-                            <img alt={product.name} className="h-10 w-10 rounded-lg object-cover" src={product.image} />
-                          ) : (
-                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accentWash text-xl">{product.image}</div>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <h3 className="text-[11px] font-bold text-ink truncate">{product.name}</h3>
-                                <p className="mt-0.5 text-[11px] text-muted">{formatCurrency(product.price)}</p>
-                              </div>
+                          <div className="mt-1.5 flex items-center justify-between border-t border-line pt-1.5">
+                            <div className="flex items-center gap-1">
                               <button
                                 type="button"
-                                className="rounded-full p-1.5 text-muted transition hover:bg-accentWash hover:text-accent shrink-0"
-                                onClick={() => removeItem(item.lineId)}
+                                className="flex h-6 w-6 items-center justify-center rounded-lg border border-line bg-panel text-ink transition hover:bg-line active:scale-95"
+                                onClick={() => updateItem(item.lineId, (cur) => ({ ...cur, quantity: Math.max(1, cur.quantity - 1) }))}
                               >
-                                <Trash2 size={14} />
+                                <Minus size={11} />
                               </button>
-                            </div>
-
-                            <div className="mt-2 flex items-center justify-between border-t border-line pt-2">
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  className="flex h-6 w-6 items-center justify-center rounded-lg border border-line bg-panel text-ink transition hover:bg-line active:scale-95"
-                                  onClick={() =>
-                                    updateItem(item.lineId, (currentItem) => ({
-                                      ...currentItem,
-                                      quantity: Math.max(1, currentItem.quantity - 1),
-                                    }))
-                                  }
-                                >
-                                  <Minus size={12} />
-                                </button>
-                                <span className="w-6 text-center text-xs font-semibold text-ink">{item.quantity}</span>
-                                <button
-                                  type="button"
-                                  className="flex h-6 w-6 items-center justify-center rounded-lg border border-line bg-panel text-ink transition hover:bg-line active:scale-95"
-                                  onClick={() =>
-                                    updateItem(item.lineId, (currentItem) => ({
-                                      ...currentItem,
-                                      quantity: currentItem.quantity + 1,
-                                    }))
-                                  }
-                                >
-                                  <Plus size={12} />
-                                </button>
-                              </div>
-                              <div className="text-right">
-                                <span className="text-xs font-bold text-ink">{formatCurrency(lineTotal)}</span>
-                              </div>
-                            </div>
-
-                            {/* Boton de Modificadores */}
-                            <div className="mt-2 flex justify-between items-center border-t border-dashed border-line pt-2">
+                              <span className="w-6 text-center text-xs font-semibold text-ink">{item.quantity}</span>
                               <button
                                 type="button"
-                                className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold transition ${
-                                  isExpanded ? 'bg-accentWash text-accent' : 'bg-panel text-muted hover:text-ink'
-                                }`}
-                                onClick={() => setExpandedLineId(isExpanded ? null : item.lineId)}
+                                className="flex h-6 w-6 items-center justify-center rounded-lg border border-line bg-panel text-ink transition hover:bg-line active:scale-95"
+                                onClick={() => updateItem(item.lineId, (cur) => ({ ...cur, quantity: cur.quantity + 1 }))}
                               >
-                                <span>Modificadores</span>
-                                <ChevronDown size={12} className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                <Plus size={11} />
                               </button>
-                              {hasModifiers && !isExpanded ? (
-                                <span className="text-[9px] text-accent font-black bg-accentWash px-2 py-0.5 rounded-md">Configurado</span>
-                              ) : null}
                             </div>
+                            <span className="text-xs font-bold text-ink">{formatCurrency(lineTotal)}</span>
+                          </div>
+
+                          {/* Toggle modificadores */}
+                          <div className="mt-1 flex justify-between items-center border-t border-dashed border-line pt-1">
+                            <button
+                              type="button"
+                              className={`flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-bold transition ${isExpanded ? 'bg-accentWash text-accent' : 'bg-panel text-muted hover:text-ink'}`}
+                              onClick={() => setExpandedLineId(isExpanded ? null : item.lineId)}
+                            >
+                              <span>Modificadores</span>
+                              <ChevronDown size={11} className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                            </button>
+                            {hasModifiers && !isExpanded ? (
+                              <span className="text-[9px] text-accent font-black bg-accentWash px-2 py-0.5 rounded-md">Configurado</span>
+                            ) : null}
                           </div>
                         </div>
+                      </div>
 
-                        {/* Panel de Modificadores expandido */}
-                        {isExpanded ? (
-                          <div className="mt-2 space-y-2.5 border-t border-line pt-2">
-                            {product.options?.length ? (
-                              <div>
-                                <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-muted">Modificadores</p>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {product.options.map((option) => {
-                                    const label = simplifyModifierLabel(option.label)
-                                    if (!label) return null
-                                    const isSelected = selectedOptions.includes(label)
+                      {/* Panel expandido */}
+                      {isExpanded ? (
+                        <div className="mt-2 space-y-2.5 border-t border-line pt-2">
+                          {product.options?.length ? (
+                            <div>
+                              <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-muted">Modificadores</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {product.options.map((option) => {
+                                  const label = simplifyModifierLabel(option.label)
+                                  if (!label) return null
+                                  const isSelected = selectedOptions.includes(label)
+                                  return (
+                                    <button
+                                      key={option.id}
+                                      type="button"
+                                      className={`rounded-full px-2 py-0.5 text-[11px] transition font-semibold ${isSelected ? 'bg-accent text-white shadow-sm' : 'bg-canvas text-ink hover:bg-accentSoft'}`}
+                                      onClick={() =>
+                                        updateItem(item.lineId, (cur) => ({
+                                          ...cur,
+                                          modifiers: {
+                                            ...cur.modifiers,
+                                            options: cur.modifiers.options.includes(label)
+                                              ? cur.modifiers.options.filter((o) => o !== label)
+                                              : [...cur.modifiers.options, label],
+                                          },
+                                        }))
+                                      }
+                                    >
+                                      {label}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
 
+                          {/* Extras Rápidos */}
+                          <div className="space-y-1.5">
+                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted">Adicionales / Extras</p>
+                            {(() => {
+                              const uniqueExtras: ProductExtra[] = []
+                              const seenIds = new Set<string>()
+                              ;[...(product.extras || []), ...quickExtras].forEach((extra) => {
+                                if (!seenIds.has(extra.id)) {
+                                  seenIds.add(extra.id)
+                                  uniqueExtras.push(extra)
+                                }
+                              })
+                              if (uniqueExtras.length === 0) {
+                                return <div className="text-[10px] text-muted italic">Sin extras disponibles</div>
+                              }
+                              return (
+                                <div className="grid gap-1.5 sm:grid-cols-2">
+                                  {uniqueExtras.map((extra) => {
+                                    const count = selectedExtras.filter((x) => x.id === extra.id).length
                                     return (
-                                      <button
-                                        key={option.id}
-                                        type="button"
-                                        className={`rounded-full px-2 py-0.5 text-[11px] transition font-semibold ${
-                                          isSelected ? 'bg-accent text-white shadow-sm' : 'bg-canvas text-ink hover:bg-accentSoft'
-                                        }`}
-                                        onClick={() =>
-                                          updateItem(item.lineId, (currentItem) => ({
-                                            ...currentItem,
-                                            modifiers: {
-                                              ...currentItem.modifiers,
-                                              options: currentItem.modifiers.options.includes(label)
-                                                ? currentItem.modifiers.options.filter((currentOption) => currentOption !== label)
-                                                : [...currentItem.modifiers.options, label],
-                                            },
-                                          }))
-                                        }
-                                      >
-                                        {label}
-                                      </button>
+                                      <div key={extra.id} className="flex items-center justify-between bg-canvas/30 px-2 py-1 rounded-xl border border-line">
+                                        <div className="flex flex-col min-w-0">
+                                          <span className="text-[11px] font-semibold text-ink truncate">{extra.name}</span>
+                                          <span className="text-[9px] text-muted font-bold">{formatCurrency(extra.price)}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          {count > 0 ? (
+                                            <>
+                                              <button
+                                                type="button"
+                                                className="flex h-5 w-5 items-center justify-center rounded-md border border-line bg-panel text-ink hover:bg-line transition active:scale-90"
+                                                onClick={() => updateItem(item.lineId, (cur) => {
+                                                  const idx = cur.modifiers.extras.findIndex((x) => x.id === extra.id)
+                                                  if (idx === -1) return cur
+                                                  const next = [...cur.modifiers.extras]
+                                                  next.splice(idx, 1)
+                                                  return { ...cur, modifiers: { ...cur.modifiers, extras: next } }
+                                                })}
+                                              >
+                                                <Minus size={10} />
+                                              </button>
+                                              <span className="w-3 text-center text-[11px] font-black text-ink">{count}</span>
+                                              <button
+                                                type="button"
+                                                className="flex h-5 w-5 items-center justify-center rounded-md border border-line bg-panel text-ink hover:bg-line transition active:scale-90"
+                                                onClick={() => updateItem(item.lineId, (cur) => ({ ...cur, modifiers: { ...cur.modifiers, extras: [...cur.modifiers.extras, extra] } }))}
+                                              >
+                                                <Plus size={10} />
+                                              </button>
+                                            </>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              className="flex h-5 px-2 items-center justify-center rounded-md border border-accent bg-accentWash text-[10px] font-black text-accent hover:bg-accent hover:text-white transition active:scale-95"
+                                              onClick={() => updateItem(item.lineId, (cur) => ({ ...cur, modifiers: { ...cur.modifiers, extras: [...cur.modifiers.extras, extra] } }))}
+                                            >
+                                              <Plus size={10} className="mr-0.5" />
+                                              Agregar
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
                                     )
                                   })}
                                 </div>
-                              </div>
-                            ) : null}
-
-                            {/* Extras Rápidos */}
-                            <div className="space-y-1.5">
-                              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted">Adicionales / Extras</p>
-                              {(() => {
-                                const uniqueExtras: ProductExtra[] = []
-                                const seenIds = new Set<string>()
-                                ;[...(product.extras || []), ...quickExtras].forEach((extra) => {
-                                  if (!seenIds.has(extra.id)) {
-                                    seenIds.add(extra.id)
-                                    uniqueExtras.push(extra)
-                                  }
-                                })
-
-                                if (uniqueExtras.length === 0) {
-                                  return <div className="text-[10px] text-muted italic">Sin extras disponibles</div>
-                                }
-
-                                return (
-                                  <div className="grid gap-1.5 sm:grid-cols-2">
-                                    {uniqueExtras.map((extra) => {
-                                      const count = selectedExtras.filter((x) => x.id === extra.id).length
-
-                                      return (
-                                        <div key={extra.id} className="flex items-center justify-between bg-canvas/30 px-2 py-1 rounded-xl border border-line">
-                                          <div className="flex flex-col min-w-0">
-                                            <span className="text-[11px] font-semibold text-ink truncate">{extra.name}</span>
-                                            <span className="text-[9px] text-muted font-bold">{formatCurrency(extra.price)}</span>
-                                          </div>
-                                          <div className="flex items-center gap-1.5 shrink-0">
-                                            {count > 0 ? (
-                                              <>
-                                                <button
-                                                  type="button"
-                                                  className="flex h-5 w-5 items-center justify-center rounded-md border border-line bg-panel text-ink hover:bg-line transition active:scale-90"
-                                                  onClick={() => {
-                                                    updateItem(item.lineId, (currentItem) => {
-                                                      const idx = currentItem.modifiers.extras.findIndex((x) => x.id === extra.id)
-                                                      if (idx === -1) return currentItem
-                                                      const nextExtras = [...currentItem.modifiers.extras]
-                                                      nextExtras.splice(idx, 1)
-                                                      return {
-                                                        ...currentItem,
-                                                        modifiers: {
-                                                          ...currentItem.modifiers,
-                                                          extras: nextExtras,
-                                                        },
-                                                      }
-                                                    })
-                                                  }}
-                                                >
-                                                  <Minus size={10} />
-                                                </button>
-                                                <span className="w-3 text-center text-[11px] font-black text-ink">{count}</span>
-                                                <button
-                                                  type="button"
-                                                  className="flex h-5 w-5 items-center justify-center rounded-md border border-line bg-panel text-ink hover:bg-line transition active:scale-90"
-                                                  onClick={() => {
-                                                    updateItem(item.lineId, (currentItem) => ({
-                                                      ...currentItem,
-                                                      modifiers: {
-                                                        ...currentItem.modifiers,
-                                                        extras: [...currentItem.modifiers.extras, extra],
-                                                      },
-                                                    }))
-                                                  }}
-                                                >
-                                                  <Plus size={10} />
-                                                </button>
-                                              </>
-                                            ) : (
-                                              <button
-                                                type="button"
-                                                className="flex h-5 px-2 items-center justify-center rounded-md border border-accent bg-accentWash text-[10px] font-black text-accent hover:bg-accent hover:text-white transition active:scale-95"
-                                                onClick={() => {
-                                                  updateItem(item.lineId, (currentItem) => ({
-                                                    ...currentItem,
-                                                    modifiers: {
-                                                      ...currentItem.modifiers,
-                                                      extras: [...currentItem.modifiers.extras, extra],
-                                                    },
-                                                  }))
-                                                }}
-                                              >
-                                                <Plus size={10} className="mr-0.5" />
-                                                Agregar
-                                              </button>
-                                            )}
-                                          </div>
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                )
-                              })()}
-                            </div>
-
-                            <div>
-                              <label className="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-muted">
-                                <MessageSquareText size={12} />
-                                Observacion para cocina
-                              </label>
-                              <textarea
-                                className="min-h-12 w-full rounded-xl border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-accent"
-                                placeholder="Ej. salsa aparte, sin cebolla..."
-                                value={item.modifiers.note}
-                                onChange={(event) =>
-                                  updateItem(item.lineId, (currentItem) => ({
-                                    ...currentItem,
-                                    modifiers: {
-                                      ...currentItem.modifiers,
-                                      note: event.target.value,
-                                    },
-                                  }))
-                                }
-                              />
-                            </div>
+                              )
+                            })()}
                           </div>
-                        ) : null}
-                      </article>
-                    )
-                  })}
-                </div>
 
-                {/* Subtotal del carrito */}
-                <div className="border-t border-line bg-panel px-3 py-2 shrink-0 flex justify-between items-center shadow-[0_-4px_12px_rgba(0,0,0,0.03)]">
-                  <div>
-                    <div className="text-[9px] font-black uppercase text-muted tracking-wider">Productos</div>
-                    <div className="text-xs font-black text-ink">{totalUnits} unidades</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[9px] font-black uppercase text-muted tracking-wider">Total Carrito</div>
-                    <div className="text-base font-black text-accent">{formatCurrency(cartTotal)}</div>
-                  </div>
-                </div>
+                          <div>
+                            <label className="mb-1 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-muted">
+                              <MessageSquareText size={11} />
+                              Observacion para cocina
+                            </label>
+                            <textarea
+                              className="min-h-10 w-full rounded-xl border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition placeholder:text-muted focus:border-accent"
+                              placeholder="Ej. salsa aparte, sin cebolla..."
+                              value={item.modifiers.note}
+                              onChange={(e) => updateItem(item.lineId, (cur) => ({ ...cur, modifiers: { ...cur.modifiers, note: e.target.value } }))}
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+                    </article>
+                  )
+                })}
               </div>
 
-              {/* Columna Derecha: Formulario de Checkout */}
-              <div className="flex flex-col h-full min-h-0 overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-                  
-                  {/* Origen de pedido */}
-                  {userRole !== 'pedidos' ? (
-                    <div className="rounded-[1rem] border border-line bg-white p-2.5 shadow-sm">
-                      <div className="text-[10px] font-black uppercase tracking-wider text-muted">Origen</div>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        {[
-                          { id: 'local', label: 'Local', icon: Store },
-                          { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquareText },
-                        ].map((option) => {
-                          const isActive = orderSource === option.id
-                          const Icon = option.icon
+              {/* Separador */}
+              <div className="mx-3 my-1 border-t border-dashed border-line" />
 
+              {/* Formulario de checkout embebido */}
+              <div className="px-3 pb-3 space-y-2">
+
+                {/* Origen */}
+                {userRole !== 'pedidos' ? (
+                  <div className="rounded-[0.9rem] border border-line bg-white p-2 shadow-sm">
+                    <div className="text-[9px] font-black uppercase tracking-wider text-muted mb-1.5">Origen</div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { id: 'local', label: 'Local', icon: Store },
+                        { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquareText },
+                      ].map((option) => {
+                        const isActive = orderSource === option.id
+                        const Icon = option.icon
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            className={`rounded-[0.7rem] border py-1.5 text-[11px] font-black transition flex items-center justify-center gap-1.5 ${isActive
+                              ? option.id === 'local'
+                                ? 'border-[#3b82f6] bg-[#3b82f6] text-white shadow-sm'
+                                : 'border-[#10b981] bg-[#10b981] text-white shadow-sm'
+                              : 'border-line bg-panel/80 text-ink hover:bg-panel'}`}
+                            onClick={() => {
+                              setOrderSource(option.id as 'local' | 'whatsapp')
+                              setFulfillmentType(option.id === 'local' ? 'table' : 'pickup')
+                            }}
+                          >
+                            <Icon size={13} />
+                            {option.label.toUpperCase()}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Entrega */}
+                <div className="rounded-[0.9rem] border border-line bg-white p-2 shadow-sm">
+                  <div className="text-[9px] font-black uppercase tracking-wider text-muted mb-1.5">Entrega</div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(() => {
+                      const options: Array<{ id: FulfillmentType; label: string; icon: typeof Utensils; disabled?: boolean }> = [
+                        { id: 'table', label: 'Mesa', icon: Utensils, disabled: userRole === 'pedidos' || orderSource === 'whatsapp' },
+                        { id: 'pickup', label: 'Retiro', icon: ShoppingBag },
+                      ]
+                      return options.map((option) => {
+                        if (option.disabled) return null
+                        const isActive = fulfillmentType === option.id
+                        const Icon = option.icon
+                        let activeStyles = 'border-ink bg-ink text-white shadow-sm'
+                        if (option.id === 'table') activeStyles = 'border-[#6366f1] bg-[#6366f1] text-white shadow-sm'
+                        else if (option.id === 'pickup') activeStyles = 'border-[#d97706] bg-[#d97706] text-white shadow-sm'
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            className={`rounded-[0.7rem] border py-1.5 text-[11px] font-black transition flex items-center justify-center gap-1.5 ${isActive ? activeStyles : 'border-line bg-panel/80 text-ink hover:bg-panel'}`}
+                            onClick={() => setFulfillmentType(option.id)}
+                          >
+                            <Icon size={13} />
+                            {option.label.toUpperCase()}
+                          </button>
+                        )
+                      })
+                    })()}
+                  </div>
+                  {fulfillmentType === 'table' ? (
+                    <div className="mt-1.5">
+                      <input
+                        className="w-full rounded-[0.7rem] border border-line bg-canvas/35 px-3 py-1.5 text-xs text-ink outline-none transition focus:border-accent"
+                        placeholder="Mesa (ej: 4, Terraza 2)"
+                        value={tableInfo}
+                        onChange={(e) => setTableInfo(e.target.value)}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Contacto */}
+                <div className="rounded-[0.9rem] border border-line bg-white p-2 shadow-sm space-y-1.5">
+                  <div className="text-[9px] font-black uppercase tracking-wider text-muted">Datos de Contacto</div>
+                  <input
+                    className="w-full rounded-[0.7rem] border border-line bg-canvas/35 px-3 py-1.5 text-xs text-ink outline-none transition focus:border-accent"
+                    placeholder="Nombre del Cliente (opcional)"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                  />
+                  {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') ? (
+                    <input
+                      className="w-full rounded-[0.7rem] border border-line bg-canvas/35 px-3 py-1.5 text-xs text-ink outline-none transition focus:border-accent"
+                      placeholder="Telefono (opcional)"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                    />
+                  ) : null}
+                  {fulfillmentType === 'delivery' ? (
+                    <>
+                      <textarea
+                        className={`w-full min-h-[42px] rounded-[0.7rem] border bg-canvas/35 px-3 py-1.5 text-xs text-ink outline-none transition focus:border-accent ${fulfillmentType === 'delivery' && deliveryAddress.trim() === '' ? 'border-red-300 focus:border-red-500' : 'border-line'}`}
+                        placeholder="Direccion completa de entrega"
+                        value={deliveryAddress}
+                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                      />
+                      {deliveryAddress.trim() === '' ? (
+                        <span className="text-[9px] text-red-500 font-bold block px-1">Direccion es obligatoria</span>
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
+
+                {/* Estado de pago */}
+                <div className="rounded-[0.9rem] border border-line bg-white p-2 shadow-sm">
+                  <div className="text-[9px] font-black uppercase tracking-wider text-muted mb-1.5">Estado de Pago</div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[
+                      { id: 'paid', label: 'Pagado' },
+                      { id: 'pending', label: 'Pendiente' },
+                      { id: 'gift', label: 'Regalo' },
+                    ].map((option) => {
+                      const isActive = paymentStatus === option.id
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          className={`rounded-[0.7rem] border py-1.5 text-[11px] font-black transition ${isActive
+                            ? option.id === 'paid'
+                              ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm'
+                              : option.id === 'pending'
+                                ? 'border-[#ef4444] bg-[#ef4444] text-white shadow-sm'
+                                : 'border-[#8b5cf6] bg-[#8b5cf6] text-white shadow-sm'
+                            : 'border-line bg-panel/80 text-ink hover:bg-panel'}`}
+                          onClick={() => {
+                            setPaymentStatus(option.id as 'paid' | 'pending' | 'gift')
+                            if (option.id === 'pending' || option.id === 'gift') setPaymentMethod(null)
+                            else setPaymentMethod('cash')
+                          }}
+                        >
+                          {option.label.toUpperCase()}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {paymentStatus === 'paid' ? (
+                    <div className="mt-2 border-t border-dashed border-line pt-2 space-y-1.5">
+                      <div className="text-[9px] font-black uppercase tracking-wider text-muted">Metodo de Pago</div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {[
+                          { id: 'cash', label: 'Efectivo', icon: Coins },
+                          { id: 'qr', label: 'QR', icon: QrCode },
+                          { id: 'mixed', label: 'Mixto', icon: Shuffle },
+                        ].map((option) => {
+                          const isActive = paymentMethod === option.id
+                          const Icon = option.icon
                           return (
                             <button
                               key={option.id}
                               type="button"
-                              className={`rounded-[0.9rem] border py-2 text-xs font-black transition flex items-center justify-center gap-1.5 min-h-[36px] ${
-                                isActive
-                                  ? option.id === 'local'
-                                    ? 'border-[#3b82f6] bg-[#3b82f6] text-white shadow-sm'
-                                    : 'border-[#10b981] bg-[#10b981] text-white shadow-sm'
-                                  : 'border-line bg-panel/80 text-ink hover:bg-panel'
-                              }`}
-                              onClick={() => {
-                                setOrderSource(option.id as 'local' | 'whatsapp')
-                                if (option.id === 'local') {
-                                  setFulfillmentType('table')
-                                } else {
-                                  setFulfillmentType('pickup')
-                                }
-                              }}
+                              className={`rounded-[0.7rem] border py-1.5 text-[11px] font-black transition flex items-center justify-center gap-1 ${isActive ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm' : 'border-line bg-panel/80 text-ink hover:bg-panel'}`}
+                              onClick={() => setPaymentMethod(option.id as PaymentMethod)}
                             >
-                              <Icon size={14} />
+                              <Icon size={12} />
+                              {option.label.toUpperCase()}
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      {paymentMethod === 'cash' ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            className="flex-1 rounded-[0.7rem] border border-line bg-canvas/35 px-3 py-1.5 text-xs text-ink outline-none transition focus:border-accent"
+                            inputMode="decimal"
+                            placeholder="Efectivo recibido (opcional)"
+                            value={cashReceivedInput}
+                            onChange={(e) => setCashReceivedInput(e.target.value)}
+                          />
+                          <div className="text-xs font-black text-ink shrink-0">Cambio: {formatCurrency(change)}</div>
+                        </div>
+                      ) : null}
+
+                      {paymentMethod === 'mixed' ? (
+                        <div className="space-y-1.5">
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <label className="block">
+                              <div className="mb-1 text-[9px] font-black uppercase tracking-wider text-muted">Efectivo</div>
+                              <input
+                                className={`w-full rounded-[0.7rem] border bg-canvas/35 px-2.5 py-1.5 text-xs text-ink outline-none transition focus:border-accent ${cashAmount === 0 ? 'border-red-300' : 'border-line'}`}
+                                inputMode="decimal"
+                                placeholder="0"
+                                value={cashSplitInput}
+                                onChange={(e) => setCashSplitInput(e.target.value)}
+                              />
+                            </label>
+                            <div className="block">
+                              <div className="mb-1 text-[9px] font-black uppercase tracking-wider text-muted">Monto QR</div>
+                              <div className="rounded-[0.7rem] border border-line bg-panel/80 px-2 py-1.5 text-xs font-bold text-ink">{formatCurrency(qrAmount)}</div>
+                            </div>
+                          </div>
+                          {cashAmount === 0 ? <span className="text-[9px] text-red-500 font-bold block px-1">Efectivo debe ser mayor a 0</span> : null}
+                          <div className="flex items-center gap-2">
+                            <input
+                              className="flex-1 rounded-[0.7rem] border border-line bg-canvas/35 px-2.5 py-1.5 text-xs text-ink outline-none transition focus:border-accent"
+                              inputMode="decimal"
+                              placeholder="Efectivo recibido (opcional)"
+                              value={cashReceivedInput}
+                              onChange={(e) => setCashReceivedInput(e.target.value)}
+                            />
+                            <div className="text-xs font-black text-ink shrink-0">Cambio: {formatCurrency(change)}</div>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {paymentMethod === 'qr' ? (
+                        <div className="rounded-[0.7rem] bg-panel/80 px-3 py-1.5 text-xs flex justify-between items-center">
+                          <span className="text-muted font-semibold">Monto por QR</span>
+                          <span className="font-black text-ink">{formatCurrency(cartTotal)}</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="mt-2 border-t border-dashed border-line pt-2 space-y-1.5">
+                      <div className="text-[9px] font-black uppercase tracking-wider text-muted">Metodo Esperado</div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {[
+                          { id: 'cash', label: 'Efectivo', icon: Coins },
+                          { id: 'qr', label: 'QR', icon: QrCode },
+                          { id: 'mixed', label: 'Mixto', icon: Shuffle },
+                        ].map((option) => {
+                          const isActive = expectedPaymentMethod === option.id
+                          const Icon = option.icon
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              className={`rounded-[0.7rem] border py-1.5 text-[11px] font-black transition flex items-center justify-center gap-1 ${isActive ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm' : 'border-line bg-panel/80 text-ink hover:bg-panel'}`}
+                              onClick={() => setExpectedPaymentMethod(option.id as PaymentMethod)}
+                            >
+                              <Icon size={12} />
                               {option.label.toUpperCase()}
                             </button>
                           )
                         })}
                       </div>
                     </div>
-                  ) : null}
+                  )}
+                </div>
+              </div>
+            </div>
 
-                  {/* Modalidad de entrega */}
-                  <div className="rounded-[1rem] border border-line bg-white p-2.5 shadow-sm">
-                    <div className="text-[10px] font-black uppercase tracking-wider text-muted">Entrega</div>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                    {(() => {
-                      const options: Array<{
-                        id: FulfillmentType
-                        label: string
-                        icon: typeof Utensils
-                        disabled?: boolean
-                      }> = [
-                        { id: 'table', label: 'Mesa', icon: Utensils, disabled: userRole === 'pedidos' || orderSource === 'whatsapp' },
-                        { id: 'pickup', label: 'Retiro', icon: ShoppingBag },
-                      ]
-                      return options.map((option) => {
-                        const isActive = fulfillmentType === option.id
-                        const Icon = option.icon
-
-                        if (option.disabled) return null
-
-                        let activeStyles = 'border-ink bg-ink text-white shadow-sm'
-                        if (option.id === 'table') {
-                          activeStyles = 'border-[#6366f1] bg-[#6366f1] text-white shadow-sm'
-                        } else if (option.id === 'pickup') {
-                          activeStyles = 'border-[#d97706] bg-[#d97706] text-white shadow-sm'
-                        } else if (option.id === 'delivery') {
-                          activeStyles = 'border-[#ec4899] bg-[#ec4899] text-white shadow-sm'
-                        }
-
-                        return (
-                          <button
-                            key={option.id}
-                            type="button"
-                            className={`rounded-[0.9rem] border py-2 text-xs font-black transition flex flex-col items-center justify-center gap-0.5 min-h-[38px] ${
-                              isActive ? activeStyles : 'border-line bg-panel/80 text-ink hover:bg-panel'
-                            }`}
-                            onClick={() => setFulfillmentType(option.id)}
-                          >
-                            <Icon size={14} />
-                            <span>{option.label.toUpperCase()}</span>
-                          </button>
-                        )
-                      })
-                    })()}
-                    </div>
-
-                    {fulfillmentType === 'table' ? (
-                      <div className="mt-2">
-                        <input
-                          className="w-full rounded-[0.9rem] border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent"
-                          placeholder="Mesa (ej: 4, Terraza 2)"
-                          value={tableInfo}
-                          onChange={(event) => setTableInfo(event.target.value)}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {/* Datos de Contacto */}
-                  <div className="rounded-[1rem] border border-line bg-white p-2.5 shadow-sm space-y-2.5">
-                    <div className="text-[10px] font-black uppercase tracking-wider text-muted">Datos de Contacto</div>
+            {/* Footer fijo compacto: total + enviar */}
+            <div className="border-t border-line bg-white px-3 py-2 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3">
                     <div>
-                      <input
-                        className="w-full rounded-[0.9rem] border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent"
-                        placeholder="Nombre del Cliente (opcional)"
-                        value={customerName}
-                        onChange={(event) => setCustomerName(event.target.value)}
-                      />
+                      <div className="text-[9px] font-black uppercase text-muted tracking-wider">Productos</div>
+                      <div className="text-xs font-black text-ink">{totalUnits} uds</div>
                     </div>
-
-                    {(orderSource === 'whatsapp' || fulfillmentType === 'delivery') ? (
-                      <div>
-                        <input
-                          className="w-full rounded-[0.9rem] border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent"
-                          placeholder="Telefono (opcional)"
-                          value={customerPhone}
-                          onChange={(event) => setCustomerPhone(event.target.value)}
-                        />
-                      </div>
-                    ) : null}
-
-                    {fulfillmentType === 'delivery' ? (
-                      <div>
-                        <textarea
-                          className={`w-full min-h-[42px] rounded-[0.9rem] border bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent ${
-                            fulfillmentType === 'delivery' && deliveryAddress.trim() === ''
-                              ? 'border-red-300 focus:border-red-500'
-                              : 'border-line'
-                          }`}
-                          placeholder="Direccion completa de entrega"
-                          value={deliveryAddress}
-                          onChange={(event) => setDeliveryAddress(event.target.value)}
-                        />
-                        {fulfillmentType === 'delivery' && deliveryAddress.trim() === '' ? (
-                          <span className="text-[9px] text-red-500 font-bold mt-0.5 block px-1">Direccion es obligatoria</span>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {/* Estado de Pago */}
-                  <div className="rounded-[1rem] border border-line bg-white p-2.5 shadow-sm">
-                    <div className="text-[10px] font-black uppercase tracking-wider text-muted">Estado de Pago</div>
-                    <div className="mt-2 grid grid-cols-3 gap-2">
-                      {[
-                        { id: 'paid', label: 'Pagado' },
-                        { id: 'pending', label: 'Pendiente' },
-                        { id: 'gift', label: 'Regalo' },
-                      ].map((option) => {
-                        const isActive = paymentStatus === option.id
-
-                        return (
-                          <button
-                            key={option.id}
-                            type="button"
-                            className={`rounded-[0.9rem] border py-2 text-xs font-black transition min-h-[36px] ${
-                              isActive
-                                ? option.id === 'paid'
-                                  ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm'
-                                  : option.id === 'pending'
-                                    ? 'border-[#ef4444] bg-[#ef4444] text-white shadow-sm'
-                                    : 'border-[#8b5cf6] bg-[#8b5cf6] text-white shadow-sm'
-                                : 'border-line bg-panel/80 text-ink hover:bg-panel'
-                            }`}
-                            onClick={() => {
-                              setPaymentStatus(option.id as 'paid' | 'pending' | 'gift')
-                              if (option.id === 'pending' || option.id === 'gift') {
-                                setPaymentMethod(null)
-                              } else {
-                                setPaymentMethod('cash')
-                              }
-                            }}
-                          >
-                            {option.label.toUpperCase()}
-                          </button>
-                        )
-                      })}
+                    <div>
+                      <div className="text-[9px] font-black uppercase text-muted tracking-wider">Total</div>
+                      <div className="text-sm font-black text-accent">{formatCurrency(cartTotal)}</div>
                     </div>
-
-                    {paymentStatus === 'paid' ? (
-                      <div className="mt-2.5 border-t border-dashed border-line pt-2.5">
-                        <div className="text-[10px] font-black uppercase tracking-wider text-muted">Metodo de Pago</div>
-                        <div className="mt-2 grid grid-cols-3 gap-2">
-                          {[
-                            { id: 'cash', label: 'Efectivo', icon: Coins },
-                            { id: 'qr', label: 'QR', icon: QrCode },
-                            { id: 'mixed', label: 'Mixto', icon: Shuffle },
-                          ].map((option) => {
-                            const isActive = paymentMethod === option.id
-                            const Icon = option.icon
-
-                            return (
-                              <button
-                                key={option.id}
-                                type="button"
-                                className={`rounded-[0.8rem] border py-1.5 text-xs font-black transition flex flex-col items-center justify-center gap-0.5 min-h-[38px] ${
-                                  isActive ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm' : 'border-line bg-panel/80 text-ink hover:bg-panel'
-                                }`}
-                                onClick={() => setPaymentMethod(option.id as PaymentMethod)}
-                              >
-                                <Icon size={13} />
-                                <span>{option.label.toUpperCase()}</span>
-                              </button>
-                            )
-                          })}
-                        </div>
-
-                        {paymentMethod === 'cash' ? (
-                          <div className="mt-2.5 space-y-2">
-                            <label className="block">
-                              <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-muted">Recibido</div>
-                              <input
-                                className="w-full rounded-[0.8rem] border border-line bg-canvas/35 px-3 py-2 text-xs text-ink outline-none transition focus:border-accent"
-                                inputMode="decimal"
-                                placeholder="Opcional"
-                                value={cashReceivedInput}
-                                onChange={(event) => setCashReceivedInput(event.target.value)}
-                              />
-                            </label>
-                            <div className="flex items-center justify-between text-xs pt-1">
-                              <span className="text-muted font-semibold">Cambio</span>
-                              <span className="font-black text-ink">{formatCurrency(change)}</span>
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {paymentMethod === 'mixed' ? (
-                          <div className="mt-2.5 space-y-2">
-                            <div className="grid grid-cols-2 gap-2">
-                              <label className="block">
-                                <div className="mb-1 text-[9px] font-black uppercase tracking-wider text-muted">Efectivo</div>
-                                <input
-                                  className={`w-full rounded-[0.8rem] border bg-canvas/35 px-2.5 py-1.5 text-xs text-ink outline-none transition focus:border-accent ${
-                                    cashAmount === 0 ? 'border-red-300 focus:border-red-500' : 'border-line'
-                                  }`}
-                                  inputMode="decimal"
-                                  placeholder="0"
-                                  value={cashSplitInput}
-                                  onChange={(event) => setCashSplitInput(event.target.value)}
-                                />
-                              </label>
-                              <div className="block">
-                                <div className="mb-1 text-[9px] font-black uppercase tracking-wider text-muted">Monto QR</div>
-                                <div className="rounded-[0.8rem] border border-line bg-panel/80 px-2 py-1.5 text-xs font-bold text-ink h-[32px] flex items-center">
-                                  {formatCurrency(qrAmount)}
-                                </div>
-                              </div>
-                            </div>
-                            {cashAmount === 0 ? (
-                              <span className="text-[9px] text-red-500 font-bold block px-1">Efectivo debe ser mayor a 0</span>
-                            ) : null}
-
-                            <label className="block mt-2">
-                              <div className="mb-1 text-[9px] font-black uppercase tracking-wider text-muted">Efectivo Recibido</div>
-                              <input
-                                className="w-full rounded-[0.8rem] border border-line bg-canvas/35 px-2.5 py-1.5 text-xs text-ink outline-none transition focus:border-accent"
-                                inputMode="decimal"
-                                placeholder="Opcional"
-                                value={cashReceivedInput}
-                                onChange={(event) => setCashReceivedInput(event.target.value)}
-                              />
-                            </label>
-                            <div className="flex items-center justify-between text-xs mt-1">
-                              <span className="text-muted font-semibold">Cambio</span>
-                              <span className="font-black text-ink">{formatCurrency(change)}</span>
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {paymentMethod === 'qr' ? (
-                          <div className="mt-2 rounded-[0.8rem] bg-panel/80 p-2.5 text-xs flex justify-between items-center">
-                            <span className="text-muted font-semibold">Monto por QR</span>
-                            <span className="font-black text-ink">{formatCurrency(cartTotal)}</span>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      /* Expected payment method selection for pending orders */
-                      <div className="mt-2.5 border-t border-dashed border-line pt-2.5">
-                        <div className="text-[10px] font-black uppercase tracking-wider text-muted">Metodo Esperado</div>
-                        <div className="mt-2 grid grid-cols-3 gap-2">
-                          {[
-                            { id: 'cash', label: 'Efectivo', icon: Coins },
-                            { id: 'qr', label: 'QR', icon: QrCode },
-                            { id: 'mixed', label: 'Mixto', icon: Shuffle },
-                          ].map((option) => {
-                            const isActive = expectedPaymentMethod === option.id
-                            const Icon = option.icon
-
-                            return (
-                              <button
-                                key={option.id}
-                                type="button"
-                                className={`rounded-[0.8rem] border py-1.5 text-xs font-black transition flex flex-col items-center justify-center gap-0.5 min-h-[38px] ${
-                                  isActive ? 'border-[#10b981] bg-[#10b981] text-white shadow-sm' : 'border-line bg-panel/80 text-ink hover:bg-panel'
-                                }`}
-                                onClick={() => setExpectedPaymentMethod(option.id as PaymentMethod)}
-                              >
-                                <Icon size={13} />
-                                <span>{option.label.toUpperCase()}</span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
                   </div>
-
                 </div>
 
-                {/* Footer de Enviar a Cocina */}
-                <div className="border-t border-line bg-white p-4 shrink-0 flex gap-3.5">
-                  <Button
-                    fullWidth
-                    size="lg"
-                    className="shadow-xl shadow-accent/20"
-                    disabled={cartItems.length === 0 || isSubmitting || !isPaymentValid || !isDeliveryInfoValid}
-                    onClick={async () => {
-                      setIsSubmitting(true)
-                      const payload = {
-                        cartItems,
-                        productsById,
+                {editingOrderId && (
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded-xl border border-orange-200 bg-orange-50 hover:bg-orange-100 transition text-xs font-bold text-orange-950 shrink-0"
+                    onClick={handleDiscardEdit}
+                  >
+                    Descartar
+                  </button>
+                )}
+
+                <Button
+                  size="lg"
+                  className="shadow-xl shadow-accent/20 shrink-0"
+                  disabled={cartItems.length === 0 || isSubmitting || !isPaymentValid || !isDeliveryInfoValid}
+                  onClick={async () => {
+                    setIsSubmitting(true)
+                    const payload = {
+                      cartItems,
+                      productsById,
+                      payment: buildPaymentSummary(),
+                      paymentStatus,
+                      paymentMethod,
+                      expectedPaymentMethod,
+                      orderSource,
+                      fulfillmentType,
+                      tableInfo: fulfillmentType === 'table' ? tableInfo.trim() : '',
+                      customerName: customerName.trim(),
+                      customerPhone: customerPhone.trim(),
+                      deliveryAddress: deliveryAddress.trim(),
+                      createdBy: userId,
+                    }
+
+                    let isSuccess = false
+                    if (editingOrderId) {
+                      try {
+                        await onUpdateOrder(editingOrderId, payload)
+                        isSuccess = true
+                      } catch (error) {
+                        console.error('Failed to update order:', error)
+                      }
+                    } else {
+                      isSuccess = await onSubmitOrder(payload)
+                    }
+
+                    if (isSuccess) {
+                      const completedOrderMock = {
+                        displayNumber: nextOrderNumber,
+                        createdAt: new Date().toISOString(),
+                        items: cartItems.map((item) => {
+                          const product = productsById.get(item.productId)
+                          const selectedExtras = item.modifiers.extras
+                          const extrasTotal = selectedExtras.reduce((sum, extra) => sum + extra.price, 0)
+                          return {
+                            id: item.lineId,
+                            name: product?.name || 'Producto',
+                            price: product?.price || 0,
+                            quantity: item.quantity,
+                            lineTotal: ((product?.price || 0) + extrasTotal) * item.quantity,
+                            modifiers: item.modifiers
+                          }
+                        }),
+                        total: cartTotal,
                         payment: buildPaymentSummary(),
                         paymentStatus,
                         paymentMethod,
-                        expectedPaymentMethod,
                         orderSource,
                         fulfillmentType,
                         tableInfo: fulfillmentType === 'table' ? tableInfo.trim() : '',
@@ -2225,100 +2149,39 @@ export function CajaView({
                         deliveryAddress: deliveryAddress.trim(),
                         createdBy: userId,
                       }
+                      setPrintedOrder(completedOrderMock as any)
 
-                      let isSuccess = false
-                      if (editingOrderId) {
-                        try {
-                          await onUpdateOrder(editingOrderId, payload)
-                          isSuccess = true
-                        } catch (error) {
-                          console.error('Failed to update order:', error)
-                        }
-                      } else {
-                        isSuccess = await onSubmitOrder(payload)
-                      }
+                      setCartItems([])
+                      setExpandedLineId(null)
+                      setPaymentStatus('paid')
+                      setPaymentMethod('cash')
+                      setCashReceivedInput('')
+                      setCashSplitInput('')
+                      setFulfillmentType(userRole === 'pedidos' ? 'pickup' : 'table')
+                      setOrderSource(userRole === 'pedidos' ? 'whatsapp' : 'local')
+                      setTableInfo('')
+                      setCustomerName('')
+                      setCustomerPhone('')
+                      setDeliveryAddress('')
+                      setExpectedPaymentMethod(null)
+                      setEditingOrderId(null)
+                      setActiveTab('catalog')
+                      setShowCheckoutModal(false)
+                    }
 
-                      if (isSuccess) {
-                        // Generar recibo imprimible antes de limpiar el estado
-                        const completedOrderMock = {
-                          displayNumber: nextOrderNumber,
-                          createdAt: new Date().toISOString(),
-                          items: cartItems.map((item) => {
-                            const product = productsById.get(item.productId)
-                            const selectedExtras = item.modifiers.extras
-                            const extrasTotal = selectedExtras.reduce((sum, extra) => sum + extra.price, 0)
-                            return {
-                              id: item.lineId,
-                              name: product?.name || 'Producto',
-                              price: product?.price || 0,
-                              quantity: item.quantity,
-                              lineTotal: ((product?.price || 0) + extrasTotal) * item.quantity,
-                              modifiers: item.modifiers
-                            }
-                          }),
-                          total: cartTotal,
-                          payment: buildPaymentSummary(),
-                          paymentStatus,
-                          paymentMethod,
-                          orderSource,
-                          fulfillmentType,
-                          tableInfo: fulfillmentType === 'table' ? tableInfo.trim() : '',
-                          customerName: customerName.trim(),
-                          customerPhone: customerPhone.trim(),
-                          deliveryAddress: deliveryAddress.trim(),
-                          createdBy: userId,
-                        }
-                        setPrintedOrder(completedOrderMock as any)
-
-                        setCartItems([])
-                        setExpandedLineId(null)
-                        setPaymentStatus('paid')
-                        setPaymentMethod('cash')
-                        setCashReceivedInput('')
-                        setCashSplitInput('')
-                        setFulfillmentType(userRole === 'pedidos' ? 'pickup' : 'table')
-                        setOrderSource(userRole === 'pedidos' ? 'whatsapp' : 'local')
-                        setTableInfo('')
-                        setCustomerName('')
-                        setCustomerPhone('')
-                        setDeliveryAddress('')
-                        setExpectedPaymentMethod(null)
-                        setEditingOrderId(null)
-                        setActiveTab('catalog')
-                        setShowCheckoutModal(false)
-                      }
-
-                      setIsSubmitting(false)
-                    }}
-                  >
-                    {isSubmitting ? <LoaderCircle size={18} className="animate-spin" /> : <CookingPot size={18} />}
-                    {isSubmitting ? 'Guardando...' : editingOrderId ? 'Guardar Cambios' : 'Enviar a cocina'}
-                  </Button>
-
-                  {editingOrderId && (
-                    <button
-                      type="button"
-                      className="px-4 rounded-xl border border-orange-200 bg-orange-50 hover:bg-orange-100 transition text-xs font-bold text-orange-950"
-                      onClick={handleDiscardEdit}
-                    >
-                      Descartar Edicion
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    className="px-4 rounded-xl border border-line bg-panel hover:bg-line transition text-xs font-bold text-ink"
-                    onClick={() => setShowCheckoutModal(false)}
-                  >
-                    Cerrar
-                  </button>
-                </div>
+                    setIsSubmitting(false)
+                  }}
+                >
+                  {isSubmitting ? <LoaderCircle size={16} className="animate-spin" /> : <CookingPot size={16} />}
+                  {isSubmitting ? 'Guardando...' : editingOrderId ? 'Guardar' : 'Enviar a cocina'}
+                </Button>
               </div>
-
             </div>
+
           </Panel>
         </div>
       )}
+
 
       {/* Fast Payment Modal (QR, Cash change calculation & Mixed validation) */}
       {payingOrder ? (

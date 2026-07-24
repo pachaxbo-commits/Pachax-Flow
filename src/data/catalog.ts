@@ -33,10 +33,7 @@ const bbqOptions = [
   { id: 'sin-salsa-bbq', label: 'Sin salsa BBQ' },
 ]
 
-const sauceExtras = [
-  { id: 'salsa-golf-extra', name: 'Salsa Golf', price: 2 },
-  { id: 'salsa-bbq-extra', name: 'Salsa BBQ', price: 2 },
-]
+const sauceExtras: { id: string; name: string; price: number }[] = []
 
 export const demoQuickExtras = sauceExtras
 
