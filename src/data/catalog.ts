@@ -38,6 +38,8 @@ const sauceExtras = [
   { id: 'salsa-bbq-extra', name: 'Salsa BBQ', price: 2 },
 ]
 
+export const demoQuickExtras = sauceExtras
+
 export const demoProducts: Product[] = [
   {
     id: 'burger-lab-simple-con-papas',
@@ -349,6 +351,7 @@ export function buildDemoCatalogState(): CatalogState {
   return {
     categories: demoCategories,
     products: demoProducts,
+    quickExtras: demoQuickExtras,
     lastUpdatedAt: Date.now(),
   }
 }

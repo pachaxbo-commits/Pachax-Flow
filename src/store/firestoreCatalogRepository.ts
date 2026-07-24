@@ -14,7 +14,7 @@ import {
   type QuerySnapshot,
   type Unsubscribe,
 } from 'firebase/firestore'
-import { demoCategories, demoProducts } from '../data/catalog'
+import { demoCategories, demoProducts, demoQuickExtras } from '../data/catalog'
 import { getFirebaseContext } from '../lib/firebase'
 import type {
   CatalogCategory,
@@ -389,13 +389,13 @@ export class FirestoreCatalogRepository implements CatalogRepository {
             const data = docSnap.data()
             this.state = {
               ...this.state,
-              quickExtras: Array.isArray(data.list) ? data.list : [],
+              quickExtras: Array.isArray(data.list) ? data.list : demoQuickExtras,
               lastUpdatedAt: Date.now(),
             }
           } else {
             this.state = {
               ...this.state,
-              quickExtras: [],
+              quickExtras: demoQuickExtras,
               lastUpdatedAt: Date.now(),
             }
           }
