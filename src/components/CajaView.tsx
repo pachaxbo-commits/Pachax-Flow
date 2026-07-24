@@ -31,6 +31,19 @@ import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
 import { StatusPill, SourceBadge, FulfillmentBadge, PaymentBadge } from './ui/StatusPill'
 import { playKitchenNotification } from '../lib/sound'
+
+function formatExtrasList(extras: any[]) {
+  if (!extras || extras.length === 0) return ''
+  const counts = new Map<string, number>()
+  extras.forEach((e) => {
+    if (e && e.name) {
+      counts.set(e.name, (counts.get(e.name) || 0) + 1)
+    }
+  })
+  return Array.from(counts.entries())
+    .map(([name, count]) => count > 1 ? `${name} (x${count})` : name)
+    .join(', ')
+}
 import { botApiUrl, botAdminToken, emitBotHealthChanged, fetchBotHealth, fetchBotSettings, onBotHealthChanged, saveBotSettings, setBotAcceptingOrders } from '../lib/botApi'
 
 const DEFAULT_PREP_DELAY = 10
@@ -458,34 +471,53 @@ export function CajaView({
   }, [orders, canManagePayments])
   const pendingPaymentCount = pendingPaymentOrders.length
 
-  // Escuchador para sonar alerta si entra un nuevo pedido de WhatsApp
-  const lastPendingWhatsappSequence = useRef<number>(0)
-
+  // Alerta sonora continua para pedidos de whatsapp pendientes (tipo yango)
   useEffect(() => {
     const pendingWhatsappOrders = orders.filter(
       (order) => order.orderSource === 'whatsapp' && order.status === 'pending'
     )
-    
-    const highestSequence = pendingWhatsappOrders.reduce(
-      (highest, order) => Math.max(highest, order.sequence), 
-      0
-    )
 
-    if (highestSequence > lastPendingWhatsappSequence.current) {
-      const prevSequence = lastPendingWhatsappSequence.current
-      lastPendingWhatsappSequence.current = highestSequence
+    if (pendingWhatsappOrders.length === 0) {
+      return
+    }
 
-      // Alerta sonora solo si es un pedido genuino recien ingresado
-      if (highestSequence !== 0 && prevSequence !== 0) {
-        const latestOrder = pendingWhatsappOrders.find((o) => o.sequence === highestSequence)
-        if (latestOrder && new Date().getTime() - new Date(latestOrder.createdAt).getTime() < 15000) {
-          playKitchenNotification()
+    const playYangoSound = () => {
+      const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioContextCtor) return
+
+      try {
+        const context = new AudioContextCtor()
+        const playTone = (freq: number, startTime: number, duration: number) => {
+          const osc = context.createOscillator()
+          const gain = context.createGain()
+          osc.type = 'sine'
+          osc.frequency.setValueAtTime(freq, startTime)
+          gain.gain.setValueAtTime(0.0001, startTime)
+          gain.gain.exponentialRampToValueAtTime(0.05, startTime + 0.02)
+          gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration - 0.02)
+          osc.connect(gain)
+          gain.connect(context.destination)
+          osc.start(startTime)
+          osc.stop(startTime + duration)
         }
+
+        // Tono tipo Yango
+        playTone(660, context.currentTime, 0.15)
+        playTone(880, context.currentTime + 0.2, 0.15)
+
+        setTimeout(() => {
+          context.close().catch(() => {})
+        }, 1000)
+      } catch (e) {
+        console.error(e)
       }
     }
 
-    if (highestSequence === 0) {
-      lastPendingWhatsappSequence.current = 0
+    playYangoSound()
+    const intervalId = setInterval(playYangoSound, 1500)
+
+    return () => {
+      clearInterval(intervalId)
     }
   }, [orders])
 
@@ -1070,7 +1102,7 @@ export function CajaView({
                                 </div>
                                 {item.modifiers?.extras?.length > 0 && (
                                   <div className="text-[10px] text-accent font-semibold pl-3 animate-fadeIn">
-                                    + Extras: {item.modifiers.extras.map((e: any) => e.name).join(', ')}
+                                    + Extras: {formatExtrasList(item.modifiers.extras)}
                                   </div>
                                 )}
                                 {item.modifiers?.options?.length > 0 && (
@@ -1098,7 +1130,7 @@ export function CajaView({
                               >
                                 <Printer size={13} />
                               </button>
-                              {canManageOrders && order.orderSource === 'local' && order.status === 'delivered' ? (
+                              {canManageOrders && (order.orderSource === 'local' || order.orderSource === 'whatsapp') && order.status === 'delivered' ? (
                                 <button
                                   type="button"
                                   className="p-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
@@ -1226,7 +1258,7 @@ export function CajaView({
                                   </div>
                                   {item.modifiers?.extras?.length > 0 && (
                                     <div className="text-[10px] text-accent font-semibold pl-3 animate-fadeIn">
-                                      + Extras: {item.modifiers.extras.map((e: any) => e.name).join(', ')}
+                                      + Extras: {formatExtrasList(item.modifiers.extras)}
                                     </div>
                                   )}
                                   {item.modifiers?.options?.length > 0 && (
@@ -1442,7 +1474,7 @@ export function CajaView({
                                   </div>
                                   {item.modifiers?.extras?.length > 0 && (
                                     <div className="text-[10px] text-accent font-semibold pl-3 animate-fadeIn">
-                                      + Extras: {item.modifiers.extras.map((e: any) => e.name).join(', ')}
+                                      + Extras: {formatExtrasList(item.modifiers.extras)}
                                     </div>
                                   )}
                                   {item.modifiers?.options?.length > 0 && (
@@ -1473,19 +1505,6 @@ export function CajaView({
 
                             {/* Acciones para Pedido Local */}
                             <div className="flex flex-wrap gap-1.5 pt-1 border-t border-dashed border-line">
-                              {canManageOrders && order.status === 'pending' ? (
-                                <button
-                                  type="button"
-                                  className="flex-1 flex items-center justify-center gap-1 bg-amber-500 hover:bg-amber-600 text-white py-1.5 rounded-lg text-[10px] font-black transition shadow-sm"
-                                  onClick={async () => {
-                                    await onSetOrderStatus(order.id, 'preparing')
-                                    setPrintedOrder(order) // Auto imprimir al enviar a cocina
-                                  }}
-                                >
-                                  <CookingPot size={12} />
-                                  A Cocina
-                                </button>
-                              ) : null}
 
                               {canManagePayments && !isPaid && (
                                 <button
@@ -2518,7 +2537,7 @@ export function CajaView({
                     </div>
                     {item.modifiers.extras.length > 0 && (
                       <div className="text-[8px] text-gray-600 ml-2">
-                         + Extras: {item.modifiers.extras.map((e: any) => e.name).join(', ')}
+                         + Extras: {formatExtrasList(item.modifiers.extras)}
                       </div>
                     )}
                     {item.modifiers.options.length > 0 && (
@@ -2577,7 +2596,7 @@ export function CajaView({
                     <div className="font-bold text-xs">{item.quantity}x {item.name}</div>
                     {item.modifiers.extras.length > 0 && (
                       <div className="text-[9px] text-gray-700 ml-2 font-medium">
-                         Extras: {item.modifiers.extras.map((e: any) => e.name).join(', ')}
+                         Extras: {formatExtrasList(item.modifiers.extras)}
                       </div>
                     )}
                     {item.modifiers.options.length > 0 && (
