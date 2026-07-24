@@ -7,6 +7,7 @@ import type {
   Product,
   RepositoryConnectionMode,
   RepositoryStatus,
+  ProductExtra,
 } from '../types'
 
 export interface CatalogRepository {

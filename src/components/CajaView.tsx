@@ -26,7 +26,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatCurrency } from '../lib/format'
-import type { CartItem, CatalogCategory, PaymentMethod, PaymentSummary, Product, Order, OrderStatus, FulfillmentType } from '../types'
+import type { CartItem, CatalogCategory, PaymentMethod, PaymentSummary, Product, Order, OrderStatus, FulfillmentType, ProductExtra } from '../types'
 import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
 import { StatusPill, SourceBadge, FulfillmentBadge, PaymentBadge } from './ui/StatusPill'

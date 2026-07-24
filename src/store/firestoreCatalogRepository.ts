@@ -23,6 +23,7 @@ import type {
   CatalogState,
   Product,
   RepositoryStatus,
+  ProductExtra,
 } from '../types'
 import { buildDefaultCatalogState, createRepositoryStatus, type CatalogRepository } from './catalogRepository'
 
