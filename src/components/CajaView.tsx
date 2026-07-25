@@ -2127,6 +2127,8 @@ export function CajaView({
                         })
 
                         const updatePayload = {
+                          cartItems,
+                          productsById,
                           items,
                           total: cartTotal,
                           payment: buildPaymentSummary(),
