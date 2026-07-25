@@ -7,7 +7,6 @@ import {
   Plus,
   Trash2,
   DollarSign,
-  Ban,
   FileEdit,
   Store,
   Utensils,
