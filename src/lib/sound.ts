@@ -69,4 +69,10 @@ export function stopContinuousOrderAlert() {
     clearInterval(alertInterval)
     alertInterval = null
   }
+  if (audioInstance) {
+    try {
+      audioInstance.pause()
+      audioInstance.currentTime = 0
+    } catch {}
+  }
 }
