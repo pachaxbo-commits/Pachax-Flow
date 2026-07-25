@@ -13,8 +13,7 @@ import { notifyBotOrderConfirmed } from './lib/botApi'
 import { formatCurrency } from './lib/format'
 import { useAuthStore } from './store/authStore'
 import { useCatalogStore } from './store/catalogStore'
-import { useOrdersStore } from './store/appStore'
-import { startContinuousOrderAlert, stopContinuousOrderAlert, playLoudOrderAlert } from './lib/sound'
+import { startContinuousOrderAlert, stopContinuousOrderAlert } from './lib/sound'
 import type { CartItem, OrderStatus, PaymentMethod, PaymentSummary, Product, UserRole } from './types'
 
 type View = 'caja' | 'cocina' | 'historial' | 'admin' | 'bot'
@@ -101,7 +100,7 @@ function MainShell({
   // Alerta sonora continua global para pedidos pendientes sin confirmar (tipo Yango / PedidosYa)
   useEffect(() => {
     const unconfirmedOrders = orders.filter(
-      (order) => order.status === 'pending' && order.status !== 'cancelled'
+      (order) => order.status === 'pending'
     )
 
     if (unconfirmedOrders.length > 0) {
