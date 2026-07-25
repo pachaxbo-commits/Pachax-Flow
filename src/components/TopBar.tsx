@@ -21,6 +21,7 @@ export function TopBar({
   userName,
   userRole,
   onSignOut,
+  pendingOrdersCount = 0,
 }: {
   availableViews: View[]
   collapsed: boolean
@@ -31,6 +32,7 @@ export function TopBar({
   userRole: UserRole | 'demo'
   mode: 'firebase' | 'local'
   onSignOut: () => Promise<void>
+  pendingOrdersCount?: number
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -107,9 +109,16 @@ export function TopBar({
                 >
                   <Icon size={16} />
                 </div>
-                <div className={`min-w-0 ${collapsed ? 'hidden' : ''}`}>
-                  <div className="text-sm font-semibold">{item.label}</div>
-                  <div className={`truncate text-xs ${isActive ? 'text-white/65' : 'text-muted'}`}>{item.subtitle}</div>
+                <div className={`min-w-0 flex-1 flex items-center justify-between ${collapsed ? 'hidden' : ''}`}>
+                  <div>
+                    <div className="text-sm font-semibold">{item.label}</div>
+                    <div className={`truncate text-xs ${isActive ? 'text-white/65' : 'text-muted'}`}>{item.subtitle}</div>
+                  </div>
+                  {item.id === 'caja' && pendingOrdersCount > 0 ? (
+                    <span className="ml-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-black text-white shadow-lg animate-bounce shrink-0">
+                      {pendingOrdersCount}
+                    </span>
+                  ) : null}
                 </div>
               </button>
             )

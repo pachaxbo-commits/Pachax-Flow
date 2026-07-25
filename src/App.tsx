@@ -2,6 +2,7 @@ import { AlertCircle, BellRing, Flame, Clock3, PackageCheck, WalletCards } from 
 import { useEffect, useMemo, useState } from 'react'
 import { AdminView } from './components/AdminView'
 import { CajaView } from './components/CajaView'
+import { FloatingOrderAlert } from './components/FloatingOrderAlert'
 import { BotControlPanel } from './components/BotControlPanel'
 import { BotView } from './components/BotView'
 import { CocinaView } from './components/CocinaView'
@@ -235,6 +236,13 @@ function MainShell({
         </div>
       ) : null}
 
+      <FloatingOrderAlert
+        orders={orders}
+        onConfirmOrder={async (orderId, delay) => {
+          await handleAdvanceStatus(orderId, 'preparing', delay)
+        }}
+      />
+
       <div className={`relative grid max-w-none gap-4 ${isSidebarCollapsed ? 'xl:grid-cols-[82px_minmax(0,1fr)]' : 'xl:grid-cols-[230px_minmax(0,1fr)]'}`}>
         <TopBar
           availableViews={availableViews}
@@ -243,6 +251,7 @@ function MainShell({
           mode={mode}
           onChange={setSelectedView}
           onSignOut={onSignOut}
+          pendingOrdersCount={pendingCount}
           rightSlot={
             <div className="space-y-3">
               {role !== 'pedidos' ? (

@@ -1,19 +1,30 @@
 let alertInterval: number | null = null
+let audioInstance: HTMLAudioElement | null = null
 
 export function playLoudOrderAlert() {
+  try {
+    if (!audioInstance) {
+      audioInstance = new Audio('/notificacion.mp3')
+    }
+    audioInstance.currentTime = 0
+    audioInstance.volume = 1.0
+    audioInstance.play().catch(() => {
+      playWebAudioTone()
+    })
+  } catch {
+    playWebAudioTone()
+  }
+}
+
+function playWebAudioTone() {
   const AudioContextCtor =
     window.AudioContext ||
     (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
 
-  if (!AudioContextCtor) {
-    return
-  }
+  if (!AudioContextCtor) return
 
   try {
     const context = new AudioContextCtor()
-
-    // Tono fuerte, claro y llamativo tipo Yango / PedidosYa
-    // Frecuencias: 587.33Hz (D5) -> 880Hz (A5) -> 1174.66Hz (D6)
     const playTone = (freq: number, startTime: number, duration: number, volume = 0.45) => {
       const osc = context.createOscillator()
       const gain = context.createGain()
@@ -38,9 +49,7 @@ export function playLoudOrderAlert() {
     setTimeout(() => {
       context.close().catch(() => {})
     }, 1000)
-  } catch (e) {
-    console.error('Error al reproducir alerta de sonido:', e)
-  }
+  } catch {}
 }
 
 export function playKitchenNotification() {
@@ -52,7 +61,7 @@ export function startContinuousOrderAlert() {
   playLoudOrderAlert()
   alertInterval = window.setInterval(() => {
     playLoudOrderAlert()
-  }, 2200)
+  }, 2500)
 }
 
 export function stopContinuousOrderAlert() {
