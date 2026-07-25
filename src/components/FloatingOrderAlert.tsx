@@ -1,6 +1,7 @@
 import { CheckCircle2, ChevronDown, ChevronUp, Clock, MapPin, Phone } from 'lucide-react'
 import { useState } from 'react'
 import { formatCurrency } from '../lib/format'
+import { stopContinuousOrderAlert } from '../lib/sound'
 import type { Order } from '../types'
 
 export function FloatingOrderAlert({
@@ -24,6 +25,7 @@ export function FloatingOrderAlert({
 
   async function handleConfirm() {
     if (!currentOrder || busyOrderId) return
+    stopContinuousOrderAlert()
     try {
       setBusyOrderId(currentOrder.id)
       await onConfirmOrder(currentOrder.id, selectedDelay)

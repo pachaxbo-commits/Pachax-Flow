@@ -1,5 +1,6 @@
 let alertInterval: number | null = null
 let audioInstance: HTMLAudioElement | null = null
+let activeAudioContext: AudioContext | null = null
 
 export function playLoudOrderAlert() {
   try {
@@ -24,7 +25,14 @@ function playWebAudioTone() {
   if (!AudioContextCtor) return
 
   try {
-    const context = new AudioContextCtor()
+    if (activeAudioContext) {
+      try {
+        activeAudioContext.close()
+      } catch {}
+    }
+    activeAudioContext = new AudioContextCtor()
+    const context = activeAudioContext
+
     const playTone = (freq: number, startTime: number, duration: number, volume = 0.45) => {
       const osc = context.createOscillator()
       const gain = context.createGain()
@@ -45,10 +53,6 @@ function playWebAudioTone() {
     playTone(587.33, t, 0.16, 0.45)
     playTone(880, t + 0.12, 0.2, 0.5)
     playTone(1174.66, t + 0.28, 0.32, 0.55)
-
-    setTimeout(() => {
-      context.close().catch(() => {})
-    }, 1000)
   } catch {}
 }
 
@@ -69,10 +73,19 @@ export function stopContinuousOrderAlert() {
     clearInterval(alertInterval)
     alertInterval = null
   }
+
   if (audioInstance) {
     try {
       audioInstance.pause()
       audioInstance.currentTime = 0
+      audioInstance.volume = 0
     } catch {}
+  }
+
+  if (activeAudioContext) {
+    try {
+      activeAudioContext.close()
+    } catch {}
+    activeAudioContext = null
   }
 }
