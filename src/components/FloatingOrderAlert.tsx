@@ -15,7 +15,7 @@ export function FloatingOrderAlert({
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null)
 
   const pendingOrders = orders.filter(
-    (order) => order.status === 'pending' && order.status !== 'cancelled'
+    (order) => order.status === 'pending'
   )
 
   if (pendingOrders.length === 0) return null
