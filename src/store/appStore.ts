@@ -117,7 +117,6 @@ export function useOrdersStore() {
     ) {
       await getOrdersRepository().setOrderStatus(orderId, status, estimatedDelay, options)
     },
-    },
     async cancelOrder(orderId: string, cancelledBy: string, cancelledReason?: string) {
       await getOrdersRepository().cancelOrder(orderId, cancelledBy, cancelledReason)
     },
