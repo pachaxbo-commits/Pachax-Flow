@@ -809,7 +809,7 @@ export function CajaView({
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="hidden xl:flex flex-wrap items-center gap-3">
           {controlsContent}
           {pendingPaymentCount > 0 ? (
             <button
@@ -825,13 +825,6 @@ export function CajaView({
             </button>
           ) : null}
         </div>
-
-        {/* Fallback rendering of bot/delay controls in desktop */}
-        {!portalElement && (
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            {controlsContent}
-          </div>
-        )}
       </div>
 
       {/* Responsive layout selector for mobile */}
