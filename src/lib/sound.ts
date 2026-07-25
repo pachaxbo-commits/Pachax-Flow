@@ -1,13 +1,31 @@
 let alertInterval: number | null = null
 let audioInstance: HTMLAudioElement | null = null
 let activeAudioContext: AudioContext | null = null
+let muted = false
+
+function destroyAudioInstance() {
+  if (audioInstance) {
+    try {
+      audioInstance.pause()
+    } catch {}
+    try {
+      audioInstance.currentTime = 0
+    } catch {}
+    try {
+      audioInstance.src = ''
+      audioInstance.removeAttribute('src')
+      audioInstance.load()
+    } catch {}
+    audioInstance = null
+  }
+}
 
 export function playLoudOrderAlert() {
+  if (muted) return
   try {
-    if (!audioInstance) {
-      audioInstance = new Audio('/notificacion.mp3')
-    }
-    audioInstance.currentTime = 0
+    // Always create a fresh Audio element to avoid stale state
+    destroyAudioInstance()
+    audioInstance = new Audio('/notificacion.mp3')
     audioInstance.volume = 1.0
     audioInstance.play().catch(() => {
       playWebAudioTone()
@@ -18,6 +36,7 @@ export function playLoudOrderAlert() {
 }
 
 function playWebAudioTone() {
+  if (muted) return
   const AudioContextCtor =
     window.AudioContext ||
     (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
@@ -61,6 +80,7 @@ export function playKitchenNotification() {
 }
 
 export function startContinuousOrderAlert() {
+  muted = false
   if (alertInterval !== null) return
   playLoudOrderAlert()
   alertInterval = window.setInterval(() => {
@@ -69,19 +89,19 @@ export function startContinuousOrderAlert() {
 }
 
 export function stopContinuousOrderAlert() {
+  // 1. Set muted flag FIRST to block any in-flight or queued playback
+  muted = true
+
+  // 2. Kill the repeating interval
   if (alertInterval !== null) {
     clearInterval(alertInterval)
     alertInterval = null
   }
 
-  if (audioInstance) {
-    try {
-      audioInstance.pause()
-      audioInstance.currentTime = 0
-      audioInstance.volume = 0
-    } catch {}
-  }
+  // 3. Destroy the Audio element completely
+  destroyAudioInstance()
 
+  // 4. Close any WebAudio context
   if (activeAudioContext) {
     try {
       activeAudioContext.close()
