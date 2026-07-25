@@ -10,11 +10,11 @@ import { LoginView } from './components/LoginView'
 import { TopBar } from './components/TopBar'
 import { UnauthorizedView } from './components/UnauthorizedView'
 import { notifyBotOrderConfirmed } from './lib/botApi'
-import { formatCurrency } from './lib/format'
 import { useAuthStore } from './store/authStore'
 import { useCatalogStore } from './store/catalogStore'
+import { useOrdersStore } from './store/appStore'
 import { startContinuousOrderAlert, stopContinuousOrderAlert } from './lib/sound'
-import type { CartItem, OrderStatus, PaymentMethod, PaymentSummary, Product, UserRole } from './types'
+import type { CartItem, Order, OrderStatus, PaymentMethod, PaymentSummary, Product, UserRole } from './types'
 
 type View = 'caja' | 'cocina' | 'historial' | 'admin' | 'bot'
 
@@ -91,16 +91,16 @@ function MainShell({
   } = useCatalogStore()
 
   const todayKey = useMemo(() => getDayKey(), [])
-  const todayOrders = useMemo(() => orders.filter((order) => getDayKey(order.createdAt) === todayKey), [orders, todayKey])
-  const dailyTotal = useMemo(() => todayOrders.reduce((sum, order) => (order.status !== 'cancelled' && order.paymentStatus === 'paid') ? sum + (order.productSubtotal ?? order.total) : sum, 0), [todayOrders])
-  const activeTodayCount = useMemo(() => todayOrders.filter((order) => order.status !== 'cancelled').length, [todayOrders])
-  const pendingCount = useMemo(() => todayOrders.filter((order) => order.status === 'pending').length, [todayOrders])
+  const todayOrders = useMemo(() => orders.filter((order: Order) => getDayKey(order.createdAt) === todayKey), [orders, todayKey])
+  const dailyTotal = useMemo(() => todayOrders.reduce((sum: number, order: Order) => (order.status !== 'cancelled' && order.paymentStatus === 'paid') ? sum + (order.productSubtotal ?? order.total) : sum, 0), [todayOrders])
+  const activeTodayCount = useMemo(() => todayOrders.filter((order: Order) => order.status !== 'cancelled').length, [todayOrders])
+  const pendingCount = useMemo(() => todayOrders.filter((order: Order) => order.status === 'pending').length, [todayOrders])
   const nextOrderNumber = `#${String(sequence + 1).padStart(3, '0')}`
 
   // Alerta sonora continua global para pedidos pendientes sin confirmar (tipo Yango / PedidosYa)
   useEffect(() => {
     const unconfirmedOrders = orders.filter(
-      (order) => order.status === 'pending'
+      (order: Order) => order.status === 'pending'
     )
 
     if (unconfirmedOrders.length > 0) {
@@ -165,7 +165,7 @@ function MainShell({
     options?: { suppressWhatsappDispatchNotice?: boolean; forceWhatsappDispatchNotice?: boolean },
   ) => {
     try {
-      const order = orders.find((currentOrder) => currentOrder.id === orderId)
+      const order = orders.find((currentOrder: Order) => currentOrder.id === orderId)
       await setOrderStatus(orderId, nextStatus, estimatedDelay, options)
       if (order?.orderSource === 'whatsapp' && nextStatus === 'preparing' && order?.status !== 'delivered') {
         try {
