@@ -85,15 +85,15 @@ function simplifyModifierLabel(label: string) {
 
 function ProductVisual({ image, alt, badge }: { image: string; alt: string; badge?: string }) {
   return (
-    <div className="relative h-32 overflow-hidden 2xl:h-36">
+    <div className="relative h-24 sm:h-26 overflow-hidden">
       {isImageUrl(image) ? (
         <img alt={alt} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" src={image} />
       ) : (
-        <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,#fff1e8,#f7d7c8)] text-7xl">{image}</div>
+        <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,#fff1e8,#f7d7c8)] text-5xl">{image}</div>
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent" />
       {badge ? (
-        <div className="absolute bottom-4 right-4 rounded-full bg-accent px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-accent/15">
+        <div className="absolute bottom-2 right-2 rounded-full bg-accent px-2 py-1 text-[10px] font-bold text-white shadow-md">
           {badge}
         </div>
       ) : null}
@@ -176,6 +176,7 @@ export function CajaView({
   const [pauseDurationMinutes, setPauseDurationMinutes] = useState(30)
   // Edit Order State
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null)
 
   // Order Details / Fields State
   const [orderSource, setOrderSource] = useState<'local' | 'whatsapp'>(
@@ -888,38 +889,39 @@ export function CajaView({
                 })}
               </div>
 
-              <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-2 2xl:grid-cols-3 min-[1850px]:grid-cols-4">
+              <div className="grid gap-2.5 grid-cols-2 md:grid-cols-3 lg:grid-cols-2 2xl:grid-cols-3 min-[1850px]:grid-cols-4">
                 {visibleProducts.map((product) => (
                   <Panel
                     key={product.id}
-                    className="group overflow-hidden border-slate-800 bg-[#1e1e2d] text-white transition duration-200 hover:-translate-y-1 hover:shadow-float flex flex-col justify-between rounded-2xl min-h-[230px]"
+                    className="group overflow-hidden border-slate-800 bg-[#1e1e2d] text-white transition duration-200 hover:-translate-y-0.5 hover:shadow-float flex flex-col justify-between rounded-xl"
                   >
                     <ProductVisual alt={product.name} badge={product.badge} image={product.image} />
 
-                    <div className="p-3 flex-1 flex flex-col justify-between space-y-2.5">
+                    <div className="p-2.5 flex-1 flex flex-col justify-between gap-2">
                       <div>
-                        <h3 className="text-sm font-bold text-white tracking-wide truncate">{product.name}</h3>
-                        <p className="mt-1 text-[11px] leading-relaxed text-slate-400 line-clamp-2 min-h-[32px]">{product.description || 'Sin descripcion'}</p>
+                        <h3 className="text-xs sm:text-sm font-bold text-white tracking-wide truncate" title={product.name}>
+                          {product.name}
+                        </h3>
                       </div>
                       
-                      <div className="flex items-center justify-between gap-2 pt-1">
-                        <div className="text-sm font-black text-amber-500">{formatCurrency(product.price)}</div>
-                        <Button
-                          className="px-2.5 py-1.5 h-8 text-[10px] font-black rounded-lg bg-accent hover:bg-accent/95 text-white flex items-center gap-1 shrink-0"
-                          onClick={() => {
-                            const nextItem = buildCartItem(product)
-                            setCartItems((currentItems) => [...currentItems, nextItem])
-                            setExpandedLineId(nextItem.lineId)
-                            if (window.innerWidth < 1024) {
-                              setActiveTab('cart')
-                              setShowCheckoutModal(true)
-                            }
-                          }}
-                        >
-                          <Plus size={11} />
+                      <Button
+                        className="w-full px-2.5 py-1.5 h-8 text-[11px] font-black rounded-lg bg-accent hover:bg-accent/95 text-white flex items-center justify-between shadow-sm shrink-0"
+                        onClick={() => {
+                          const nextItem = buildCartItem(product)
+                          setCartItems((currentItems) => [...currentItems, nextItem])
+                          setExpandedLineId(nextItem.lineId)
+                          setActiveTab('cart')
+                          setShowCheckoutModal(true)
+                        }}
+                      >
+                        <span className="flex items-center gap-1">
+                          <Plus size={12} />
                           Agregar
-                        </Button>
-                      </div>
+                        </span>
+                        <span className="bg-black/35 border border-white/15 text-white px-2 py-0.5 rounded-md text-[10px] font-black tracking-tight">
+                          {formatCurrency(product.price)}
+                        </span>
+                      </Button>
                     </div>
                   </Panel>
                 ))}
@@ -1390,23 +1392,12 @@ export function CajaView({
                               <button
                                 type="button"
                                 className={`flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition ${canManageOrders ? '' : 'hidden'}`}
-                                onClick={() => {
-                                  setCancellingOrder(order)
-                                  setCancelReason('')
-                                }}
-                              >
-                                <Ban size={12} />
-                              </button>
-
-                              <button
-                                type="button"
-                                className={`flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition ${canManageOrders ? '' : 'hidden'}`}
                                 onClick={async () => {
-                                  if (window.confirm('Estas seguro de que deseas ELIMINAR permanentemente este pedido del sistema? Esta accion no se puede deshacer.')) {
-                                    await onDeleteOrder(order.id)
+                                  if (window.confirm('¿Estas seguro de que deseas anular y eliminar este pedido?')) {
+                                    await onCancelOrder(order.id, userName || 'Caja', 'Anulado por usuario')
                                   }
                                 }}
-                                title="Eliminar permanentemente"
+                                title="Eliminar / Anular pedido"
                               >
                                 <Trash2 size={12} />
                               </button>
@@ -1541,23 +1532,12 @@ export function CajaView({
                               <button
                                 type="button"
                                 className={`flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition ${canManageOrders ? '' : 'hidden'}`}
-                                onClick={() => {
-                                  setCancellingOrder(order)
-                                  setCancelReason('')
-                                }}
-                              >
-                                <Ban size={12} />
-                              </button>
-
-                              <button
-                                type="button"
-                                className={`flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition ${canManageOrders ? '' : 'hidden'}`}
                                 onClick={async () => {
-                                  if (window.confirm('Estas seguro de que deseas ELIMINAR permanentemente este pedido del sistema? Esta accion no se puede deshacer.')) {
-                                    await onDeleteOrder(order.id)
+                                  if (window.confirm('¿Estas seguro de que deseas anular y eliminar este pedido?')) {
+                                    await onCancelOrder(order.id, userName || 'Caja', 'Anulado por usuario')
                                   }
                                 }}
-                                title="Eliminar permanentemente"
+                                title="Eliminar / Anular pedido"
                               >
                                 <Trash2 size={12} />
                               </button>
@@ -2129,9 +2109,40 @@ export function CajaView({
                     }
 
                     let isSuccess = false
+                    const isEditing = Boolean(editingOrderId)
+
                     if (editingOrderId) {
                       try {
-                        await onUpdateOrder(editingOrderId, payload)
+                        const items = cartItems.map((item) => {
+                          const product = productsById.get(item.productId)
+                          const selectedExtras = item.modifiers?.extras || []
+                          const extrasTotal = selectedExtras.reduce((sum, extra) => sum + extra.price, 0)
+                          return {
+                            id: item.lineId,
+                            name: product?.name || 'Producto',
+                            price: product?.price || 0,
+                            quantity: item.quantity,
+                            lineTotal: ((product?.price || 0) + extrasTotal) * item.quantity,
+                            modifiers: item.modifiers,
+                          }
+                        })
+
+                        const updatePayload = {
+                          items,
+                          total: cartTotal,
+                          payment: buildPaymentSummary(),
+                          paymentStatus,
+                          paymentMethod,
+                          expectedPaymentMethod,
+                          orderSource,
+                          fulfillmentType,
+                          tableInfo: fulfillmentType === 'table' ? tableInfo.trim() : '',
+                          customerName: customerName.trim(),
+                          customerPhone: customerPhone.trim(),
+                          deliveryAddress: deliveryAddress.trim(),
+                        }
+
+                        await onUpdateOrder(editingOrderId, updatePayload as any)
                         isSuccess = true
                       } catch (error) {
                         console.error('Failed to update order:', error)
@@ -2141,35 +2152,40 @@ export function CajaView({
                     }
 
                     if (isSuccess) {
-                      const completedOrderMock = {
-                        displayNumber: nextOrderNumber,
-                        createdAt: new Date().toISOString(),
-                        items: cartItems.map((item) => {
-                          const product = productsById.get(item.productId)
-                          const selectedExtras = item.modifiers.extras
-                          const extrasTotal = selectedExtras.reduce((sum, extra) => sum + extra.price, 0)
-                          return {
-                            id: item.lineId,
-                            name: product?.name || 'Producto',
-                            price: product?.price || 0,
-                            quantity: item.quantity,
-                            lineTotal: ((product?.price || 0) + extrasTotal) * item.quantity,
-                            modifiers: item.modifiers
-                          }
-                        }),
-                        total: cartTotal,
-                        payment: buildPaymentSummary(),
-                        paymentStatus,
-                        paymentMethod,
-                        orderSource,
-                        fulfillmentType,
-                        tableInfo: fulfillmentType === 'table' ? tableInfo.trim() : '',
-                        customerName: customerName.trim(),
-                        customerPhone: customerPhone.trim(),
-                        deliveryAddress: deliveryAddress.trim(),
-                        createdBy: userId,
+                      if (isEditing) {
+                        setSaveSuccessMessage('¡Cambios guardados con éxito!')
+                        setTimeout(() => setSaveSuccessMessage(null), 3500)
+                      } else {
+                        const completedOrderMock = {
+                          displayNumber: nextOrderNumber,
+                          createdAt: new Date().toISOString(),
+                          items: cartItems.map((item) => {
+                            const product = productsById.get(item.productId)
+                            const selectedExtras = item.modifiers.extras
+                            const extrasTotal = selectedExtras.reduce((sum, extra) => sum + extra.price, 0)
+                            return {
+                              id: item.lineId,
+                              name: product?.name || 'Producto',
+                              price: product?.price || 0,
+                              quantity: item.quantity,
+                              lineTotal: ((product?.price || 0) + extrasTotal) * item.quantity,
+                              modifiers: item.modifiers
+                            }
+                          }),
+                          total: cartTotal,
+                          payment: buildPaymentSummary(),
+                          paymentStatus,
+                          paymentMethod,
+                          orderSource,
+                          fulfillmentType,
+                          tableInfo: fulfillmentType === 'table' ? tableInfo.trim() : '',
+                          customerName: customerName.trim(),
+                          customerPhone: customerPhone.trim(),
+                          deliveryAddress: deliveryAddress.trim(),
+                          createdBy: userId,
+                        }
+                        setPrintedOrder(completedOrderMock as any)
                       }
-                      setPrintedOrder(completedOrderMock as any)
 
                       setCartItems([])
                       setExpandedLineId(null)
@@ -2615,6 +2631,16 @@ export function CajaView({
           </div>
         </div>
       ) : null}
+
+      {saveSuccessMessage && (
+        <div className="fixed top-5 right-5 z-[9999] flex items-center gap-3 rounded-2xl border border-emerald-300 bg-emerald-600 px-5 py-3.5 text-white shadow-2xl animate-bounce">
+          <CheckCircle2 size={22} className="text-white shrink-0" />
+          <div>
+            <div className="text-sm font-black tracking-wide">{saveSuccessMessage}</div>
+            <p className="text-[11px] text-emerald-100 font-semibold">El pedido se actualizo correctamente en el comandero.</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
