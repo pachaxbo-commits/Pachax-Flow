@@ -12,6 +12,8 @@ export type BotHealth = {
 }
 
 export type BotSettings = {
+  openHour?: number
+  closeHour?: number
   acceptingOrders: boolean
   acceptingOrdersPausedUntil: string
   acceptingOrdersPauseReason: string

@@ -36,6 +36,8 @@ import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
 
 const emptySettings: BotSettings = {
+  openHour: 17,
+  closeHour: 23,
   acceptingOrders: true,
   acceptingOrdersPausedUntil: '',
   acceptingOrdersPauseReason: '',
@@ -325,6 +327,32 @@ export function BotView() {
       <Panel className="p-5">
         <SectionTitle icon={MessageSquareText} title="Mensajes del bot" />
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="flex items-center gap-4 lg:col-span-2 bg-panel p-3.5 rounded-xl border border-line">
+            <div className="flex-1">
+              <label className="block text-xs font-bold text-ink mb-1">Hora Apertura (0 - 23h)</label>
+              <input
+                type="number"
+                min="0"
+                max="23"
+                className="w-full rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink"
+                value={settings.openHour ?? 17}
+                onChange={(e) => setSettings({ ...settings, openHour: Number(e.target.value) })}
+              />
+              <span className="text-[10px] text-muted font-semibold mt-1 block">Ej: 17 = 5:00 PM</span>
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-bold text-ink mb-1">Hora Cierre (0 - 23h)</label>
+              <input
+                type="number"
+                min="0"
+                max="23"
+                className="w-full rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink"
+                value={settings.closeHour ?? 23}
+                onChange={(e) => setSettings({ ...settings, closeHour: Number(e.target.value) })}
+              />
+              <span className="text-[10px] text-muted font-semibold mt-1 block">Ej: 23 = 11:00 PM</span>
+            </div>
+          </div>
           <TextArea label="Mensaje fuera de horario" value={settings.closedMessage} onChange={(value) => setSettings({ ...settings, closedMessage: value })} />
           <TextArea label="Mensaje pedidos pausados" value={settings.pausedOrdersMessage} onChange={(value) => setSettings({ ...settings, pausedOrdersMessage: value })} />
           <TextArea label="Mensaje solo recojo" value={settings.pickupOnlyMessage} onChange={(value) => setSettings({ ...settings, pickupOnlyMessage: value })} />
