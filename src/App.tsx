@@ -96,13 +96,13 @@ function MainShell({
   const todayOrders = useMemo(() => orders.filter((order: Order) => getDayKey(order.createdAt) === todayKey), [orders, todayKey])
   const dailyTotal = useMemo(() => todayOrders.reduce((sum: number, order: Order) => (order.status !== 'cancelled' && order.paymentStatus === 'paid') ? sum + (order.productSubtotal ?? order.total) : sum, 0), [todayOrders])
   const activeTodayCount = useMemo(() => todayOrders.filter((order: Order) => order.status !== 'cancelled').length, [todayOrders])
-  const pendingCount = useMemo(() => todayOrders.filter((order: Order) => order.status === 'pending').length, [todayOrders])
+  const pendingCount = useMemo(() => todayOrders.filter((order: Order) => order.status === 'pending' && order.orderSource === 'whatsapp').length, [todayOrders])
   const nextOrderNumber = `#${String(sequence + 1).padStart(3, '0')}`
 
-  // Alerta sonora continua global para pedidos pendientes sin confirmar (tipo Yango / PedidosYa)
+  // Alerta sonora continua global para pedidos pendientes sin confirmar (solo WhatsApp, no locales)
   useEffect(() => {
     const unconfirmedOrders = orders.filter(
-      (order: Order) => order.status === 'pending'
+      (order: Order) => order.status === 'pending' && order.orderSource === 'whatsapp'
     )
 
     if (unconfirmedOrders.length > 0) {
@@ -237,7 +237,7 @@ function MainShell({
       ) : null}
 
       <FloatingOrderAlert
-        orders={orders}
+        orders={orders.filter((o: Order) => o.orderSource === 'whatsapp')}
         onConfirmOrder={async (orderId, delay) => {
           await handleAdvanceStatus(orderId, 'preparing', delay)
         }}
