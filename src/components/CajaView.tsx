@@ -461,11 +461,11 @@ export function CajaView({
   const canManagePayments = userRole === 'admin' || userRole === 'caja' || userRole === 'demo'
   const canManageOrders = userRole === 'admin' || userRole === 'caja' || userRole === 'demo'
 
-  // Filtered Orders & Badge count
+  // Filtered Orders & Badge count for delivered unpaid orders
   const pendingPaymentOrders = useMemo(() => {
     if (!canManagePayments) return []
     return orders
-      .filter((order) => order.paymentStatus === 'pending' && order.status !== 'cancelled')
+      .filter((order) => order.paymentStatus === 'pending' && order.status === 'delivered')
       .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
   }, [orders, canManagePayments])
   const pendingPaymentCount = pendingPaymentOrders.length
@@ -809,19 +809,22 @@ export function CajaView({
           </button>
         </div>
 
-        {pendingPaymentCount > 0 ? (
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-2 text-xs font-extrabold tracking-wider hover:bg-rose-100 transition shadow-sm animate-pulse"
-            onClick={() => {
-              setViewMode('orders_list')
-              setWhatsappSubFilter('pending')
-            }}
-          >
-            <DollarSign size={14} />
-            <span>COBROS PENDIENTES ({pendingPaymentCount})</span>
-          </button>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          {controlsContent}
+          {pendingPaymentCount > 0 ? (
+            <button
+              type="button"
+              className="flex items-center gap-2 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-2 text-xs font-extrabold tracking-wider hover:bg-rose-100 transition shadow-sm animate-pulse"
+              onClick={() => {
+                setViewMode('orders_list')
+                setWhatsappSubFilter('pending')
+              }}
+            >
+              <DollarSign size={14} />
+              <span>COBROS PENDIENTES ({pendingPaymentCount})</span>
+            </button>
+          ) : null}
+        </div>
 
         {/* Fallback rendering of bot/delay controls in desktop */}
         {!portalElement && (
