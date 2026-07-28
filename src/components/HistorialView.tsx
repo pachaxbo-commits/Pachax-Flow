@@ -199,9 +199,14 @@ export function HistorialView({
           nameLower.includes('burger') ||
           nameLower.includes('hamburguesa') ||
           nameLower.startsWith('bbq ')
+        const isBreadSandwich = nameLower.includes('sandwich')
+
+        if (isBreadSandwich && !isBurger) {
+          panes += qty
+        }
 
         if (isBurger) {
-          panes += 2 * qty
+          panes += qty
 
           let basePatties = 1
           if (nameLower.includes('doble') || nameLower.includes('double')) {
