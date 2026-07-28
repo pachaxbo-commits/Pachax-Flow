@@ -2493,6 +2493,9 @@ export function CajaView({
       ) : null}
 
       <style>{`
+        #print-section {
+          display: none;
+        }
         @media print {
           @page {
             size: 80mm auto;
@@ -2500,6 +2503,9 @@ export function CajaView({
           }
           body * {
             visibility: hidden;
+          }
+          #print-section {
+            display: block !important;
           }
           #print-section, #print-section * {
             visibility: visible;
@@ -2529,7 +2535,7 @@ export function CajaView({
 
       {/* Recibo termico dual (Cliente + Cocina) */}
       {printedOrder ? (
-        <div id="print-section" className="hidden print:block text-black font-mono text-[10px] p-1 leading-normal bg-white w-[76mm]">
+        <div id="print-section" className="text-black font-mono text-[10px] p-1 leading-normal bg-white w-[76mm]">
           {/* Ticket de Cliente */}
           <div className="print-page w-full flex flex-col items-center">
             <div className="text-center font-bold text-xl tracking-wider mb-2">{printedOrder.displayNumber}</div>
