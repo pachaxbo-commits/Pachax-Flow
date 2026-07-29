@@ -130,6 +130,14 @@ export class FirestoreOrderRepository {
   private lastSnapshotFromCache = true
   private unsubscribes: Unsubscribe[] = []
   private readonly daysOrders = new Map<string, Order[]>()
+  // El contador de "hoy" tiene que venir del documento del dia, no adivinarse. Antes se calculaba
+  // como el maximo de sequence entre los pedidos visibles localmente: si se borraba el pedido con
+  // el numero mas alto del dia (una accion normal de caja), el contador local bajaba pero
+  // Firestore nunca olvida el numero real ya usado, y CUALQUIER pedido nuevo quedaba rechazado
+  // para siempre ese dia con "Missing or insufficient permissions" - sin relacion con el tipo de
+  // pedido, solo con haber borrado algo antes.
+  private todaySequenceFromDayDoc: number | null = null
+  private lastHasPendingWrites = false
 
   constructor() {
     window.addEventListener('online', this.handleNetworkChange)
@@ -486,6 +494,17 @@ export class FirestoreOrderRepository {
         })
       }
 
+      const todayDocRef = doc(firebase.db, 'restaurants', firebase.restaurantId, 'days', this.todayKey)
+      const unsubscribeTodayDoc = onSnapshot(
+        todayDocRef,
+        (docSnapshot) => {
+          this.todaySequenceFromDayDoc = docSnapshot.exists() ? Number(docSnapshot.data()?.sequence ?? 0) : 0
+          this.mergeAndEmit(this.lastHasPendingWrites)
+        },
+        (error) => this.handleSnapshotError(error),
+      )
+      this.unsubscribes.push(unsubscribeTodayDoc)
+
       dayKeysWithFilter.forEach(({ dayKey, onlyPending }) => {
         const ordersRef = collection(firebase.db, 'restaurants', firebase.restaurantId, 'days', dayKey, 'orders')
         let ordersQuery
@@ -565,10 +584,15 @@ export class FirestoreOrderRepository {
 
     const todayOrders = this.daysOrders.get(this.todayKey) || []
     const highestTodaySequence = todayOrders.reduce((max, order) => Math.max(max, order.sequence), 0)
+    // El campo del documento manda; el maximo local solo cubre el instante antes de que ese
+    // listener cargue por primera vez. Math.max evita que el contador retroceda si llegaran
+    // desordenados.
+    const sequence = Math.max(highestTodaySequence, this.todaySequenceFromDayDoc ?? 0)
 
+    this.lastHasPendingWrites = hasPendingWrites
     this.state = {
       orders: allOrders,
-      sequence: highestTodaySequence,
+      sequence,
       lastUpdatedAt: Date.now(),
     }
 
