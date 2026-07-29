@@ -11,7 +11,7 @@ import {
   Timestamp,
   updateDoc,
   where,
-  writeBatch,
+  runTransaction,
   type DocumentData,
   type FirestoreError,
   type QuerySnapshot,
@@ -193,30 +193,42 @@ export class FirestoreOrderRepository {
       const ordersRef = collection(dayRef, 'orders')
       const orderRef = doc(ordersRef)
 
-      const nextSequence = this.state.sequence + 1
-      const displayNumber = `#${String(nextSequence).padStart(3, '0')}`
+      // El numero de pedido se lee del documento del dia DENTRO de una transaccion, no del estado
+      // local. Antes se elegia entre crear y actualizar ese documento segun si el contador local
+      // era 0, y eso rompia de dos formas:
+      //   - Si el documento del dia ya existia pero el contador local decia 0 (por ejemplo porque
+      //     se borro el pedido con el numero mas alto), se tomaba la rama de CREAR: eso reescribe
+      //     createdAt, y isValidDayUpdate exige que createdAt no cambie -> Firestore rechazaba con
+      //     "Missing or insufficient permissions" cualquier pedido, de cualquier tipo, el resto
+      //     del dia.
+      //   - Dos cajas pidiendo a la vez calculaban el mismo numero y una de las dos fallaba.
+      // La transaccion resuelve las dos: lee el numero real y decide crear o actualizar segun si
+      // el documento existe de verdad. Es el mismo enfoque que ya usaba el bot, que nunca fallo.
+      const displayNumber = await runTransaction(firebase.db, async (transaction) => {
+        const daySnapshot = await transaction.get(dayRef)
+        const dayExists = daySnapshot.exists()
+        const nextSequence = dayExists ? Number(daySnapshot.data()?.sequence ?? 0) + 1 : 1
+        const nextDisplayNumber = `#${String(nextSequence).padStart(3, '0')}`
 
-      const batch = writeBatch(firebase.db)
+        if (dayExists) {
+          transaction.update(dayRef, {
+            sequence: nextSequence,
+            updatedAt: serverTimestamp(),
+          })
+        } else {
+          transaction.set(dayRef, {
+            dayKey: this.todayKey,
+            restaurantId: firebase.restaurantId,
+            sequence: 1,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          })
+        }
 
-      if (this.state.sequence === 0) {
-        batch.set(dayRef, {
-          dayKey: this.todayKey,
-          restaurantId: firebase.restaurantId,
-          sequence: 1,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        })
-      } else {
-        batch.update(dayRef, {
-          sequence: nextSequence,
-          updatedAt: serverTimestamp(),
-        })
-      }
-
-      batch.set(orderRef, {
+        transaction.set(orderRef, {
         id: orderRef.id,
         sequence: nextSequence,
-        displayNumber,
+        displayNumber: nextDisplayNumber,
         createdAt: serverTimestamp(),
         status: 'pending',
         items: order.items,
@@ -235,9 +247,10 @@ export class FirestoreOrderRepository {
         forceWhatsappDispatchNotice: order.forceWhatsappDispatchNotice ?? false,
         createdBy: order.createdBy ?? '',
         updatedAt: serverTimestamp(),
-      })
+        })
 
-      await batch.commit()
+        return nextDisplayNumber
+      })
 
       this.pendingOperations = Math.max(0, this.pendingOperations - 1)
       this.refreshStatus('Pedido sincronizado en tiempo real.')
