@@ -1083,8 +1083,21 @@ export function CajaView({
                               }`}>
                                 {order.status === 'cancelled' ? 'Anulado' : 'Entregado'}
                               </span>
-                              <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                Pagado
+                              {/* Esta etiqueta decia "Pagado" fijo, sin mirar el estado real: un
+                                  pedido entregado pero sin cobrar aparecia como pagado aca al
+                                  mismo tiempo que figuraba en "Cobros pendientes". */}
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                order.paymentStatus === 'paid'
+                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                  : order.paymentStatus === 'gift'
+                                    ? 'bg-purple-50 text-purple-800 border border-purple-200'
+                                    : 'bg-rose-50 text-rose-800 border border-rose-200'
+                              }`}>
+                                {order.paymentStatus === 'paid'
+                                  ? 'Pagado'
+                                  : order.paymentStatus === 'gift'
+                                    ? 'Regalo'
+                                    : 'Pendiente de pago'}
                               </span>
                             </div>
                           </div>

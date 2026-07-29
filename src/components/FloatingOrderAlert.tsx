@@ -12,7 +12,7 @@ export function FloatingOrderAlert({
   onConfirmOrder: (orderId: string, estimatedDelay: number) => Promise<void>
 }) {
   const [minimized, setMinimized] = useState(false)
-  const [selectedDelay, setSelectedDelay] = useState(15)
+  const [selectedDelay, setSelectedDelay] = useState(10)
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null)
 
   const pendingOrders = orders.filter(
