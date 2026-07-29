@@ -12,10 +12,13 @@ service cloud.firestore {
 
     function isValidFulfillment(data) {
       return (
+        // La direccion ya NO es obligatoria en delivery: muchas veces el cliente manda la
+        // ubicacion por WhatsApp y quien carga el pedido en caja no la tiene en ese momento.
+        // Exigirla hacia que Firestore rechazara el pedido entero con "Missing or insufficient
+        // permissions", un mensaje que no le dice nada a quien esta atendiendo.
         (data.fulfillmentType != 'delivery' || (
           'customerName' in data && isValidString(data.customerName) &&
-          'customerPhone' in data && isValidString(data.customerPhone) &&
-          'deliveryAddress' in data && isValidString(data.deliveryAddress)
+          'customerPhone' in data && isValidString(data.customerPhone)
         ))
       ) && (
         (data.orderSource != 'whatsapp' || (
