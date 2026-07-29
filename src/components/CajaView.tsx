@@ -11,6 +11,7 @@ import {
   Store,
   Utensils,
   ShoppingBag,
+  Truck,
   Coins,
   QrCode,
   Shuffle,
@@ -227,7 +228,12 @@ export function CajaView({
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Checkout Payment State
-  const [paymentStatus, setPaymentStatus] = useState<'paid' | 'pending' | 'gift'>('paid')
+  // Un pedido de WhatsApp arranca PENDIENTE DE PAGO y cae en "Cobros pendientes"; recien pasa a
+  // pagado cuando alguien lo cobra de verdad. El de caja se cobra en el momento, asi que ese si
+  // arranca en pagado.
+  const [paymentStatus, setPaymentStatus] = useState<'paid' | 'pending' | 'gift'>(
+    userRole === 'pedidos' ? 'pending' : 'paid',
+  )
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>('cash')
   const [portalElement, setPortalElement] = useState<HTMLElement | null>(null)
   const [expectedPaymentMethod, setExpectedPaymentMethod] = useState<PaymentMethod | null>(null)
@@ -421,10 +427,9 @@ export function CajaView({
             ? cashAmount > 0 && qrAmount > 0
             : false
 
-  const isDeliveryInfoValid =
-    fulfillmentType === 'delivery'
-      ? deliveryAddress.trim() !== ''
-      : true
+  // La direccion del delivery es opcional: muchas veces el cliente manda la ubicacion por
+  // WhatsApp y quien carga el pedido a mano no la tiene a mano en ese momento.
+  const isDeliveryInfoValid = true
 
   const buildPaymentSummary = (): PaymentSummary => ({
     method: paymentMethod || 'cash',
@@ -473,7 +478,7 @@ export function CajaView({
   // Alerta sonora continua para pedidos de whatsapp pendientes (tipo yango)
   useEffect(() => {
     const pendingWhatsappOrders = orders.filter(
-      (order) => order.orderSource === 'whatsapp' && order.status === 'pending'
+      (order) => order.orderSource === 'whatsapp' && order.status === 'pending' && !order.manualEntry
     )
 
     if (pendingWhatsappOrders.length === 0) {
@@ -696,7 +701,7 @@ export function CajaView({
     setCustomerPhone('')
     setDeliveryAddress('')
     setTableInfo('')
-    setPaymentStatus('paid')
+    setPaymentStatus(userRole === 'pedidos' ? 'pending' : 'paid')
     setPaymentMethod('cash')
     setExpectedPaymentMethod(null)
     setCashReceivedInput('')
@@ -1843,6 +1848,7 @@ export function CajaView({
                             onClick={() => {
                               setOrderSource(option.id as 'local' | 'whatsapp')
                               setFulfillmentType(option.id === 'local' ? 'table' : 'pickup')
+                              setPaymentStatus(option.id === 'whatsapp' ? 'pending' : 'paid')
                             }}
                           >
                             <Icon size={13} />
@@ -1862,6 +1868,9 @@ export function CajaView({
                       const options: Array<{ id: FulfillmentType; label: string; icon: typeof Utensils; disabled?: boolean }> = [
                         { id: 'table', label: 'Mesa', icon: Utensils, disabled: userRole === 'pedidos' || orderSource === 'whatsapp' },
                         { id: 'pickup', label: 'Retiro', icon: ShoppingBag },
+                        // Faltaba: un pedido de WhatsApp cargado a mano (bot apagado o corrigiendo
+                        // algo) solo se podia guardar como retiro, aunque fuera para envio.
+                        { id: 'delivery', label: 'Delivery', icon: Truck },
                       ]
                       return options.map((option) => {
                         if (option.disabled) return null
@@ -1870,6 +1879,7 @@ export function CajaView({
                         let activeStyles = 'border-ink bg-ink text-white shadow-sm'
                         if (option.id === 'table') activeStyles = 'border-[#6366f1] bg-[#6366f1] text-white shadow-sm'
                         else if (option.id === 'pickup') activeStyles = 'border-[#d97706] bg-[#d97706] text-white shadow-sm'
+                        else if (option.id === 'delivery') activeStyles = 'border-[#0ea5e9] bg-[#0ea5e9] text-white shadow-sm'
                         return (
                           <button
                             key={option.id}
@@ -1916,14 +1926,11 @@ export function CajaView({
                   {fulfillmentType === 'delivery' ? (
                     <>
                       <textarea
-                        className={`w-full min-h-[42px] rounded-[0.7rem] border bg-canvas/35 px-3 py-1.5 text-xs text-ink outline-none transition focus:border-accent ${fulfillmentType === 'delivery' && deliveryAddress.trim() === '' ? 'border-red-300 focus:border-red-500' : 'border-line'}`}
-                        placeholder="Direccion completa de entrega"
+                        className="w-full min-h-[42px] rounded-[0.7rem] border border-line bg-canvas/35 px-3 py-1.5 text-xs text-ink outline-none transition focus:border-accent"
+                        placeholder="Direccion o link de ubicacion (opcional)"
                         value={deliveryAddress}
                         onChange={(e) => setDeliveryAddress(e.target.value)}
                       />
-                      {deliveryAddress.trim() === '' ? (
-                        <span className="text-[9px] text-red-500 font-bold block px-1">Direccion es obligatoria</span>
-                      ) : null}
                     </>
                   ) : null}
                 </div>
@@ -2114,6 +2121,9 @@ export function CajaView({
                       customerPhone: customerPhone.trim(),
                       deliveryAddress: deliveryAddress.trim(),
                       createdBy: userId,
+                      // Cargado a mano desde caja: no debe sonar la alerta ni saltar la
+                      // notificacion, que son para avisar de los pedidos que entran solos.
+                      manualEntry: true,
                     }
 
                     let isSuccess = false
