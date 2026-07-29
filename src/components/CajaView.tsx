@@ -2109,6 +2109,19 @@ export function CajaView({
                   disabled={cartItems.length === 0 || isSubmitting || !isPaymentValid || !isDeliveryInfoValid}
                   onClick={async () => {
                     setIsSubmitting(true)
+                    // Las reglas de Firestore exigen nombre, telefono y direccion NO vacios en los
+                    // pedidos de delivery, y nombre y telefono en los de WhatsApp. Si falta alguno
+                    // rechazan el pedido entero con "Missing or insufficient permissions", que no
+                    // le dice nada a quien lo esta cargando. Como se pidio que la direccion fuera
+                    // opcional, cuando no la escriben se guarda un texto claro en lugar de dejarla
+                    // vacia: el pedido entra igual y quien lo lleva ve que hay que coordinarla.
+                    const necesitaDatosDeContacto = fulfillmentType === 'delivery' || orderSource === 'whatsapp'
+                    const nombreFinal = customerName.trim() || (necesitaDatosDeContacto ? 'Cliente' : '')
+                    const telefonoFinal = customerPhone.trim() || (necesitaDatosDeContacto ? 'Sin telefono' : '')
+                    const direccionFinal =
+                      deliveryAddress.trim() ||
+                      (fulfillmentType === 'delivery' ? 'Sin direccion: coordinar con el cliente' : '')
+
                     const payload = {
                       cartItems,
                       productsById,
@@ -2119,9 +2132,9 @@ export function CajaView({
                       orderSource,
                       fulfillmentType,
                       tableInfo: fulfillmentType === 'table' ? tableInfo.trim() : '',
-                      customerName: customerName.trim(),
-                      customerPhone: customerPhone.trim(),
-                      deliveryAddress: deliveryAddress.trim(),
+                      customerName: nombreFinal,
+                      customerPhone: telefonoFinal,
+                      deliveryAddress: direccionFinal,
                       createdBy: userId,
                     }
 
@@ -2156,9 +2169,9 @@ export function CajaView({
                           orderSource,
                           fulfillmentType,
                           tableInfo: fulfillmentType === 'table' ? tableInfo.trim() : '',
-                          customerName: customerName.trim(),
-                          customerPhone: customerPhone.trim(),
-                          deliveryAddress: deliveryAddress.trim(),
+                          customerName: nombreFinal,
+                          customerPhone: telefonoFinal,
+                          deliveryAddress: direccionFinal,
                         }
 
                         await onUpdateOrder(editingOrderId, updatePayload as any)
@@ -2198,9 +2211,9 @@ export function CajaView({
                           orderSource,
                           fulfillmentType,
                           tableInfo: fulfillmentType === 'table' ? tableInfo.trim() : '',
-                          customerName: customerName.trim(),
-                          customerPhone: customerPhone.trim(),
-                          deliveryAddress: deliveryAddress.trim(),
+                          customerName: nombreFinal,
+                          customerPhone: telefonoFinal,
+                          deliveryAddress: direccionFinal,
                           createdBy: userId,
                         }
                         setPrintedOrder(completedOrderMock as any)
