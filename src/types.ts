@@ -157,8 +157,8 @@ export interface Order {
   deliveryAddress?: string
   createdBy?: string
   dayKey?: string
-  /** Cargado a mano desde caja: no dispara alerta sonora ni notificacion flotante. */
-  manualEntry?: boolean
+  /** Lo escribe el bot al crear el pedido. Si falta, el pedido se cargo a mano desde caja. */
+  whatsappChatId?: string
 }
 
 export interface CreateOrderInput {
@@ -175,8 +175,6 @@ export interface CreateOrderInput {
   customerPhone?: string
   deliveryAddress?: string
   createdBy?: string
-  /** Cargado a mano desde caja (no vino del bot). No dispara alerta ni notificacion. */
-  manualEntry?: boolean
   suppressWhatsappDispatchNotice?: boolean
   forceWhatsappDispatchNotice?: boolean
 }

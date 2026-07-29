@@ -478,7 +478,9 @@ export function CajaView({
   // Alerta sonora continua para pedidos de whatsapp pendientes (tipo yango)
   useEffect(() => {
     const pendingWhatsappOrders = orders.filter(
-      (order) => order.orderSource === 'whatsapp' && order.status === 'pending' && !order.manualEntry
+      // Solo los que entraron solos por el bot: esos traen whatsappChatId. Los cargados a mano
+      // desde caja no lo tienen, y avisar de un pedido que la persona esta escribiendo solo molesta.
+      (order) => order.orderSource === 'whatsapp' && order.status === 'pending' && Boolean(order.whatsappChatId)
     )
 
     if (pendingWhatsappOrders.length === 0) {
@@ -2121,9 +2123,6 @@ export function CajaView({
                       customerPhone: customerPhone.trim(),
                       deliveryAddress: deliveryAddress.trim(),
                       createdBy: userId,
-                      // Cargado a mano desde caja: no debe sonar la alerta ni saltar la
-                      // notificacion, que son para avisar de los pedidos que entran solos.
-                      manualEntry: true,
                     }
 
                     let isSuccess = false

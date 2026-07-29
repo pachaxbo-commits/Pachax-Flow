@@ -103,7 +103,7 @@ function mapDocToOrder(id: string, data: DocumentData): Order {
     customerPhone: data.customerPhone ?? undefined,
     deliveryAddress: data.deliveryAddress ?? undefined,
     createdBy: data.createdBy ?? undefined,
-    manualEntry: Boolean(data.manualEntry),
+    whatsappChatId: data.whatsappChatId ?? undefined,
     suppressWhatsappDispatchNotice: Boolean(data.suppressWhatsappDispatchNotice),
     forceWhatsappDispatchNotice: Boolean(data.forceWhatsappDispatchNotice),
   }
@@ -226,7 +226,6 @@ export class FirestoreOrderRepository {
         suppressWhatsappDispatchNotice: order.suppressWhatsappDispatchNotice ?? false,
         forceWhatsappDispatchNotice: order.forceWhatsappDispatchNotice ?? false,
         createdBy: order.createdBy ?? '',
-        manualEntry: order.manualEntry ?? false,
         updatedAt: serverTimestamp(),
       })
 
