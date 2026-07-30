@@ -1397,11 +1397,14 @@ export function CajaView({
                                 type="button"
                                 className={`flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition ${canManageOrders ? '' : 'hidden'}`}
                                 onClick={async () => {
-                                  if (window.confirm('¿Estas seguro de que deseas anular y eliminar este pedido?')) {
-                                    await onCancelOrder(order.id, userName || 'Caja', 'Anulado por usuario')
+                                  // El boton decia "eliminar" pero solo anulaba: el pedido seguia
+                                  // apareciendo en "Pedidos Finalizados" como anulado, y encima
+                                  // como pagado. Ahora elimina de verdad y no queda rastro.
+                                  if (window.confirm('Estas seguro de que deseas ELIMINAR este pedido? Va a desaparecer del sistema y no se puede deshacer.')) {
+                                    await onDeleteOrder(order.id)
                                   }
                                 }}
-                                title="Eliminar / Anular pedido"
+                                title="Eliminar pedido"
                               >
                                 <Trash2 size={12} />
                               </button>
@@ -1537,11 +1540,14 @@ export function CajaView({
                                 type="button"
                                 className={`flex items-center justify-center p-1.5 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-[10px] font-black transition ${canManageOrders ? '' : 'hidden'}`}
                                 onClick={async () => {
-                                  if (window.confirm('¿Estas seguro de que deseas anular y eliminar este pedido?')) {
-                                    await onCancelOrder(order.id, userName || 'Caja', 'Anulado por usuario')
+                                  // El boton decia "eliminar" pero solo anulaba: el pedido seguia
+                                  // apareciendo en "Pedidos Finalizados" como anulado, y encima
+                                  // como pagado. Ahora elimina de verdad y no queda rastro.
+                                  if (window.confirm('Estas seguro de que deseas ELIMINAR este pedido? Va a desaparecer del sistema y no se puede deshacer.')) {
+                                    await onDeleteOrder(order.id)
                                   }
                                 }}
-                                title="Eliminar / Anular pedido"
+                                title="Eliminar pedido"
                               >
                                 <Trash2 size={12} />
                               </button>

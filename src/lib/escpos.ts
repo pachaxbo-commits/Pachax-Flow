@@ -247,10 +247,10 @@ export function modoImpresion(): ModoImpresion {
   } catch {
     // Sin acceso al almacenamiento se decide por el dispositivo.
   }
-  // Por defecto, la impresion del navegador: es la que esta comprobada que funciona. RawBT se
-  // activa a mano desde el interruptor, para que un problema con esa app no deje al local sin
-  // imprimir.
-  return 'navegador'
+  // En celular y tablet arranca en RawBT: es el unico modo que corta el papel y no muestra el
+  // dialogo del navegador. En PC no existe RawBT, asi que ahi va por navegador. El interruptor
+  // sigue disponible en las dos pantallas por si hay que volver atras en pleno servicio.
+  return esAndroid() ? 'rawbt' : 'navegador'
 }
 
 export function guardarModoImpresion(modo: ModoImpresion) {
