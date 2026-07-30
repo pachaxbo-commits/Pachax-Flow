@@ -194,26 +194,34 @@ export function PrintableTicket({
       if (raiz) raiz.style.display = displayRaiz
       if (ticket.current) ticket.current.style.display = 'none'
       window.removeEventListener('afterprint', restaurar)
-      window.removeEventListener('focus', restaurar)
+      document.removeEventListener('visibilitychange', alCambiarVisibilidad)
       onDone()
     }
 
-    // CUANDO empezar a escuchar el "ya termino" depende del dispositivo, y equivocarse rompe
-    // uno de los dos:
-    //  - Android manda esos avisos APENAS se llama a imprimir, antes de tomar la imagen. Si se
-    //    escuchan de entrada, la app reaparece a tiempo de salir impresa en vez del ticket.
-    //  - La PC los manda cuando el usuario cierra el dialogo. Si se escuchan tarde, el aviso se
-    //    pierde y la pantalla queda trabada mostrando el ticket sin forma de volver.
-    const esperaAvisos = esAndroid() ? 2500 : 0
-
-    const escucharAvisos = () => {
-      window.addEventListener('afterprint', restaurar)
-      window.addEventListener('focus', restaurar)
+    // NO se puede adivinar por tiempo cuando termina la impresion. En Android el usuario abre
+    // la previsualizacion, la mira unos segundos y recien ahi toca imprimir: si la app se
+    // restaura antes, la previsualizacion sale bien (se genero al principio) pero el papel sale
+    // con la pantalla del sistema, porque la impresion real ocurre despues. Eso es exactamente
+    // lo que estaba pasando.
+    //
+    // La señal confiable es la VISIBILIDAD de la pagina: mientras el dialogo de impresion esta
+    // adelante la pagina queda oculta, y vuelve a estar visible recien cuando el usuario
+    // regresa. Ahi, y solo ahi, se restaura.
+    let estuvoOculta = false
+    const alCambiarVisibilidad = () => {
+      if (document.visibilityState === 'hidden') {
+        estuvoOculta = true
+        return
+      }
+      if (estuvoOculta) restaurar()
     }
+    document.addEventListener('visibilitychange', alCambiarVisibilidad)
 
-    let escuchar: number | undefined
-    if (esperaAvisos === 0) escucharAvisos()
-    else escuchar = window.setTimeout(escucharAvisos, esperaAvisos)
+    // En la PC la pagina no se oculta: ahi el aviso bueno es "afterprint", que llega al cerrar
+    // el dialogo. En Android ese aviso llega antes de tiempo, asi que no se usa.
+    if (!esAndroid()) {
+      window.addEventListener('afterprint', restaurar)
+    }
 
     const imprimir = window.setTimeout(() => {
       if (raiz) raiz.style.display = 'none'
@@ -221,17 +229,17 @@ export function PrintableTicket({
       window.print()
     }, 300)
 
-    // Red de seguridad, ahora corta: la pantalla no puede quedarse trabada mas que unos segundos.
-    const respaldo = window.setTimeout(restaurar, 15000)
+    // Respaldo largo, solo para que la app no quede oculta si el usuario nunca vuelve. No debe
+    // dispararse mientras esta mirando la previsualizacion.
+    const respaldo = window.setTimeout(restaurar, 180000)
 
     return () => {
       window.clearTimeout(imprimir)
-      if (escuchar) window.clearTimeout(escuchar)
       window.clearTimeout(respaldo)
       if (raiz) raiz.style.display = displayRaiz
       if (ticket.current) ticket.current.style.display = 'none'
       window.removeEventListener('afterprint', restaurar)
-      window.removeEventListener('focus', restaurar)
+      document.removeEventListener('visibilitychange', alCambiarVisibilidad)
     }
   }, [order, variant, onDone])
 
