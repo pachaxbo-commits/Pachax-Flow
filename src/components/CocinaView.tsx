@@ -1,4 +1,4 @@
-import { BellRing, CheckCheck, ChefHat, Clock3, LoaderCircle } from 'lucide-react'
+import { BellRing, CheckCheck, ChefHat, Clock3, LoaderCircle, Printer } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatTime } from '../lib/format'
 import { playKitchenNotification } from '../lib/sound'
@@ -7,6 +7,7 @@ import { OrderTimer } from './OrderTimer'
 import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
 import { SourceBadge, FulfillmentBadge, PaymentBadge } from './ui/StatusPill'
+import { PrintableTicket } from './OrderTicket'
 
 function emphasizeText(input: string) {
   return input.toUpperCase()
@@ -21,6 +22,11 @@ export function CocinaView({
 }) {
   const [notice, setNotice] = useState<string | null>(null)
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null)
+  const [ticketToPrint, setTicketToPrint] = useState<Order | null>(null)
+  // Pedidos cuyo ticket ya salio, para no repetirlo. Se guarda en el navegador porque si no,
+  // al recargar la pagina la cocina imprimiria de nuevo todos los pedidos del turno.
+  const printedOrderIds = useRef<Set<string>>(new Set())
+  const autoPrintReady = useRef(false)
   const [audioUnlocked, setAudioUnlocked] = useState(false)
   const lastPendingSequence = useRef<number>(0)
   const hideNoticeTimeout = useRef<number | null>(null)
@@ -49,6 +55,47 @@ export function CocinaView({
     }
     void context.close()
   }, [])
+
+  // Impresion automatica de los pedidos de WhatsApp que caja ya confirmo.
+  //
+  // Se imprime al confirmarse (no al llegar) para no gastar papel en pedidos que despues se
+  // cancelan o se corrigen. Los pedidos que carga caja NO entran aca: esos se imprimen a mano
+  // con el boton de cada tarjeta.
+  //
+  // La primera vuelta solo toma nota de lo que ya estaba en pantalla sin imprimirlo, si no al
+  // abrir la tablet a mitad del turno saldrian de golpe todos los tickets del dia.
+  useEffect(() => {
+    const STORAGE_KEY = 'cocina-tickets-impresos'
+
+    if (!autoPrintReady.current) {
+      try {
+        const guardados = window.localStorage.getItem(STORAGE_KEY)
+        if (guardados) printedOrderIds.current = new Set(JSON.parse(guardados) as string[])
+      } catch {
+        printedOrderIds.current = new Set()
+      }
+      orders.forEach((order) => printedOrderIds.current.add(order.id))
+      autoPrintReady.current = true
+      return
+    }
+
+    const pendiente = orders.find(
+      (order) =>
+        order.orderSource === 'whatsapp' &&
+        order.status === 'preparing' &&
+        !printedOrderIds.current.has(order.id),
+    )
+
+    if (!pendiente || ticketToPrint) return
+
+    printedOrderIds.current.add(pendiente.id)
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify([...printedOrderIds.current]))
+    } catch {
+      // Si el navegador no deja guardar, igual se imprime; solo se pierde la memoria al recargar.
+    }
+    setTicketToPrint(pendiente)
+  }, [orders, ticketToPrint])
 
   const handleUnlockAudio = () => {
     playKitchenNotification()
@@ -242,6 +289,7 @@ export function CocinaView({
                         : 'ready_for_dispatch'
 
                   return (
+                    <div className="flex gap-2">
                     <Button
                       fullWidth
                       size="lg"
@@ -265,6 +313,19 @@ export function CocinaView({
                         <>{buttonText}</>
                       )}
                     </Button>
+                    {/* Reimprimir a mano. Es el unico modo de imprimir los pedidos que carga
+                        caja, y sirve para repetir un ticket de WhatsApp si salio mal. */}
+                    <Button
+                      size="lg"
+                      tone="ghost"
+                      title="Imprimir ticket de cocina"
+                      className="py-4 px-4 rounded-2xl min-h-[48px] shrink-0"
+                      disabled={Boolean(ticketToPrint)}
+                      onClick={() => setTicketToPrint(order)}
+                    >
+                      <Printer size={20} />
+                    </Button>
+                    </div>
                   )
                 })()}
               </div>
@@ -279,6 +340,9 @@ export function CocinaView({
           </div>
         ) : null}
       </div>
+
+      {/* Cocina imprime el ticket de preparacion, sin precios. */}
+      <PrintableTicket order={ticketToPrint} variant="kitchen" onDone={() => setTicketToPrint(null)} />
     </section>
   )
 }

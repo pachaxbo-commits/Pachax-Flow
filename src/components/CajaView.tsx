@@ -30,6 +30,7 @@ import type { CartItem, CatalogCategory, PaymentMethod, PaymentSummary, Product,
 import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
 import { StatusPill, SourceBadge, FulfillmentBadge, PaymentBadge } from './ui/StatusPill'
+import { PrintableTicket } from './OrderTicket'
 
 function formatExtrasList(extras: any[]) {
   if (!extras || extras.length === 0) return ''
@@ -289,21 +290,7 @@ export function CajaView({
     setDemandModalDelay(null)
   }
 
-  useEffect(() => {
-    if (printedOrder) {
-      const clearPrintedOrder = () => setPrintedOrder(null)
-      window.addEventListener('afterprint', clearPrintedOrder, { once: true })
-      const timer = setTimeout(() => {
-        window.print()
-      }, 500)
-      const fallbackTimer = setTimeout(clearPrintedOrder, 120000)
-      return () => {
-        clearTimeout(timer)
-        clearTimeout(fallbackTimer)
-        window.removeEventListener('afterprint', clearPrintedOrder)
-      }
-    }
-  }, [printedOrder])
+
 
   useEffect(() => {
     try {
@@ -2527,148 +2514,9 @@ export function CajaView({
         </div>
       ) : null}
 
-      <style>{`
-        #print-section {
-          display: none;
-        }
-        @media print {
-          @page {
-            size: 80mm auto;
-            margin: 0;
-          }
-          body * {
-            visibility: hidden;
-          }
-          #print-section {
-            display: block !important;
-          }
-          #print-section, #print-section * {
-            visibility: visible;
-          }
-          #print-section {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 76mm;
-            padding: 0;
-            margin: 0;
-            background: white;
-            color: black;
-          }
-          .print-page {
-            page-break-after: always;
-            break-after: page;
-            page-break-inside: avoid;
-            break-inside: avoid;
-          }
-          .print-page:last-child {
-            page-break-after: auto;
-            break-after: auto;
-          }
-        }
-      `}</style>
-
-      {/* Recibo termico dual (Cliente + Cocina) */}
-      {printedOrder ? (
-        <div id="print-section" className="text-black font-mono text-[10px] p-1 leading-normal bg-white w-[76mm]">
-          {/* Ticket de Cliente */}
-          <div className="print-page w-full flex flex-col items-center">
-            <div className="text-center font-bold text-xl tracking-wider mb-2">{printedOrder.displayNumber}</div>
-            
-            <div className="border-t border-b border-black border-dashed py-1 w-full text-left space-y-0.5 text-[9px]">
-              <div><b>Fecha:</b> {new Date(printedOrder.createdAt).toLocaleString('es-ES')}</div>
-              <div><b>Cliente:</b> {printedOrder.customerName || 'Cliente General'}</div>
-              <div><b>Entrega:</b> {printedOrder.fulfillmentType === 'table' ? `Mesa: ${printedOrder.tableInfo}` : printedOrder.fulfillmentType === 'pickup' ? 'Retiro en Local' : 'Delivery'}</div>
-            </div>
-            
-            <div className="mt-2 w-full space-y-1.5 text-[9px]">
-              {printedOrder.items.map((item: any, idx: number) => (
-                 <div key={idx} className="w-full">
-                    <div className="flex justify-between font-bold">
-                       <span>{item.quantity}x {item.name}</span>
-                       <span>{formatCurrency(item.lineTotal || (item.price * item.quantity))}</span>
-                    </div>
-                    {item.modifiers.extras.length > 0 && (
-                      <div className="text-[8px] text-gray-600 ml-2">
-                         + Extras: {formatExtrasList(item.modifiers.extras)}
-                      </div>
-                    )}
-                    {item.modifiers.options.length > 0 && (
-                      <div className="text-[8px] text-gray-600 ml-2">
-                         + Opcion: {item.modifiers.options.join(', ')}
-                      </div>
-                    )}
-                    {item.modifiers.note && (
-                      <div className="text-[8px] text-red-700 font-bold ml-2">
-                         Obs: {item.modifiers.note}
-                      </div>
-                    )}
-                 </div>
-              ))}
-            </div>
-            
-            <div className="border-t border-black border-dashed mt-2 pt-1 w-full text-right text-[9px] space-y-0.5">
-               <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span>{formatCurrency(printedOrder.total)}</span>
-               </div>
-               <div className="flex justify-between font-bold text-xs">
-                  <span>TOTAL:</span>
-                  <span>{formatCurrency(printedOrder.total)}</span>
-               </div>
-               <div className="flex justify-between">
-                  <span>Metodo:</span>
-                  <span>{printedOrder.payment?.method === 'qr' ? 'Pago QR' : printedOrder.payment?.method === 'mixed' ? 'Mixto' : 'Efectivo'}</span>
-               </div>
-               <div className="flex justify-between">
-                  <span>Estado:</span>
-                  <span>{printedOrder.paymentStatus === 'paid' ? 'PAGADO' : 'PENDIENTE'}</span>
-               </div>
-            </div>
-            
-            <div className="text-center text-[8px] mt-4 border-t border-black border-dotted pt-1">
-               Muchas gracias por su preferencia!
-            </div>
-          </div>
-
-          {/* Ticket de Cocina */}
-          <div className="print-page w-full flex flex-col items-center">
-            <div className="text-center font-bold text-base bg-black text-white px-2 py-0.5 rounded mb-2">
-              {printedOrder.displayNumber}
-            </div>
-            
-            <div className="border-t border-b border-black border-dashed py-1 w-full text-left space-y-0.5 text-[9px]">
-              <div><b>Fecha:</b> {new Date(printedOrder.createdAt).toLocaleString('es-ES')}</div>
-              <div><b>Cliente:</b> {printedOrder.customerName || 'Cliente General'}</div>
-              <div><b>Entrega:</b> {printedOrder.fulfillmentType === 'table' ? `Mesa: ${printedOrder.tableInfo}` : printedOrder.fulfillmentType === 'pickup' ? 'Retiro en Local' : 'Delivery'}</div>
-            </div>
-            
-            <div className="mt-2 w-full space-y-2 text-[10px]">
-              {printedOrder.items.map((item: any, idx: number) => (
-                 <div key={idx} className="w-full border-b border-black/10 pb-1">
-                    <div className="font-bold text-xs">{item.quantity}x {item.name}</div>
-                    {item.modifiers.extras.length > 0 && (
-                      <div className="text-[9px] text-gray-700 ml-2 font-medium">
-                         Extras: {formatExtrasList(item.modifiers.extras)}
-                      </div>
-                    )}
-                    {item.modifiers.options.length > 0 && (
-                      <div className="text-[9px] text-gray-700 ml-2 font-medium">
-                         Opcion: {item.modifiers.options.join(', ')}
-                      </div>
-                    )}
-                    {item.modifiers.note && (
-                      <div className="text-[9px] text-red-600 font-bold ml-2 border border-red-200 bg-red-50 p-1 mt-0.5 rounded">
-                         OBS: {item.modifiers.note}
-                      </div>
-                    )}
-                 </div>
-              ))}
-            </div>
-            
-          </div>
-        </div>
-      ) : null}
+      {/* Caja imprime SOLO el ticket del cliente. El de cocina lo imprime la tablet de cocina
+          en su propia impresora, asi que aca ya no se manda esa segunda hoja. */}
+      <PrintableTicket order={printedOrder} variant="customer" onDone={() => setPrintedOrder(null)} />
 
       {saveSuccessMessage && (
         <div className="fixed top-5 right-5 z-[9999] flex items-center gap-3 rounded-2xl border border-emerald-300 bg-emerald-600 px-5 py-3.5 text-white shadow-2xl animate-bounce">
