@@ -193,39 +193,47 @@ export function PrintableTicket({
       restaurado = true
       if (raiz) raiz.style.display = displayRaiz
       if (ticket.current) ticket.current.style.display = 'none'
-      window.removeEventListener('afterprint', restaurar)
-      document.removeEventListener('visibilitychange', alCambiarVisibilidad)
+      window.removeEventListener('afterprint', intentarRestaurar)
+      window.removeEventListener('focus', intentarRestaurar)
+      document.removeEventListener('visibilitychange', alVolverAVer)
+      document.removeEventListener('pointerdown', intentarRestaurar, true)
       onDone()
     }
 
-    // NO se puede adivinar por tiempo cuando termina la impresion. En Android el usuario abre
-    // la previsualizacion, la mira unos segundos y recien ahi toca imprimir: si la app se
-    // restaura antes, la previsualizacion sale bien (se genero al principio) pero el papel sale
-    // con la pantalla del sistema, porque la impresion real ocurre despues. Eso es exactamente
-    // lo que estaba pasando.
+    // Cuando termina la impresion NO se puede saber por tiempo: en Android el usuario abre la
+    // previsualizacion, la mira unos segundos y recien ahi imprime. Si la app se restaura antes,
+    // la previsualizacion sale bien (se genero al principio) pero el papel sale con la pantalla
+    // del sistema. Tampoco alcanza con la visibilidad de la pagina: en algunos Android el
+    // dialogo no la marca como oculta, y entonces nunca se restaura y la pantalla queda trabada
+    // mostrando el ticket. Las dos cosas pasaron.
     //
-    // La señal confiable es la VISIBILIDAD de la pagina: mientras el dialogo de impresion esta
-    // adelante la pagina queda oculta, y vuelve a estar visible recien cuando el usuario
-    // regresa. Ahi, y solo ahi, se restaura.
-    let estuvoOculta = false
-    const alCambiarVisibilidad = () => {
-      if (document.visibilityState === 'hidden') {
-        estuvoOculta = true
-        return
-      }
-      if (estuvoOculta) restaurar()
-    }
-    document.addEventListener('visibilitychange', alCambiarVisibilidad)
+    // La señal que si es confiable: el usuario TOCA la pantalla al volver. Mientras esta en el
+    // dialogo de impresion no puede tocar nuestra pagina, asi que ese toque solo puede ocurrir
+    // cuando ya volvio. Se escucha eso, mas la visibilidad y "afterprint" por si alguno llega
+    // primero, con una guarda inicial para descartar los avisos falsos que dispara el propio
+    // print() en Android.
+    const GUARDA_MS = 1200
+    let momentoImpresion = 0
 
-    // En la PC la pagina no se oculta: ahi el aviso bueno es "afterprint", que llega al cerrar
-    // el dialogo. En Android ese aviso llega antes de tiempo, asi que no se usa.
-    if (!esAndroid()) {
-      window.addEventListener('afterprint', restaurar)
+    const puedeRestaurar = () => momentoImpresion > 0 && Date.now() - momentoImpresion > GUARDA_MS
+
+    const intentarRestaurar = () => {
+      if (puedeRestaurar()) restaurar()
     }
+
+    const alVolverAVer = () => {
+      if (document.visibilityState === 'visible') intentarRestaurar()
+    }
+
+    document.addEventListener('visibilitychange', alVolverAVer)
+    document.addEventListener('pointerdown', intentarRestaurar, true)
+    window.addEventListener('afterprint', intentarRestaurar)
+    window.addEventListener('focus', intentarRestaurar)
 
     const imprimir = window.setTimeout(() => {
       if (raiz) raiz.style.display = 'none'
       if (ticket.current) ticket.current.style.display = 'block'
+      momentoImpresion = Date.now()
       window.print()
     }, 300)
 
@@ -238,21 +246,25 @@ export function PrintableTicket({
       window.clearTimeout(respaldo)
       if (raiz) raiz.style.display = displayRaiz
       if (ticket.current) ticket.current.style.display = 'none'
-      window.removeEventListener('afterprint', restaurar)
-      document.removeEventListener('visibilitychange', alCambiarVisibilidad)
+      window.removeEventListener('afterprint', intentarRestaurar)
+      window.removeEventListener('focus', intentarRestaurar)
+      document.removeEventListener('visibilitychange', alVolverAVer)
+      document.removeEventListener('pointerdown', intentarRestaurar, true)
     }
   }, [order, variant, onDone])
 
   if (!order) return null
 
+  // Ancho 70 mm y no 76: en papel de 80 mm el area imprimible real es menor, y los valores
+  // alineados a la derecha (BOB 22, Efectivo, PAGADO) salian cortados en la impresion.
   return createPortal(
     <div
       ref={ticket}
       id="print-ticket"
       className="text-black font-mono text-[10px] leading-normal"
-      style={{ display: 'none', width: '76mm', padding: '2mm', margin: '0 auto', background: '#fff', color: '#000' }}
+      style={{ display: 'none', width: '70mm', padding: '1mm', margin: '0', background: '#fff', color: '#000' }}
     >
-      <style>{'@page { size: 80mm auto; margin: 0; }'}</style>
+      <style>{'@page { size: 80mm auto; margin: 0; } #print-ticket * { max-width: 100%; }'}</style>
       {variant === 'customer' ? <CustomerTicket order={order} /> : <KitchenTicket order={order} />}
     </div>,
     document.body,

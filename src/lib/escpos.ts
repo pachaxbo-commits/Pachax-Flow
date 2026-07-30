@@ -211,9 +211,11 @@ export function ticketCocinaBase64(order: Order) {
  */
 export function enviarARawBt(base64: string) {
   try {
-    // El base64 se codifica para la URL: contiene "+", "/" y "=", y el "+" en una direccion se
-    // interpreta como espacio, lo que llegaria a RawBT con los datos alterados.
-    const enlace = `intent:base64,${encodeURIComponent(base64)}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`
+    // El base64 va TAL CUAL, sin codificar. Se probo codificandolo (por miedo a que el "+" se
+    // leyera como espacio) y RawBT respondio "Wrong base64": la direccion de un intent no se
+    // interpreta como formulario, asi que el "+" viaja bien y codificarlo es justamente lo que
+    // rompe los datos. Es la misma forma que usa la libreria escpos-php.
+    const enlace = `intent:base64,${base64}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`
 
     // Se dispara desde un marco oculto en vez de cambiar la direccion de la pagina. Navegando
     // directo, el navegador descarga la pagina para abrir la app y al volver la recarga: por eso
