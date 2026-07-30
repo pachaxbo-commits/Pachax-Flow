@@ -4,6 +4,7 @@ import { formatCurrency } from '../lib/format'
 import { createRestaurantMember, deleteRestaurantMemberAccess, listRestaurantMembers, sendRestaurantMemberPasswordReset, updateRestaurantMember } from '../lib/firebase'
 import type { CatalogCategory, CatalogCategoryInput, CatalogProductInput, Product, ProductExtra, ProductOption, RestaurantMember, UserRole } from '../types'
 import { ConfirmDialog } from './ui/ConfirmDialog'
+import { ResetSalesPanel } from './ResetSalesPanel'
 import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
 
@@ -329,6 +330,10 @@ export function AdminView({
           </Panel>
         </div>
       )}
+
+      {/* Borrado de ventas: va en la pestaña de usuarios, que es la de administracion pura y
+          solo la ve el admin. */}
+      {activeAdminTab === 'users' && <ResetSalesPanel />}
 
       {/* PESTAÑA: PRODUCTOS */}
       {activeAdminTab === 'products' && (

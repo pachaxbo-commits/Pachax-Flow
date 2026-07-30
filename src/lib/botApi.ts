@@ -161,3 +161,29 @@ export async function notifyBotOrderConfirmed(orderId: string, delayMinutes: num
     throw new Error(message || 'El bot no pudo avisar al cliente.')
   }
 }
+
+export type SalesResetStatus = {
+  usados: number
+  restantes: number
+  maximo: number
+}
+
+/** Cuantos borrados de ventas quedan disponibles. */
+export async function fetchSalesResetStatus(): Promise<SalesResetStatus> {
+  const response = await fetch(`${botApiUrl}/admin/reset-sales/status`, {
+    headers: { 'x-bot-token': botAdminToken },
+  })
+  if (!response.ok) throw new Error('No se pudo consultar el estado del borrado de ventas.')
+  return response.json()
+}
+
+/** Borra todo el historial de ventas. Lo hace el bot porque el navegador no tiene permiso. */
+export async function resetSalesData(): Promise<{ pedidosBorrados: number; diasBorrados: number; restantes: number }> {
+  const response = await fetch(`${botApiUrl}/admin/reset-sales`, {
+    method: 'POST',
+    headers: { 'x-bot-token': botAdminToken },
+  })
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(body?.error || 'No se pudo borrar el historial de ventas.')
+  return body
+}
