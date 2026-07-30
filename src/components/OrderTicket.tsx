@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { formatCurrency } from '../lib/format'
 import type { Order } from '../types'
@@ -155,70 +155,71 @@ export function PrintableTicket({
   variant: 'customer' | 'kitchen'
   onDone: () => void
 }) {
+  const ticket = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (!order) return
 
-    const finish = () => onDone()
-    window.addEventListener('afterprint', finish, { once: true })
-    // Un respiro para que el ticket este pintado antes de abrir el dialogo.
-    const printTimer = window.setTimeout(() => window.print(), 400)
-    const fallbackTimer = window.setTimeout(finish, 120000)
+    // Chrome de Android IGNORA las reglas de "@media print". Ya fallaron tres intentos que
+    // dependian de eso: ocultar con visibility (salieron hojas en blanco), imprimir dentro de
+    // un iframe (imprimio la pagina principal) y ocultar con "display:none" por CSS de
+    // impresion (volvio a imprimir la pantalla entera).
+    //
+    // Asi que no le pedimos nada al navegador: escondemos la app y mostramos el ticket con
+    // estilo en linea, justo antes de imprimir. En ese momento la pagina contiene UNICAMENTE
+    // el ticket, asi que no puede salir otra cosa, interprete lo que interprete cada Chrome.
+    const raiz = document.getElementById('root')
+    const displayRaiz = raiz?.style.display ?? ''
+    let restaurado = false
+
+    const restaurar = () => {
+      if (restaurado) return
+      restaurado = true
+      if (raiz) raiz.style.display = displayRaiz
+      if (ticket.current) ticket.current.style.display = 'none'
+      window.removeEventListener('afterprint', restaurar)
+      window.removeEventListener('focus', restaurar)
+      onDone()
+    }
+
+    // "afterprint" es lo esperable, pero en Android no siempre llega; cuando el usuario vuelve
+    // del dialogo la ventana recupera el foco, y eso si es confiable.
+    window.addEventListener('afterprint', restaurar)
+    window.addEventListener('focus', restaurar)
+
+    const imprimir = window.setTimeout(() => {
+      if (raiz) raiz.style.display = 'none'
+      if (ticket.current) ticket.current.style.display = 'block'
+      window.print()
+    }, 300)
+
+    // Red de seguridad: si no llega ninguno de los dos avisos, la app no puede quedarse oculta.
+    const respaldo = window.setTimeout(restaurar, 60000)
 
     return () => {
-      window.clearTimeout(printTimer)
-      window.clearTimeout(fallbackTimer)
-      window.removeEventListener('afterprint', finish)
+      window.clearTimeout(imprimir)
+      window.clearTimeout(respaldo)
+      if (raiz) raiz.style.display = displayRaiz
+      if (ticket.current) ticket.current.style.display = 'none'
+      window.removeEventListener('afterprint', restaurar)
+      window.removeEventListener('focus', restaurar)
     }
   }, [order, onDone])
 
   if (!order) return null
 
-  // El ticket se monta FUERA de la app, como hijo directo de <body>.
-  //
-  // Historial de lo que no funciono, para no repetirlo:
-  //  1. Ocultar todo con "visibility: hidden" y dejar visible solo el ticket: en la PC andaba,
-  //     en la tablet Android salian DOS HOJAS EN BLANCO.
-  //  2. Imprimir el ticket dentro de un documento aislado (iframe): Chrome de Android ignora
-  //     ese documento y manda a imprimir la pagina principal - salio impresa la pantalla
-  //     entera de la app en vez de la comanda.
-  // Lo que si funciona en las dos: sacar el ticket de la app y esconder el resto con
-  // "display: none". Al no quedar nada mas en la pagina, no hay nada que el navegador pueda
-  // imprimir de mas, y no depende de trucos que cada Chrome interpreta distinto.
+  // Va fuera de la app, colgando de <body>, para que al esconder #root quede solo el ticket.
+  // Arranca oculto y se muestra recien en el momento de imprimir.
   return createPortal(
-    <>
-      <style>{`
-        #print-ticket { display: none; }
-        @media print {
-          @page { size: 80mm auto; margin: 0; }
-          html, body {
-            margin: 0 !important;
-            padding: 0 !important;
-            background: #fff !important;
-            width: 76mm !important;
-          }
-          /* Todo lo que cuelga de <body> se va, menos el ticket: eso incluye la app entera
-             (#root) y cualquier modal o cartel montado por fuera. */
-          body > *:not(#print-ticket) { display: none !important; }
-          #print-ticket {
-            display: block !important;
-            position: static !important;
-            width: 76mm !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: #fff !important;
-            color: #000 !important;
-          }
-          .print-page {
-            page-break-inside: avoid;
-            break-inside: avoid;
-          }
-        }
-      `}</style>
-
-      <div id="print-ticket" className="text-black font-mono text-[10px] p-1 leading-normal bg-white w-[76mm]">
-        {variant === 'customer' ? <CustomerTicket order={order} /> : <KitchenTicket order={order} />}
-      </div>
-    </>,
+    <div
+      ref={ticket}
+      id="print-ticket"
+      className="text-black font-mono text-[10px] leading-normal"
+      style={{ display: 'none', width: '76mm', padding: '2mm', margin: '0 auto', background: '#fff', color: '#000' }}
+    >
+      <style>{'@page { size: 80mm auto; margin: 0; }'}</style>
+      {variant === 'customer' ? <CustomerTicket order={order} /> : <KitchenTicket order={order} />}
+    </div>,
     document.body,
   )
 }
