@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { formatCurrency } from '../lib/format'
 import type { Order } from '../types'
-import { enviarARawBt, esAndroid, modoImpresion, ticketClienteBase64, ticketCocinaBase64 } from '../lib/escpos'
+import { enviarARawBt, modoImpresion, ticketClienteBase64, ticketCocinaBase64 } from '../lib/escpos'
 
 /**
  * Ticket termico compartido por Caja y Cocina.
