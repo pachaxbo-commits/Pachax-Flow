@@ -211,7 +211,18 @@ export function ticketCocinaBase64(order: Order) {
  */
 export function enviarARawBt(base64: string) {
   try {
-    window.location.href = `intent:base64,${base64}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`
+    // El base64 se codifica para la URL: contiene "+", "/" y "=", y el "+" en una direccion se
+    // interpreta como espacio, lo que llegaria a RawBT con los datos alterados.
+    const enlace = `intent:base64,${encodeURIComponent(base64)}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`
+
+    // Se dispara desde un marco oculto en vez de cambiar la direccion de la pagina. Navegando
+    // directo, el navegador descarga la pagina para abrir la app y al volver la recarga: por eso
+    // el sistema insistia en abrir RawBT una y otra vez.
+    const marco = document.createElement('iframe')
+    marco.style.display = 'none'
+    marco.src = enlace
+    document.body.appendChild(marco)
+    window.setTimeout(() => marco.remove(), 3000)
     return true
   } catch {
     return false
@@ -234,7 +245,10 @@ export function modoImpresion(): ModoImpresion {
   } catch {
     // Sin acceso al almacenamiento se decide por el dispositivo.
   }
-  return esAndroid() ? 'rawbt' : 'navegador'
+  // Por defecto, la impresion del navegador: es la que esta comprobada que funciona. RawBT se
+  // activa a mano desde el interruptor, para que un problema con esa app no deje al local sin
+  // imprimir.
+  return 'navegador'
 }
 
 export function guardarModoImpresion(modo: ModoImpresion) {

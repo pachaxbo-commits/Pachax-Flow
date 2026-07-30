@@ -198,19 +198,25 @@ export function PrintableTicket({
       onDone()
     }
 
+    // "afterprint" se escucha DESDE YA: en la PC el dialogo se cierra rapido y si el aviso
+    // llega antes de que lo escuchemos, la pantalla se queda trabada mostrando el ticket sin
+    // forma de volver atras. Eso paso.
+    window.addEventListener('afterprint', restaurar)
+
     const imprimir = window.setTimeout(() => {
       if (raiz) raiz.style.display = 'none'
       if (ticket.current) ticket.current.style.display = 'block'
       window.print()
     }, 300)
 
-    // Recien cuando el dialogo ya esta arriba escuchamos el "ya termino".
+    // El foco, en cambio, se escucha mas tarde: en Android vuelve APENAS se llama a imprimir, y
+    // si lo tomamos como "ya termino" la app reaparece antes de que el sistema tome la imagen.
     const escuchar = window.setTimeout(() => {
-      window.addEventListener('afterprint', restaurar)
       window.addEventListener('focus', restaurar)
     }, 2500)
 
-    const respaldo = window.setTimeout(restaurar, 60000)
+    // Red de seguridad, ahora corta: la pantalla no puede quedarse trabada mas que unos segundos.
+    const respaldo = window.setTimeout(restaurar, 15000)
 
     return () => {
       window.clearTimeout(imprimir)
