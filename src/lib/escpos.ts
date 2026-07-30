@@ -219,7 +219,7 @@ export function ticketPruebaBase64() {
   t.separador()
   t.alinear('izquierda')
   t.linea(`Ancho:   ${settings.paperWidth}`)
-  t.linea(`Modo:    ${settings.printMode}`)
+  t.linea(`Modo:    ${settings.connectionType}`)
   t.linea(`Gaveta:  ${settings.kickCashDrawer ? 'Habilitada' : 'Deshabilitada'}`)
   t.linea(`Fecha:   ${new Date().toLocaleString('es-BO')}`)
   t.separador()
@@ -247,13 +247,13 @@ export function esAndroid() {
   return /android/i.test(navigator.userAgent)
 }
 
-export type ModoImpresion = 'rawbt' | 'browser' | 'navegador'
+export type ModoImpresion = 'rawbt' | 'browser' | 'navegador' | 'bluetooth' | 'wifi'
 
 export function modoImpresion(): ModoImpresion {
-  return getPrinterSettings().printMode
+  return getPrinterSettings().connectionType
 }
 
 export function guardarModoImpresion(modo: ModoImpresion) {
   const current = getPrinterSettings()
-  savePrinterSettings({ ...current, printMode: modo === 'navegador' ? 'browser' : modo })
+  savePrinterSettings({ ...current, connectionType: modo === 'navegador' ? 'browser' : modo })
 }
