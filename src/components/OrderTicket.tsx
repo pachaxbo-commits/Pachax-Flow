@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { formatCurrency } from '../lib/format'
 import type { Order } from '../types'
 
@@ -154,104 +155,70 @@ export function PrintableTicket({
   variant: 'customer' | 'kitchen'
   onDone: () => void
 }) {
-  const contenedor = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     if (!order) return
 
-    let cancelado = false
-    let limpiar: (() => void) | null = null
-
-    // Se imprime dentro de un documento aparte (iframe) en vez de ocultar el resto de la pagina.
-    // El metodo viejo tapaba todo con "visibility: hidden" y mostraba solo el ticket: en la PC
-    // andaba, pero Chrome de Android lo resuelve distinto y salian DOS HOJAS EN BLANCO. Aislando
-    // el ticket en su propio documento no hay nada que ocultar, asi que imprime igual en
-    // cualquier dispositivo.
-    const imprimir = () => {
-      const origen = contenedor.current
-      if (!origen || cancelado) return
-
-      const marco = document.createElement('iframe')
-      marco.setAttribute('aria-hidden', 'true')
-      marco.style.position = 'fixed'
-      marco.style.right = '0'
-      marco.style.bottom = '0'
-      marco.style.width = '0'
-      marco.style.height = '0'
-      marco.style.border = '0'
-      document.body.appendChild(marco)
-
-      const doc = marco.contentDocument
-      const ventana = marco.contentWindow
-      if (!doc || !ventana) {
-        marco.remove()
-        window.print()
-        onDone()
-        return
-      }
-
-      // Los estilos de la app (Tailwind) se copian al documento nuevo; si no, el ticket saldria
-      // sin formato.
-      const estilos = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-        .map((nodo) => nodo.outerHTML)
-        .join('')
-
-      doc.open()
-      doc.write(
-        '<!doctype html><html><head><meta charset="utf-8">' +
-          estilos +
-          '<style>@page{size:80mm auto;margin:0}' +
-          'html,body{margin:0;padding:0;background:#fff;color:#000;width:76mm}</style>' +
-          '</head><body>' +
-          origen.innerHTML +
-          '</body></html>',
-      )
-      doc.close()
-
-      const lanzar = () => {
-        if (cancelado) return
-        try {
-          ventana.focus()
-          ventana.print()
-        } catch {
-          window.print()
-        }
-        // Se saca el marco despues de imprimir. El retraso le da tiempo al dialogo a tomar el
-        // contenido antes de que desaparezca.
-        window.setTimeout(() => {
-          marco.remove()
-          onDone()
-        }, 1000)
-      }
-
-      // Esperamos a que carguen las hojas de estilo copiadas antes de mandar a imprimir.
-      const alCargar = window.setTimeout(lanzar, 400)
-      limpiar = () => {
-        window.clearTimeout(alCargar)
-        marco.remove()
-      }
-    }
-
-    // Un respiro para que React termine de pintar el ticket antes de copiarlo.
-    const inicio = window.setTimeout(imprimir, 300)
-    const respaldo = window.setTimeout(onDone, 120000)
+    const finish = () => onDone()
+    window.addEventListener('afterprint', finish, { once: true })
+    // Un respiro para que el ticket este pintado antes de abrir el dialogo.
+    const printTimer = window.setTimeout(() => window.print(), 400)
+    const fallbackTimer = window.setTimeout(finish, 120000)
 
     return () => {
-      cancelado = true
-      window.clearTimeout(inicio)
-      window.clearTimeout(respaldo)
-      if (limpiar) limpiar()
+      window.clearTimeout(printTimer)
+      window.clearTimeout(fallbackTimer)
+      window.removeEventListener('afterprint', finish)
     }
   }, [order, onDone])
 
-  // Queda oculto en la pagina: solo sirve para que React arme el ticket y de ahi copiarlo.
-  return (
-    <div ref={contenedor} style={{ display: 'none' }} aria-hidden="true">
-      {order ? (
-        <div className="text-black font-mono text-[10px] p-1 leading-normal bg-white w-[76mm]">
-          {variant === 'customer' ? <CustomerTicket order={order} /> : <KitchenTicket order={order} />}
-        </div>
-      ) : null}
-    </div>
+  if (!order) return null
+
+  // El ticket se monta FUERA de la app, como hijo directo de <body>.
+  //
+  // Historial de lo que no funciono, para no repetirlo:
+  //  1. Ocultar todo con "visibility: hidden" y dejar visible solo el ticket: en la PC andaba,
+  //     en la tablet Android salian DOS HOJAS EN BLANCO.
+  //  2. Imprimir el ticket dentro de un documento aislado (iframe): Chrome de Android ignora
+  //     ese documento y manda a imprimir la pagina principal - salio impresa la pantalla
+  //     entera de la app en vez de la comanda.
+  // Lo que si funciona en las dos: sacar el ticket de la app y esconder el resto con
+  // "display: none". Al no quedar nada mas en la pagina, no hay nada que el navegador pueda
+  // imprimir de mas, y no depende de trucos que cada Chrome interpreta distinto.
+  return createPortal(
+    <>
+      <style>{`
+        #print-ticket { display: none; }
+        @media print {
+          @page { size: 80mm auto; margin: 0; }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #fff !important;
+            width: 76mm !important;
+          }
+          /* Todo lo que cuelga de <body> se va, menos el ticket: eso incluye la app entera
+             (#root) y cualquier modal o cartel montado por fuera. */
+          body > *:not(#print-ticket) { display: none !important; }
+          #print-ticket {
+            display: block !important;
+            position: static !important;
+            width: 76mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #fff !important;
+            color: #000 !important;
+          }
+          .print-page {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+        }
+      `}</style>
+
+      <div id="print-ticket" className="text-black font-mono text-[10px] p-1 leading-normal bg-white w-[76mm]">
+        {variant === 'customer' ? <CustomerTicket order={order} /> : <KitchenTicket order={order} />}
+      </div>
+    </>,
+    document.body,
   )
 }
