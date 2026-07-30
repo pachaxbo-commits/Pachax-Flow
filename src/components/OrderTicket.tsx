@@ -194,8 +194,7 @@ export function PrintableTicket({
       // sin formato.
       const estilos = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
         .map((nodo) => nodo.outerHTML)
-        .join('
-')
+        .join('')
 
       doc.open()
       doc.write(
