@@ -160,14 +160,18 @@ export function PrintableTicket({
   useEffect(() => {
     if (!order) return
 
-    // Chrome de Android IGNORA las reglas de "@media print". Ya fallaron tres intentos que
-    // dependian de eso: ocultar con visibility (salieron hojas en blanco), imprimir dentro de
-    // un iframe (imprimio la pagina principal) y ocultar con "display:none" por CSS de
-    // impresion (volvio a imprimir la pantalla entera).
+    // Chrome de Android IGNORA las reglas de "@media print", asi que no se le pide nada:
+    // se esconde #root y se muestra el ticket con estilo EN LINEA, que es un cambio real del
+    // documento. En ese instante la pagina contiene unicamente el ticket.
     //
-    // Asi que no le pedimos nada al navegador: escondemos la app y mostramos el ticket con
-    // estilo en linea, justo antes de imprimir. En ese momento la pagina contiene UNICAMENTE
-    // el ticket, asi que no puede salir otra cosa, interprete lo que interprete cada Chrome.
+    // Lo que fallo antes y hay que evitar:
+    //   - visibility: hidden          -> hojas en blanco
+    //   - imprimir dentro de un iframe -> imprimia la pagina entera
+    //   - display:none por CSS print   -> imprimia la pagina entera
+    //   - restaurar al recuperar el foco -> en Android el foco vuelve APENAS se llama a
+    //     imprimir, asi que la app reaparecia antes de que el sistema tomara la imagen y
+    //     terminaba imprimiendose la pantalla igual. Por eso los avisos de "ya termino" se
+    //     empiezan a escuchar recien un rato despues de mandar a imprimir.
     const raiz = document.getElementById('root')
     const displayRaiz = raiz?.style.display ?? ''
     let restaurado = false
@@ -182,22 +186,25 @@ export function PrintableTicket({
       onDone()
     }
 
-    // "afterprint" es lo esperable, pero en Android no siempre llega; cuando el usuario vuelve
-    // del dialogo la ventana recupera el foco, y eso si es confiable.
-    window.addEventListener('afterprint', restaurar)
-    window.addEventListener('focus', restaurar)
-
     const imprimir = window.setTimeout(() => {
       if (raiz) raiz.style.display = 'none'
       if (ticket.current) ticket.current.style.display = 'block'
       window.print()
     }, 300)
 
-    // Red de seguridad: si no llega ninguno de los dos avisos, la app no puede quedarse oculta.
+    // Recien despues de que el dialogo esta arriba escuchamos el "ya termino". Antes de eso
+    // los eventos que dispara el propio print() nos harian revertir demasiado pronto.
+    const escuchar = window.setTimeout(() => {
+      window.addEventListener('afterprint', restaurar)
+      window.addEventListener('focus', restaurar)
+    }, 2500)
+
+    // Red de seguridad: la app nunca puede quedarse escondida.
     const respaldo = window.setTimeout(restaurar, 60000)
 
     return () => {
       window.clearTimeout(imprimir)
+      window.clearTimeout(escuchar)
       window.clearTimeout(respaldo)
       if (raiz) raiz.style.display = displayRaiz
       if (ticket.current) ticket.current.style.display = 'none'
