@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { formatCurrency } from '../lib/format'
 import type { Order } from '../types'
 
@@ -154,71 +154,105 @@ export function PrintableTicket({
   variant: 'customer' | 'kitchen'
   onDone: () => void
 }) {
+  const contenedor = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (!order) return
 
-    const finish = () => onDone()
-    window.addEventListener('afterprint', finish, { once: true })
-    // Le damos un respiro al navegador para pintar el ticket antes de abrir el dialogo.
-    const printTimer = window.setTimeout(() => window.print(), 500)
-    // Si el dialogo queda abierto o se cancela sin evento, igual liberamos el estado.
-    const fallbackTimer = window.setTimeout(finish, 120000)
+    let cancelado = false
+    let limpiar: (() => void) | null = null
+
+    // Se imprime dentro de un documento aparte (iframe) en vez de ocultar el resto de la pagina.
+    // El metodo viejo tapaba todo con "visibility: hidden" y mostraba solo el ticket: en la PC
+    // andaba, pero Chrome de Android lo resuelve distinto y salian DOS HOJAS EN BLANCO. Aislando
+    // el ticket en su propio documento no hay nada que ocultar, asi que imprime igual en
+    // cualquier dispositivo.
+    const imprimir = () => {
+      const origen = contenedor.current
+      if (!origen || cancelado) return
+
+      const marco = document.createElement('iframe')
+      marco.setAttribute('aria-hidden', 'true')
+      marco.style.position = 'fixed'
+      marco.style.right = '0'
+      marco.style.bottom = '0'
+      marco.style.width = '0'
+      marco.style.height = '0'
+      marco.style.border = '0'
+      document.body.appendChild(marco)
+
+      const doc = marco.contentDocument
+      const ventana = marco.contentWindow
+      if (!doc || !ventana) {
+        marco.remove()
+        window.print()
+        onDone()
+        return
+      }
+
+      // Los estilos de la app (Tailwind) se copian al documento nuevo; si no, el ticket saldria
+      // sin formato.
+      const estilos = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+        .map((nodo) => nodo.outerHTML)
+        .join('
+')
+
+      doc.open()
+      doc.write(
+        '<!doctype html><html><head><meta charset="utf-8">' +
+          estilos +
+          '<style>@page{size:80mm auto;margin:0}' +
+          'html,body{margin:0;padding:0;background:#fff;color:#000;width:76mm}</style>' +
+          '</head><body>' +
+          origen.innerHTML +
+          '</body></html>',
+      )
+      doc.close()
+
+      const lanzar = () => {
+        if (cancelado) return
+        try {
+          ventana.focus()
+          ventana.print()
+        } catch {
+          window.print()
+        }
+        // Se saca el marco despues de imprimir. El retraso le da tiempo al dialogo a tomar el
+        // contenido antes de que desaparezca.
+        window.setTimeout(() => {
+          marco.remove()
+          onDone()
+        }, 1000)
+      }
+
+      // Esperamos a que carguen las hojas de estilo copiadas antes de mandar a imprimir.
+      const alCargar = window.setTimeout(lanzar, 400)
+      limpiar = () => {
+        window.clearTimeout(alCargar)
+        marco.remove()
+      }
+    }
+
+    // Un respiro para que React termine de pintar el ticket antes de copiarlo.
+    const inicio = window.setTimeout(imprimir, 300)
+    const respaldo = window.setTimeout(onDone, 120000)
 
     return () => {
-      window.clearTimeout(printTimer)
-      window.clearTimeout(fallbackTimer)
-      window.removeEventListener('afterprint', finish)
+      cancelado = true
+      window.clearTimeout(inicio)
+      window.clearTimeout(respaldo)
+      if (limpiar) limpiar()
     }
   }, [order, onDone])
 
+  // Queda oculto en la pagina: solo sirve para que React arme el ticket y de ahi copiarlo.
   return (
-    <>
-      <style>{`
-        #print-section {
-          display: none;
-        }
-        @media print {
-          @page {
-            size: 80mm auto;
-            margin: 0;
-          }
-          body * {
-            visibility: hidden;
-          }
-          #print-section {
-            display: block !important;
-          }
-          #print-section, #print-section * {
-            visibility: visible;
-          }
-          #print-section {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 76mm;
-            padding: 0;
-            margin: 0;
-            background: white;
-            color: black;
-          }
-          .print-page {
-            page-break-after: always;
-            break-after: page;
-            page-break-inside: avoid;
-            break-inside: avoid;
-          }
-          .print-page:last-child {
-            page-break-after: auto;
-            break-after: auto;
-          }
-        }
-      `}</style>
-
+    <div ref={contenedor} style={{ display: 'none' }} aria-hidden="true">
       {order ? (
-        <div id="print-section" className="text-black font-mono text-[10px] p-1 leading-normal bg-white w-[76mm]">
+        <div className="text-black font-mono text-[10px] p-1 leading-normal bg-white w-[76mm]">
           {variant === 'customer' ? <CustomerTicket order={order} /> : <KitchenTicket order={order} />}
         </div>
       ) : null}
-    </>
+    </div>
   )
 }
