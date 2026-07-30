@@ -14,6 +14,7 @@ import {
   type User,
   type Unsubscribe,
 } from 'firebase/auth'
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import {
   collection,
   connectFirestoreEmulator,
@@ -342,4 +343,17 @@ export async function deleteRestaurantMemberAccess(uid: string) {
   if (!context) throw new Error('Firebase no esta configurado.')
 
   await deleteDoc(doc(context.db, 'restaurants', context.restaurantId, 'members', uid))
+}
+
+export async function uploadProductImageToFirebase(file: File, restaurantId: string): Promise<string> {
+  const context = await getFirebaseContext()
+  if (!context) throw new Error('Firebase no esta configurado.')
+
+  const storage = getStorage(context.app)
+  const fileExt = file.name.split('.').pop() || 'jpg'
+  const path = `restaurants/${restaurantId}/products/${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`
+  const fileRef = storageRef(storage, path)
+
+  await uploadBytes(fileRef, file)
+  return getDownloadURL(fileRef)
 }
