@@ -1,14 +1,17 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,500;6..72,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   font-family: Manrope, system-ui, sans-serif;
-  background: #f6efe7;
-  color: #211b17;
+  background-color: #070C1A;
+  color: #F8FAFC;
+  --pachax-primary: #0B132B;
+  --pachax-navy: #1C2541;
+  --pachax-accent: #00F0FF;
 }
 
 * {
@@ -22,10 +25,13 @@ html {
 body {
   margin: 0;
   min-width: 320px;
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.78), transparent 32%),
-    radial-gradient(circle at right, rgba(197, 91, 51, 0.08), transparent 26%),
-    linear-gradient(180deg, #faf5f0 0%, #f3ebe1 100%);
+  background-color: #070C1A;
+  background-image: 
+    radial-gradient(circle at 10% 10%, rgba(0, 240, 255, 0.08), transparent 35%),
+    radial-gradient(circle at 90% 85%, rgba(28, 37, 65, 0.45), transparent 45%),
+    linear-gradient(180deg, #070C1A 0%, #0B132B 100%);
+  background-attachment: fixed;
+  color: #F8FAFC;
 }
 
 #root {
@@ -55,19 +61,48 @@ img {
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgba(125, 111, 100, 0.28);
+  background: rgba(0, 240, 255, 0.25);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 240, 255, 0.45);
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(11, 19, 43, 0.5);
 }
 
 ::selection {
-  background: rgba(197, 91, 51, 0.18);
+  background: rgba(0, 240, 255, 0.3);
+  color: #ffffff;
+}
+
+/* Glassmorphism Utilities */
+.glass-panel {
+  background: rgba(17, 29, 55, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card {
+  background: rgba(28, 37, 65, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cyan-glow {
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.25);
+}
+
+.cyan-border-glow {
+  border-color: rgba(0, 240, 255, 0.5);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
 }

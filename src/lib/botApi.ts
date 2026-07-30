@@ -1,5 +1,5 @@
 export const botApiUrl = (import.meta.env.VITE_BOT_API_URL || 'http://localhost:3010').replace(/\/$/, '')
-export const botAdminToken = import.meta.env.VITE_BOT_ADMIN_TOKEN || 'burgerlab-bot-local-2026-cambia-esto-antes-de-produccion'
+export const botAdminToken = import.meta.env.VITE_BOT_ADMIN_TOKEN || 'pachax-bot-local-2026-cambia-esto-antes-de-produccion'
 
 export type BotHealth = {
   ok: boolean
@@ -38,7 +38,7 @@ export type WhatsappGroup = {
   participants: number
 }
 
-export const BOT_HEALTH_CHANGED_EVENT = 'burgerlab:bot-health-changed'
+export const BOT_HEALTH_CHANGED_EVENT = 'pachax:bot-health-changed'
 
 export function emitBotHealthChanged(health?: BotHealth) {
   window.dispatchEvent(new CustomEvent(BOT_HEALTH_CHANGED_EVENT, { detail: health }))

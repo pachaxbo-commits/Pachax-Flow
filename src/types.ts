@@ -18,6 +18,26 @@ export interface RepositoryStatus {
   isOnline: boolean
 }
 
+export interface RestaurantBranding {
+  name: string
+  logoUrl?: string
+  primaryColor?: string
+  accentColor?: string
+  receiptHeader?: string
+  receiptFooter?: string
+  tablesCount?: number
+}
+
+export interface RestaurantAccount {
+  id: string
+  name: string
+  slug: string
+  ownerUid: string
+  createdAt: string
+  plan: 'basic' | 'pro' | 'enterprise'
+  branding: RestaurantBranding
+}
+
 export interface RestaurantMember {
   uid: string
   email: string
@@ -25,6 +45,7 @@ export interface RestaurantMember {
   role: UserRole
   active: boolean
   createdAt?: string
+  restaurantId?: string
 }
 
 export interface ProductExtra {
@@ -157,7 +178,6 @@ export interface Order {
   deliveryAddress?: string
   createdBy?: string
   dayKey?: string
-  /** Lo escribe el bot al crear el pedido. Si falta, el pedido se cargo a mano desde caja. */
   whatsappChatId?: string
 }
 

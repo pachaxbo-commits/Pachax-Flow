@@ -19,6 +19,7 @@ import {
   connectFirestoreEmulator,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   initializeFirestore,
   memoryLocalCache,
@@ -29,7 +30,7 @@ import {
   updateDoc,
   type Firestore,
 } from 'firebase/firestore'
-import type { RestaurantMember, UserRole } from '../types'
+import type { RestaurantAccount, RestaurantBranding, RestaurantMember, UserRole } from '../types'
 
 interface FirebaseWebConfig {
   apiKey: string
@@ -71,13 +72,20 @@ function readFirebaseConfig(): FirebaseWebConfig | null {
   return requiredValues.every(Boolean) ? config : null
 }
 
-export function getFirebaseRestaurantId() {
-  const restaurantId = import.meta.env.VITE_FIREBASE_RESTAURANT_ID
-  return typeof restaurantId === 'string' && restaurantId.trim().length > 0 ? restaurantId.trim() : null
+let currentActiveRestaurantId: string = localStorage.getItem('pachax_active_restaurant_id') || import.meta.env.VITE_FIREBASE_RESTAURANT_ID || 'restaurant-demo'
+
+export function getFirebaseRestaurantId(): string {
+  return currentActiveRestaurantId || 'restaurant-demo'
+}
+
+export function setFirebaseRestaurantId(id: string) {
+  currentActiveRestaurantId = id
+  localStorage.setItem('pachax_active_restaurant_id', id)
+  firebaseContextPromise = null
 }
 
 export function isFirebaseConfigured() {
-  return Boolean(readFirebaseConfig() && getFirebaseRestaurantId())
+  return Boolean(readFirebaseConfig())
 }
 
 let firebaseContextPromise: Promise<FirebaseContext | null> | null = null
@@ -92,7 +100,7 @@ export async function getFirebaseContext(): Promise<FirebaseContext | null> {
       const firebaseConfig = readFirebaseConfig()
       const restaurantId = getFirebaseRestaurantId()
 
-      if (!firebaseConfig || !restaurantId) {
+      if (!firebaseConfig) {
         return null
       }
 
@@ -119,8 +127,9 @@ export async function getFirebaseContext(): Promise<FirebaseContext | null> {
 
       if (useEmulator) {
         const host = window.location.hostname || 'localhost'
-        connectFirestoreEmulator(db, host, 8080)
-        connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true })
+        // Custom ports for PACHAX: 8085 for Firestore, 9095 for Auth
+        connectFirestoreEmulator(db, host, 8085)
+        connectAuthEmulator(auth, `http://${host}:9095`, { disableWarnings: true })
       }
 
       try {
@@ -174,6 +183,107 @@ export async function subscribeToAuthChanges(listener: (user: User | null) => vo
   }
 
   return onAuthStateChanged(context.auth, listener)
+}
+
+export async function fetchRestaurantAccount(restaurantId: string): Promise<RestaurantAccount | null> {
+  const context = await getFirebaseContext()
+  if (!context) return null
+
+  const ref = doc(context.db, 'restaurants', restaurantId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return null
+
+  const data = snap.data()
+  return {
+    id: snap.id,
+    name: data.name || 'Mi Restaurante',
+    slug: data.slug || restaurantId,
+    ownerUid: data.ownerUid || '',
+    createdAt: data.createdAt || new Date().toISOString(),
+    plan: data.plan || 'pro',
+    branding: data.branding || {
+      name: data.name || 'Mi Restaurante',
+      primaryColor: '#0B132B',
+      accentColor: '#00F0FF',
+      tablesCount: 12,
+    },
+  }
+}
+
+export async function updateRestaurantBranding(restaurantId: string, branding: Partial<RestaurantBranding>) {
+  const context = await getFirebaseContext()
+  if (!context) throw new Error('Firebase no está configurado.')
+
+  const ref = doc(context.db, 'restaurants', restaurantId)
+  await updateDoc(ref, {
+    branding,
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function createNewRestaurantAccount(input: {
+  restaurantName: string
+  ownerName: string
+  email: string
+  password: string
+}): Promise<string> {
+  const firebaseConfig = readFirebaseConfig()
+  if (!firebaseConfig) throw new Error('Firebase no esta configurado.')
+
+  const secondaryApp = initializeApp(firebaseConfig, `tenant-create-${Date.now()}`)
+  const secondaryAuth = getAuth(secondaryApp)
+
+  try {
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, input.email.trim(), input.password)
+    const ownerUid = cred.user.uid
+    const restaurantId = `rest_${input.restaurantName.toLowerCase().replace(/[^a-z0-9]/g, '')}_${Date.now().toString(36)}`
+
+    const context = await getFirebaseContext()
+    if (!context) throw new Error('Error al conectar con la base de datos.')
+
+    // 1. Create Restaurant Doc
+    await setDoc(doc(context.db, 'restaurants', restaurantId), {
+      id: restaurantId,
+      name: input.restaurantName.trim(),
+      slug: restaurantId,
+      ownerUid,
+      createdAt: serverTimestamp(),
+      plan: 'pro',
+      branding: {
+        name: input.restaurantName.trim(),
+        primaryColor: '#0B132B',
+        accentColor: '#00F0FF',
+        receiptHeader: `*** ${input.restaurantName.toUpperCase()} ***`,
+        receiptFooter: '¡Gracias por su preferencia!',
+        tablesCount: 12,
+      },
+    })
+
+    // 2. Add Owner as Admin Member inside the restaurant
+    await setDoc(doc(context.db, 'restaurants', restaurantId, 'members', ownerUid), {
+      uid: ownerUid,
+      email: input.email.trim(),
+      displayName: input.ownerName.trim(),
+      role: 'admin',
+      active: true,
+      createdAt: serverTimestamp(),
+    })
+
+    // 3. User mapping record
+    await setDoc(doc(context.db, 'users', ownerUid), {
+      uid: ownerUid,
+      email: input.email.trim(),
+      displayName: input.ownerName.trim(),
+      defaultRestaurantId: restaurantId,
+      restaurants: [restaurantId],
+    })
+
+    setFirebaseRestaurantId(restaurantId)
+    return restaurantId
+  } finally {
+    await firebaseSignOut(secondaryAuth).catch(() => undefined)
+    await deleteApp(secondaryApp).catch(() => undefined)
+  }
 }
 
 export async function listRestaurantMembers() {

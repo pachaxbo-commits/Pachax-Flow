@@ -1,24 +1,24 @@
-import { AlertCircle, BellRing, Flame, Clock3, PackageCheck, WalletCards } from 'lucide-react'
+import { AlertCircle, PackageCheck, WalletCards, BellRing, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { AdminView } from './components/AdminView'
 import { CajaView } from './components/CajaView'
 import { FloatingOrderAlert } from './components/FloatingOrderAlert'
-import { BotControlPanel } from './components/BotControlPanel'
 import { BotView } from './components/BotView'
 import { CocinaView } from './components/CocinaView'
 import { HistorialView } from './components/HistorialView'
 import { LoginView } from './components/LoginView'
-import { TopBar } from './components/TopBar'
+import { RegisterView } from './components/RegisterView'
+import { Sidebar, type ViewType } from './components/Sidebar'
+import { TenantCustomizerModal } from './components/TenantCustomizerModal'
 import { UnauthorizedView } from './components/UnauthorizedView'
 import { notifyBotOrderConfirmed } from './lib/botApi'
 import { formatCurrency } from './lib/format'
+import { fetchRestaurantAccount, updateRestaurantBranding } from './lib/firebase'
 import { useAuthStore } from './store/authStore'
 import { useCatalogStore } from './store/catalogStore'
 import { useOrdersStore } from './store/appStore'
 import { startContinuousOrderAlert, stopContinuousOrderAlert } from './lib/sound'
-import type { CartItem, Order, OrderStatus, PaymentMethod, PaymentSummary, Product, UserRole } from './types'
-
-type View = 'caja' | 'cocina' | 'historial' | 'admin' | 'bot'
+import type { CartItem, Order, OrderStatus, PaymentMethod, PaymentSummary, Product, RestaurantBranding, UserRole } from './types'
 
 function getDayKey(value: string | Date = new Date()) {
   const date = value instanceof Date ? value : new Date(value)
@@ -29,7 +29,7 @@ function getDayKey(value: string | Date = new Date()) {
   return `${year}-${month}-${day}`
 }
 
-function getAllowedViews(role: UserRole | 'demo'): View[] {
+function getAllowedViews(role: UserRole | 'demo'): ViewType[] {
   if (role === 'admin' || role === 'demo') {
     return ['caja', 'cocina', 'historial', 'admin', 'bot']
   }
@@ -50,20 +50,41 @@ function MainShell({
   role,
   userName,
   userId,
+  restaurantId,
   onSignOut,
 }: {
   mode: 'firebase' | 'local'
   role: UserRole | 'demo'
   userName: string
   userId: string
+  restaurantId: string | null
   onSignOut: () => Promise<void>
 }) {
   const availableViews = getAllowedViews(role)
-  const [selectedView, setSelectedView] = useState<View>(availableViews[0] ?? 'caja')
-  const isSidebarCollapsed = false
+  const [selectedView, setSelectedView] = useState<ViewType>(availableViews[0] ?? 'caja')
   const view = availableViews.includes(selectedView) ? selectedView : availableViews[0]
   const [confirmation, setConfirmation] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
+
+  const [branding, setBranding] = useState<RestaurantBranding>({
+    name: 'PACHAX Comandero',
+    primaryColor: '#0B132B',
+    accentColor: '#00F0FF',
+    tablesCount: 12,
+  })
+
+  // Fetch tenant branding on load
+  useEffect(() => {
+    if (restaurantId && mode === 'firebase') {
+      void (async () => {
+        const account = await fetchRestaurantAccount(restaurantId)
+        if (account?.branding) {
+          setBranding(account.branding)
+        }
+      })()
+    }
+  }, [restaurantId, mode])
 
   const {
     state: { orders, sequence },
@@ -74,6 +95,7 @@ function MainShell({
     updateOrder,
     deleteOrder,
   } = useOrdersStore()
+
   const {
     state: { categories, products, quickExtras },
     createCategory,
@@ -96,11 +118,10 @@ function MainShell({
   const todayOrders = useMemo(() => orders.filter((order: Order) => getDayKey(order.createdAt) === todayKey), [orders, todayKey])
   const dailyTotal = useMemo(() => todayOrders.reduce((sum: number, order: Order) => (order.status !== 'cancelled' && order.paymentStatus === 'paid') ? sum + (order.productSubtotal ?? order.total) : sum, 0), [todayOrders])
   const activeTodayCount = useMemo(() => todayOrders.filter((order: Order) => order.status !== 'cancelled').length, [todayOrders])
-  // Los cargados a mano desde caja no cuentan: la notificacion es para avisar de los que entran solos.
   const pendingCount = useMemo(() => todayOrders.filter((order: Order) => order.status === 'pending' && order.orderSource === 'whatsapp' && Boolean(order.whatsappChatId)).length, [todayOrders])
   const nextOrderNumber = `#${String(sequence + 1).padStart(3, '0')}`
 
-  // Alerta sonora continua global para pedidos pendientes sin confirmar (solo WhatsApp, no locales)
+  // Alerta sonora continua global para pedidos pendientes
   useEffect(() => {
     const unconfirmedOrders = orders.filter(
       (order: Order) => order.status === 'pending' && order.orderSource === 'whatsapp' && Boolean(order.whatsappChatId)
@@ -118,19 +139,13 @@ function MainShell({
   }, [orders])
 
   useEffect(() => {
-    if (!confirmation) {
-      return
-    }
-
+    if (!confirmation) return
     const timeout = window.setTimeout(() => setConfirmation(null), 2800)
     return () => window.clearTimeout(timeout)
   }, [confirmation])
 
   useEffect(() => {
-    if (!errorMessage) {
-      return
-    }
-
+    if (!errorMessage) return
     const timeout = window.setTimeout(() => setErrorMessage(null), 4200)
     return () => window.clearTimeout(timeout)
   }, [errorMessage])
@@ -161,6 +176,7 @@ function MainShell({
       return false
     }
   }
+
   const handleAdvanceStatus = async (
     orderId: string,
     nextStatus: OrderStatus,
@@ -198,44 +214,44 @@ function MainShell({
     }
   }
 
+  const handleSaveBranding = async (updates: Partial<RestaurantBranding>) => {
+    setBranding((prev) => ({ ...prev, ...updates }))
+    if (restaurantId && mode === 'firebase') {
+      await updateRestaurantBranding(restaurantId, updates)
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-canvas px-4 py-5 text-ink md:px-5 xl:px-6">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.75),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(197,91,51,0.08),_transparent_25%)]" />
-
-      {mode === 'local' ? (
-        <div className="relative z-40 mx-auto mb-4 max-w-[1680px] rounded-[1.5rem] border border-[#ead7ad] bg-warningSoft px-5 py-4 text-sm font-semibold text-warning shadow-card">
-          Modo local/demo activo. Este modo usa localStorage y no aplica seguridad real de produccion.
-        </div>
-      ) : null}
-
-      {confirmation ? (
-        <div className="pointer-events-none fixed right-5 top-5 z-50 w-[min(420px,calc(100vw-2.5rem))] rounded-[1.8rem] border border-accent/15 bg-white/95 p-4 shadow-float backdrop-blur">
+    <div className="min-h-screen bg-pachaxDark text-ink px-2 sm:px-4 py-3 md:py-4 pb-20 md:pb-4">
+      {/* Toast Notifications */}
+      {confirmation && (
+        <div className="pointer-events-none fixed right-5 top-5 z-50 w-[min(400px,calc(100vw-2rem))] rounded-3xl border border-pachaxCyan/30 bg-pachaxNavy/95 p-4 shadow-float backdrop-blur cyan-border-glow">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent text-white shadow-lg shadow-accent/20">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-pachaxCyan text-pachaxDark font-bold">
               <PackageCheck size={22} />
             </div>
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.26em] text-accent">Pedido enviado</div>
-              <div className="mt-1 text-2xl font-semibold text-ink">{confirmation}</div>
-              <p className="mt-1 text-sm text-muted">La cocina ya lo recibio y esta listo para iniciar preparacion.</p>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-pachaxCyan">Pedido Registrado</div>
+              <div className="text-xl font-extrabold text-ink">{confirmation}</div>
+              <p className="text-xs text-muted mt-0.5">Enviado a cocina para preparación inmediata.</p>
             </div>
           </div>
         </div>
-      ) : null}
+      )}
 
-      {errorMessage ? (
-        <div className="fixed bottom-5 right-5 z-50 w-[min(460px,calc(100vw-2.5rem))] rounded-[1.7rem] border border-[#f0cfbf] bg-white/95 p-4 shadow-float backdrop-blur">
+      {errorMessage && (
+        <div className="fixed bottom-5 right-5 z-50 w-[min(440px,calc(100vw-2rem))] rounded-3xl border border-danger/30 bg-pachaxNavy/95 p-4 shadow-float backdrop-blur">
           <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fff3ec] text-[#9c4d2a]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-dangerSoft text-danger">
               <AlertCircle size={20} />
             </div>
             <div>
-              <div className="text-sm font-semibold text-ink">Accion no sincronizada</div>
-              <p className="mt-1 text-sm text-muted">{errorMessage}</p>
+              <div className="text-sm font-bold text-ink">Aviso del Sistema</div>
+              <p className="text-xs text-muted mt-0.5">{errorMessage}</p>
             </div>
           </div>
         </div>
-      ) : null}
+      )}
 
       <FloatingOrderAlert
         orders={orders.filter((o: Order) => o.orderSource === 'whatsapp' && Boolean(o.whatsappChatId))}
@@ -244,148 +260,196 @@ function MainShell({
         }}
       />
 
-      <div className={`relative grid max-w-none gap-4 ${isSidebarCollapsed ? 'xl:grid-cols-[82px_minmax(0,1fr)]' : 'xl:grid-cols-[230px_minmax(0,1fr)]'}`}>
-        <TopBar
-          availableViews={availableViews}
-          collapsed={isSidebarCollapsed}
+      {/* Main Layout Grid */}
+      <div className="flex gap-4 items-start max-w-[1920px] mx-auto">
+        {/* Sleek Compact Sidebar */}
+        <Sidebar
           currentView={view}
-          mode={mode}
-          onChange={setSelectedView}
-          onSignOut={onSignOut}
-          pendingOrdersCount={pendingCount}
-          rightSlot={
-            <div className="space-y-3">
-              {role !== 'pedidos' ? (
-                <div className="rounded-[1.25rem] border border-white/80 bg-panel/92 p-3 shadow-card">
-                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted">
-                    <WalletCards size={15} className="text-accent" />
-                    Venta del dia
-                  </div>
-                  <div className="mt-2 text-2xl font-semibold tracking-tight text-ink">{formatCurrency(dailyTotal)}</div>
-                  <div className="mt-0.5 text-xs text-muted">
-                    {activeTodayCount} pedidos activos hoy
-                  </div>
-                </div>
-              ) : null}
-
-              <BotControlPanel collapsed={isSidebarCollapsed} userRole={role} />
-
-              <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                <div className="rounded-[1.15rem] border border-white/80 bg-white/72 p-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-ink">
-                    <BellRing size={16} className="text-accent" />
-                    Pendientes
-                  </div>
-                  <div className="mt-1 text-2xl font-semibold">{pendingCount}</div>
-                </div>
-                <div className="rounded-[1.15rem] border border-white/80 bg-white/72 p-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-ink">
-                    <Clock3 size={16} className="text-accent" />
-                    Proximo
-                  </div>
-                  <div className="mt-1 text-2xl font-semibold">{nextOrderNumber}</div>
-                </div>
-                <div className="rounded-[1.15rem] border border-white/80 bg-white/72 p-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-ink">
-                    <Flame size={16} className="text-accent" />
-                    Area
-                  </div>
-                  <div className="mt-1 text-xs font-semibold text-muted">
-                    {view === 'caja' ? 'Tomando pedidos' : view === 'cocina' ? 'Preparacion' : view === 'historial' ? 'Reporte diario' : view === 'bot' ? 'Bot WhatsApp' : 'Menu y productos'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          }
-          userName={userName}
+          availableViews={availableViews}
+          onChangeView={setSelectedView}
           userRole={role}
+          userName={userName}
+          restaurantName={branding.name}
+          logoUrl={branding.logoUrl}
+          pendingOrdersCount={pendingCount}
+          onSignOut={onSignOut}
+          onOpenCustomizer={role === 'admin' || role === 'demo' ? () => setIsCustomizerOpen(true) : undefined}
         />
 
-        <main className="min-w-0">
-          {view === 'caja' ? (
-            <CajaView
-              categories={categories}
-              nextOrderNumber={nextOrderNumber}
-              onSubmitOrder={handleSubmitOrder}
-              products={products}
-              orders={orders}
-              quickExtras={quickExtras ?? []}
-              userRole={role}
-              userId={userId}
-              userName={userName}
-              onConfirmPayment={confirmPayment}
-              onCancelOrder={handleCancelOrder}
-              onDeleteOrder={deleteOrder}
-              onUpdateOrder={updateOrder}
-              onSetOrderStatus={handleAdvanceStatus}
-            />
-          ) : null}
-          {view === 'cocina' ? <CocinaView orders={orders} onAdvanceStatus={handleAdvanceStatus} /> : null}
-          {view === 'historial' ? (
-            <HistorialView
-              onAdvanceStatus={handleAdvanceStatus}
-              onCancelOrder={handleCancelOrder}
-              orders={orders}
-              userName={userName}
-              userRole={role}
-            />
-          ) : null}
-          {view === 'admin' ? (
-            <AdminView
-              categories={categories}
-              onCreateCategory={createCategory}
-              onCreateProduct={createProduct}
-              onDeleteCategory={deleteCategory}
-              onDeleteProduct={deleteProduct}
-              onMoveCategory={moveCategory}
-              onMoveProduct={moveProduct}
-              onSetCategoryActive={setCategoryActive}
-              onSetCategoryVisibility={setCategoryVisibility}
-              onSetProductActive={setProductActive}
-              onSetProductAvailability={setProductAvailability}
-              onSetProductVisibility={setProductVisibility}
-              onUpdateCategory={updateCategory}
-              onUpdateProduct={updateProduct}
-              products={products}
-              quickExtras={quickExtras ?? []}
-              onSaveQuickExtras={saveQuickExtras}
-            />
-          ) : null}
-          {view === 'bot' ? <BotView /> : null}
+        {/* Main Content Area */}
+        <main className="flex-1 min-w-0 space-y-4">
+          {/* Top Info Header */}
+          <header className="rounded-3xl glass-panel border border-panelBorder px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-card">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-2xl bg-pachaxNavy flex items-center justify-center text-pachaxCyan">
+                <Sparkles size={18} />
+              </div>
+              <div>
+                <h1 className="text-base font-extrabold text-ink tracking-tight flex items-center gap-2">
+                  {branding.name}
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-pachaxCyan/10 text-pachaxCyan border border-pachaxCyan/30">
+                    {view.toUpperCase()}
+                  </span>
+                </h1>
+                <p className="text-[11px] text-muted">PACHAX Comandero Multi-Restaurante</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {role !== 'pedidos' && (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-2xl bg-pachaxNavy/80 border border-panelBorder text-xs">
+                  <WalletCards size={15} className="text-pachaxCyan" />
+                  <span className="text-muted font-medium">Venta Hoy:</span>
+                  <span className="font-extrabold text-ink">{formatCurrency(dailyTotal)}</span>
+                  <span className="text-[11px] text-pachaxCyan font-semibold">({activeTodayCount})</span>
+                </div>
+              )}
+
+              {pendingCount > 0 && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-accentSoft border border-pachaxCyan/40 text-pachaxCyan text-xs font-bold animate-pulse">
+                  <BellRing size={14} />
+                  <span>{pendingCount} Pendiente(s)</span>
+                </div>
+              )}
+            </div>
+          </header>
+
+          {/* Views Render */}
+          <div>
+            {view === 'caja' && (
+              <CajaView
+                categories={categories}
+                nextOrderNumber={nextOrderNumber}
+                onSubmitOrder={handleSubmitOrder}
+                products={products}
+                orders={orders}
+                quickExtras={quickExtras ?? []}
+                userRole={role}
+                userId={userId}
+                userName={userName}
+                onConfirmPayment={confirmPayment}
+                onCancelOrder={handleCancelOrder}
+                onDeleteOrder={deleteOrder}
+                onUpdateOrder={updateOrder}
+                onSetOrderStatus={handleAdvanceStatus}
+              />
+            )}
+            {view === 'cocina' && <CocinaView orders={orders} onAdvanceStatus={handleAdvanceStatus} />}
+            {view === 'historial' && (
+              <HistorialView
+                onAdvanceStatus={handleAdvanceStatus}
+                onCancelOrder={handleCancelOrder}
+                orders={orders}
+                userName={userName}
+                userRole={role}
+              />
+            )}
+            {view === 'admin' && (
+              <AdminView
+                categories={categories}
+                onCreateCategory={createCategory}
+                onCreateProduct={createProduct}
+                onDeleteCategory={deleteCategory}
+                onDeleteProduct={deleteProduct}
+                onMoveCategory={moveCategory}
+                onMoveProduct={moveProduct}
+                onSetCategoryActive={setCategoryActive}
+                onSetCategoryVisibility={setCategoryVisibility}
+                onSetProductActive={setProductActive}
+                onSetProductAvailability={setProductAvailability}
+                onSetProductVisibility={setProductVisibility}
+                onUpdateCategory={updateCategory}
+                onUpdateProduct={updateProduct}
+                products={products}
+                quickExtras={quickExtras ?? []}
+                onSaveQuickExtras={saveQuickExtras}
+              />
+            )}
+            {view === 'bot' && <BotView />}
+          </div>
         </main>
       </div>
+
+      {/* Tenant Customizer Modal */}
+      <TenantCustomizerModal
+        isOpen={isCustomizerOpen}
+        onClose={() => setIsCustomizerOpen(false)}
+        initialBranding={branding}
+        onSave={handleSaveBranding}
+      />
     </div>
   )
 }
 
 function App() {
   const auth = useAuthStore()
+  const [authView, setAuthView] = useState<'login' | 'register'>('login')
 
   if (auth.mode === 'local') {
-    return <MainShell mode="local" onSignOut={auth.signOut} role={auth.role ?? 'demo'} userName={auth.userDisplayName ?? 'Modo demo'} userId={auth.member?.uid || `mock-${auth.role || 'admin'}`} />
+    return (
+      <MainShell
+        mode="local"
+        onSignOut={auth.signOut}
+        role={auth.role ?? 'demo'}
+        userName={auth.userDisplayName ?? 'Modo demo'}
+        userId={auth.member?.uid || `mock-${auth.role || 'admin'}`}
+        restaurantId={auth.restaurantId}
+      />
+    )
   }
 
   if (auth.status === 'loading' && auth.userEmail === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-canvas text-sm font-semibold text-muted">
-        Validando acceso seguro...
+      <div className="flex min-h-screen items-center justify-center bg-pachaxDark text-sm font-semibold text-muted">
+        Cargando PACHAX Comandero...
       </div>
     )
   }
 
-  if (auth.status === 'signed_out') {
-    return <LoginView error={auth.error} isLoading={false} onSubmit={auth.signIn} />
+  if (auth.status === 'signed_out' || authView === 'register') {
+    if (authView === 'register') {
+      return (
+        <RegisterView
+          onSuccess={() => setAuthView('login')}
+          onSwitchToLogin={() => setAuthView('login')}
+        />
+      )
+    }
+    return (
+      <LoginView
+        error={auth.error}
+        isLoading={false}
+        onSubmit={auth.signIn}
+        onSwitchToRegister={() => setAuthView('register')}
+      />
+    )
   }
 
   if (auth.status === 'authenticating' || auth.status === 'loading') {
-    return <LoginView error={auth.error} isLoading={true} onSubmit={auth.signIn} />
+    return (
+      <LoginView
+        error={auth.error}
+        isLoading={true}
+        onSubmit={auth.signIn}
+        onSwitchToRegister={() => setAuthView('register')}
+      />
+    )
   }
 
   if (auth.status === 'unauthorized') {
-    return <UnauthorizedView email={auth.userEmail} message={auth.error ?? 'Acceso no autorizado.'} onSignOut={auth.signOut} />
+    return <UnauthorizedView email={auth.error} message={auth.error ?? 'Acceso no autorizado.'} onSignOut={auth.signOut} />
   }
 
-  return <MainShell mode="firebase" onSignOut={auth.signOut} role={auth.role ?? 'caja'} userName={auth.userDisplayName ?? auth.userEmail ?? 'Usuario'} userId={auth.member?.uid ?? ''} />
+  return (
+    <MainShell
+      mode="firebase"
+      onSignOut={auth.signOut}
+      role={auth.role ?? 'caja'}
+      userName={auth.userDisplayName ?? auth.userEmail ?? 'Usuario'}
+      userId={auth.member?.uid ?? ''}
+      restaurantId={auth.restaurantId}
+    />
+  )
 }
 
 export default App

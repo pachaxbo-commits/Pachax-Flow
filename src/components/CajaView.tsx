@@ -48,7 +48,7 @@ function formatExtrasList(extras: any[]) {
 import { botApiUrl, botAdminToken, emitBotHealthChanged, fetchBotHealth, fetchBotSettings, onBotHealthChanged, saveBotSettings, setBotAcceptingOrders } from '../lib/botApi'
 
 const DEFAULT_PREP_DELAY = 10
-const DEMAND_STORAGE_KEY = 'burgerlab:demand-delay'
+const DEMAND_STORAGE_KEY = 'pachax:demand-delay'
 
 function buildCartItem(product: Product): CartItem {
   return {
