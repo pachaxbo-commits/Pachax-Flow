@@ -10,6 +10,7 @@ import { LoginView } from './components/LoginView'
 import { RegisterView } from './components/RegisterView'
 import { Sidebar, type ViewType } from './components/Sidebar'
 import { TenantCustomizerModal } from './components/TenantCustomizerModal'
+import { PrinterSettingsModal } from './components/PrinterSettingsModal'
 import { UnauthorizedView } from './components/UnauthorizedView'
 import { notifyBotOrderConfirmed } from './lib/botApi'
 import { formatCurrency } from './lib/format'
@@ -66,6 +67,7 @@ function MainShell({
   const [confirmation, setConfirmation] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
+  const [isPrinterSettingsOpen, setIsPrinterSettingsOpen] = useState(false)
 
   const [branding, setBranding] = useState<RestaurantBranding>({
     name: 'PACHAX Comandero',
@@ -274,6 +276,7 @@ function MainShell({
           pendingOrdersCount={pendingCount}
           onSignOut={onSignOut}
           onOpenCustomizer={role === 'admin' || role === 'demo' ? () => setIsCustomizerOpen(true) : undefined}
+          onOpenPrinterSettings={() => setIsPrinterSettingsOpen(true)}
         />
 
         {/* Main Content Area */}
@@ -376,6 +379,12 @@ function MainShell({
         onClose={() => setIsCustomizerOpen(false)}
         initialBranding={branding}
         onSave={handleSaveBranding}
+      />
+
+      {/* Printer Settings Modal */}
+      <PrinterSettingsModal
+        isOpen={isPrinterSettingsOpen}
+        onClose={() => setIsPrinterSettingsOpen(false)}
       />
     </div>
   )

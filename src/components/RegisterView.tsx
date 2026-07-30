@@ -36,76 +36,90 @@ export function RegisterView({ onSuccess, onSwitchToLogin }: RegisterViewProps) 
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-pachaxDark px-4 py-8 relative overflow-hidden">
-      {/* Glow Effects */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-pachaxCyan/10 rounded-full blur-[120px] pointer-events-none" />
+    <div className="relative flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10 text-slate-100 font-sans selection:bg-indigo-500/30 selection:text-indigo-200 overflow-hidden">
+      {/* Subtle Mesh Ambient Glows */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-600/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-[450px] h-[450px] bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none" />
 
-      <div className="w-full max-w-md rounded-3xl glass-panel border border-pachaxCyan/30 p-8 shadow-float cyan-border-glow relative z-10">
+      <div className="relative w-full max-w-md rounded-3xl bg-slate-900/90 border border-slate-800 p-8 sm:p-10 shadow-2xl backdrop-blur-xl z-10">
         {/* Header */}
-        <div className="text-center mb-6">
-          <div className="mx-auto h-14 w-14 rounded-2xl bg-gradient-to-br from-pachaxNavy to-pachaxNavyLight border border-pachaxCyan/40 flex items-center justify-center text-pachaxCyan cyan-glow mb-3">
-            <Sparkles size={28} />
+        <div className="text-center mb-8">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-emerald-500 text-white shadow-xl shadow-indigo-500/20 mb-4">
+            <Store size={30} />
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-ink">Registrar Restaurante</h1>
-          <p className="text-xs text-muted mt-1">Crea la cuenta de tu restaurante en PACHAX Comandero</p>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-bold uppercase tracking-widest text-emerald-400 mb-2">
+            Alta de Negocio <Sparkles size={12} />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-white">Registrar Restaurante</h1>
+          <p className="text-xs text-slate-400 mt-1">
+            Crea la cuenta independiente de tu restaurante en PACHAX Flow
+          </p>
         </div>
 
         {error && (
-          <div className="mb-4 rounded-2xl bg-dangerSoft border border-danger/30 p-3 text-xs font-semibold text-danger text-center">
+          <div className="mb-5 rounded-2xl bg-rose-500/10 border border-rose-500/30 p-3.5 text-xs font-semibold text-rose-400 text-center">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-muted mb-1 uppercase tracking-wider">Nombre del Restaurante</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              Nombre del Restaurante
+            </label>
             <div className="relative">
-              <Store className="absolute left-3 top-3 text-muted" size={18} />
+              <Store className="absolute left-3.5 top-3.5 text-slate-500" size={18} />
               <input
                 type="text"
                 required
-                placeholder="Ej. BurguerLab Downtown"
+                placeholder="Ej. PACHAX Central"
                 value={restaurantName}
                 onChange={(e) => setRestaurantName(e.target.value)}
-                className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-pachaxNavy/60 border border-panelBorder text-ink text-sm focus:border-pachaxCyan focus:outline-none transition"
+                className="w-full pl-11 pr-4 py-3 rounded-2xl bg-slate-950/70 border border-slate-800 text-white text-sm placeholder-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none transition"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-muted mb-1 uppercase tracking-wider">Tu Nombre Completo</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              Tu Nombre Completo
+            </label>
             <div className="relative">
-              <User className="absolute left-3 top-3 text-muted" size={18} />
+              <User className="absolute left-3.5 top-3.5 text-slate-500" size={18} />
               <input
                 type="text"
                 required
-                placeholder="Ej. Juan Pérez"
+                placeholder="Ej. Fabri Admin"
                 value={ownerName}
                 onChange={(e) => setOwnerName(e.target.value)}
-                className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-pachaxNavy/60 border border-panelBorder text-ink text-sm focus:border-pachaxCyan focus:outline-none transition"
+                className="w-full pl-11 pr-4 py-3 rounded-2xl bg-slate-950/70 border border-slate-800 text-white text-sm placeholder-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none transition"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-muted mb-1 uppercase tracking-wider">Correo Electrónico</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              Correo Electrónico
+            </label>
             <div className="relative">
-              <Mail className="absolute left-3 top-3 text-muted" size={18} />
+              <Mail className="absolute left-3.5 top-3.5 text-slate-500" size={18} />
               <input
                 type="email"
                 required
-                placeholder="administracion@minegocio.com"
+                placeholder="pachax.bo@gmail.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-pachaxNavy/60 border border-panelBorder text-ink text-sm focus:border-pachaxCyan focus:outline-none transition"
+                className="w-full pl-11 pr-4 py-3 rounded-2xl bg-slate-950/70 border border-slate-800 text-white text-sm placeholder-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none transition"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-muted mb-1 uppercase tracking-wider">Contraseña</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              Contraseña de Acceso
+            </label>
             <div className="relative">
-              <Lock className="absolute left-3 top-3 text-muted" size={18} />
+              <Lock className="absolute left-3.5 top-3.5 text-slate-500" size={18} />
               <input
                 type="password"
                 required
@@ -113,7 +127,7 @@ export function RegisterView({ onSuccess, onSwitchToLogin }: RegisterViewProps) 
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-pachaxNavy/60 border border-panelBorder text-ink text-sm focus:border-pachaxCyan focus:outline-none transition"
+                className="w-full pl-11 pr-4 py-3 rounded-2xl bg-slate-950/70 border border-slate-800 text-white text-sm placeholder-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none transition"
               />
             </div>
           </div>
@@ -121,7 +135,7 @@ export function RegisterView({ onSuccess, onSwitchToLogin }: RegisterViewProps) 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3 rounded-2xl bg-gradient-to-r from-pachaxCyanDark to-pachaxCyan text-pachaxDark text-sm font-extrabold flex items-center justify-center gap-2 cyan-glow shadow-card hover:opacity-95 transition mt-2"
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-emerald-500 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 hover:opacity-95 transition disabled:opacity-50 mt-3"
           >
             {isLoading ? (
               'Creando Restaurante...'
@@ -133,20 +147,20 @@ export function RegisterView({ onSuccess, onSwitchToLogin }: RegisterViewProps) 
           </button>
         </form>
 
-        <div className="mt-6 pt-4 border-t border-panelBorder text-center">
-          <p className="text-xs text-muted">
-            ¿Ya tienes una cuenta activada?{' '}
+        <div className="mt-8 pt-5 border-t border-slate-800/80 text-center">
+          <p className="text-xs text-slate-400">
+            ¿Ya tienes una cuenta registrada?{' '}
             <button
               onClick={onSwitchToLogin}
-              className="text-pachaxCyan font-extrabold hover:underline ml-1"
+              className="text-indigo-400 font-bold hover:underline ml-1"
             >
               Iniciar Sesión
             </button>
           </p>
         </div>
 
-        <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-muted">
-          <ShieldCheck size={14} className="text-pachaxCyan" /> Garantía de Aislamiento y Seguridad PACHAX
+        <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
+          <ShieldCheck size={14} className="text-emerald-400" /> Aislamiento de Datos y Seguridad PACHAX Flow
         </div>
       </div>
     </div>

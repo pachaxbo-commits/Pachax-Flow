@@ -1,29 +1,14 @@
 import type { Order } from '../types'
+import { getPrinterSettings, savePrinterSettings } from './printerSettings'
 
 /**
- * Ticket como comandos ESC/POS, enviado a RawBT.
- *
- * Imprimir la pagina desde el navegador manda una IMAGEN a la impresora, y por eso no se puede
- * cortar el papel: el corte no es parte de la imagen, es un comando. Aca se arma el ticket como
- * comandos de impresora (igual que hace Loyverse) y se le pasa a RawBT directamente. Con eso
- * salen las tres cosas que faltaban: corte automatico, impresion sin dialogo y control del
- * formato desde el codigo.
- *
- * Formato del enlace, tomado de la libreria escpos-php (mike42):
- *   intent:base64,<datos>#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;
+ * Generador de comandos ESC/POS para Impresoras Térmicas (Estilo Loyverse).
  */
-
-/** Papel de 80 mm: 48 caracteres por linea en la tipografia normal. */
-export const ANCHO_TICKET = 48
 
 const ESC = 0x1b
 const GS = 0x1d
 
-/**
- * Las impresoras no entienden UTF-8: usan tablas de un byte. Se elige CP850, que tiene las
- * vocales acentuadas y la ñ (importante: hay productos como "Piña"). Sin esto salen simbolos
- * raros en vez de las tildes.
- */
+/** Tabla de caracteres CP850 para vocales acentuadas y Ñ en impresoras térmicas */
 const CP850: Record<string, number> = {
   'á': 0xa0, 'é': 0x82, 'í': 0xa1, 'ó': 0xa2, 'ú': 0xa3,
   'Á': 0xb5, 'É': 0x90, 'Í': 0xd6, 'Ó': 0xe0, 'Ú': 0xe9,
@@ -40,18 +25,22 @@ function codificar(texto: string): number[] {
       continue
     }
     const codigo = caracter.charCodeAt(0)
-    // Cualquier cosa fuera de la tabla se reemplaza por un espacio en vez de imprimir basura.
     bytes.push(codigo < 128 ? codigo : 0x20)
   }
   return bytes
 }
 
-class Ticket {
+export class Ticket {
   private bytes: number[] = []
+  private ancho: number = 48
+
+  constructor(paperWidth: '58mm' | '80mm' = '80mm') {
+    this.ancho = paperWidth === '58mm' ? 32 : 48
+  }
 
   iniciar() {
     this.bytes.push(ESC, 0x40) // ESC @ : reinicia la impresora
-    this.bytes.push(ESC, 0x74, 0x02) // ESC t 2 : tabla de caracteres CP850
+    this.bytes.push(ESC, 0x74, 0x02) // ESC t 2 : tabla CP850
     return this
   }
 
@@ -66,7 +55,6 @@ class Ticket {
     return this
   }
 
-  /** Letra al doble de alto y ancho, para el numero de pedido. */
   doble(activar: boolean) {
     this.bytes.push(GS, 0x21, activar ? 0x11 : 0x00)
     return this
@@ -78,20 +66,18 @@ class Ticket {
   }
 
   separador(caracter = '-') {
-    return this.linea(caracter.repeat(ANCHO_TICKET))
+    return this.linea(caracter.repeat(this.ancho))
   }
 
-  /** Texto a la izquierda y valor a la derecha, rellenando el medio con espacios. */
   filaDoble(izquierda: string, derecha: string) {
-    const espacio = ANCHO_TICKET - derecha.length
+    const espacio = this.ancho - derecha.length
     const recortada = izquierda.length > espacio ? izquierda.slice(0, Math.max(0, espacio - 1)) : izquierda
-    const relleno = ' '.repeat(Math.max(1, ANCHO_TICKET - recortada.length - derecha.length))
+    const relleno = ' '.repeat(Math.max(1, this.ancho - recortada.length - derecha.length))
     return this.linea(`${recortada}${relleno}${derecha}`)
   }
 
-  /** Parte un texto largo en varias lineas sin cortar palabras al medio. */
   parrafo(texto: string, sangria = 0) {
-    const disponible = ANCHO_TICKET - sangria
+    const disponible = this.ancho - sangria
     const palabras = texto.split(/\s+/).filter(Boolean)
     let actual = ''
     for (const palabra of palabras) {
@@ -111,7 +97,13 @@ class Ticket {
     return this
   }
 
-  /** Avanza hasta la cuchilla y corta. Es lo que faltaba imprimiendo desde el navegador. */
+  /** Apertura de gaveta de dinero / cajón de efectivo */
+  abrirCajon() {
+    this.bytes.push(ESC, 0x70, 0x00, 0x19, 0xfa)
+    return this
+  }
+
+  /** Avanza hasta la cuchilla y corta */
   cortar() {
     this.bytes.push(GS, 0x56, 0x42, 0x00)
     return this
@@ -129,7 +121,7 @@ class Ticket {
 }
 
 function precio(valor: number) {
-  return `Bs ${valor}`
+  return `Bs ${valor.toFixed(2)}`
 }
 
 function describirEntrega(order: Order) {
@@ -156,45 +148,52 @@ function encabezado(t: Ticket, order: Order, titulo?: string) {
   t.linea(`Entrega: ${describirEntrega(order)}`)
   if (order.customerPhone) t.linea(`Telefono: ${order.customerPhone}`)
   if (order.fulfillmentType === 'delivery' && order.deliveryAddress) {
-    t.parrafo(`Direccion: ${order.deliveryAddress}`)
+    t.parrafo(`Dirección: ${order.deliveryAddress}`)
   }
   t.separador()
 }
 
-/** El que se lleva el cliente: con precios y total. */
+/** Ticket Cliente */
 export function ticketClienteBase64(order: Order) {
-  const t = new Ticket().iniciar()
+  const settings = getPrinterSettings()
+  const t = new Ticket(settings.paperWidth).iniciar()
+
+  if (settings.kickCashDrawer && order.payment?.method === 'cash') {
+    t.abrirCajon()
+  }
+
   encabezado(t, order)
 
   order.items.forEach((item) => {
     t.filaDoble(`${item.quantity}x ${item.name}`, precio(item.lineTotal))
-    if (item.modifiers.extras.length) t.parrafo(`+ ${listarExtras(item.modifiers.extras)}`, 3)
-    if (item.modifiers.options.length) t.parrafo(`+ ${item.modifiers.options.join(', ')}`, 3)
-    if (item.modifiers.note) t.parrafo(`Obs: ${item.modifiers.note}`, 3)
+    if (item.modifiers.extras.length) t.parrafo(`+ ${listarExtras(item.modifiers.extras)}`, 2)
+    if (item.modifiers.options.length) t.parrafo(`+ ${item.modifiers.options.join(', ')}`, 2)
+    if (item.modifiers.note) t.parrafo(`Obs: ${item.modifiers.note}`, 2)
   })
 
   t.separador()
   t.negrita(true).filaDoble('TOTAL', precio(order.total)).negrita(false)
   t.linea(`Pago:   ${order.payment?.method === 'qr' ? 'QR' : order.payment?.method === 'mixed' ? 'Mixto' : 'Efectivo'}`)
-  t.linea(`Estado: ${order.paymentStatus === 'paid' ? 'PAGADO' : order.paymentStatus === 'gift' ? 'REGALO' : 'PENDIENTE DE PAGO'}`)
+  t.linea(`Estado: ${order.paymentStatus === 'paid' ? 'PAGADO' : order.paymentStatus === 'gift' ? 'REGALO' : 'PENDIENTE'}`)
   t.separador()
-  t.alinear('centro').linea('Gracias por su preferencia!')
+  t.alinear('centro').linea('¡Gracias por su preferencia!')
   t.avanzar(3).cortar()
 
   return t.aBase64()
 }
 
-/** El de cocina: sin precios, con los extras y las observaciones bien visibles. */
+/** Ticket Cocina */
 export function ticketCocinaBase64(order: Order) {
-  const t = new Ticket().iniciar()
-  encabezado(t, order, 'COCINA')
+  const settings = getPrinterSettings()
+  const t = new Ticket(settings.paperWidth).iniciar()
+  encabezado(t, order, '*** COCINA ***')
 
   order.items.forEach((item) => {
     t.doble(true).negrita(true).linea(`${item.quantity}x ${item.name}`).negrita(false).doble(false)
-    if (item.modifiers.extras.length) t.parrafo(`EXTRAS: ${listarExtras(item.modifiers.extras)}`, 3)
-    if (item.modifiers.options.length) t.parrafo(`OPCION: ${item.modifiers.options.join(', ')}`, 3)
+    if (item.modifiers.extras.length) t.parrafo(`EXTRAS: ${listarExtras(item.modifiers.extras)}`, 2)
+    if (item.modifiers.options.length) t.parrafo(`OPCION: ${item.modifiers.options.join(', ')}`, 2)
     if (item.modifiers.note) {
-      t.negrita(true).parrafo(`** ${item.modifiers.note.toUpperCase()} **`, 3).negrita(false)
+      t.negrita(true).parrafo(`** ${item.modifiers.note.toUpperCase()} **`, 2).negrita(false)
     }
     t.linea()
   })
@@ -205,21 +204,34 @@ export function ticketCocinaBase64(order: Order) {
   return t.aBase64()
 }
 
-/**
- * Manda el ticket a RawBT. Devuelve false si el navegador no pudo abrir la app, para que quien
- * llame pueda caer a la impresion normal del navegador.
- */
+/** Ticket de Prueba */
+export function ticketPruebaBase64() {
+  const settings = getPrinterSettings()
+  const t = new Ticket(settings.paperWidth).iniciar()
+  
+  if (settings.kickCashDrawer) {
+    t.abrirCajon()
+  }
+
+  t.alinear('centro')
+  t.doble(true).negrita(true).linea('PACHAX FLOW').negrita(false).doble(false)
+  t.linea('Impresora Térmica Configurada')
+  t.separador()
+  t.alinear('izquierda')
+  t.linea(`Ancho:   ${settings.paperWidth}`)
+  t.linea(`Modo:    ${settings.printMode}`)
+  t.linea(`Gaveta:  ${settings.kickCashDrawer ? 'Habilitada' : 'Deshabilitada'}`)
+  t.linea(`Fecha:   ${new Date().toLocaleString('es-BO')}`)
+  t.separador()
+  t.alinear('centro').linea('¡Prueba exitosa!')
+  t.avanzar(3).cortar()
+
+  return t.aBase64()
+}
+
 export function enviarARawBt(base64: string) {
   try {
-    // El base64 va TAL CUAL, sin codificar. Se probo codificandolo (por miedo a que el "+" se
-    // leyera como espacio) y RawBT respondio "Wrong base64": la direccion de un intent no se
-    // interpreta como formulario, asi que el "+" viaja bien y codificarlo es justamente lo que
-    // rompe los datos. Es la misma forma que usa la libreria escpos-php.
     const enlace = `intent:base64,${base64}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`
-
-    // Se dispara desde un marco oculto en vez de cambiar la direccion de la pagina. Navegando
-    // directo, el navegador descarga la pagina para abrir la app y al volver la recarga: por eso
-    // el sistema insistia en abrir RawBT una y otra vez.
     const marco = document.createElement('iframe')
     marco.style.display = 'none'
     marco.src = enlace
@@ -231,32 +243,17 @@ export function enviarARawBt(base64: string) {
   }
 }
 
-/** RawBT es una app de Android; en PC no existe y hay que imprimir por el navegador. */
 export function esAndroid() {
   return /android/i.test(navigator.userAgent)
 }
 
-const CLAVE_MODO = 'modo-impresion'
-
-export type ModoImpresion = 'rawbt' | 'navegador'
+export type ModoImpresion = 'rawbt' | 'browser' | 'navegador'
 
 export function modoImpresion(): ModoImpresion {
-  try {
-    const guardado = window.localStorage.getItem(CLAVE_MODO)
-    if (guardado === 'rawbt' || guardado === 'navegador') return guardado
-  } catch {
-    // Sin acceso al almacenamiento se decide por el dispositivo.
-  }
-  // En celular y tablet arranca en RawBT: es el unico modo que corta el papel y no muestra el
-  // dialogo del navegador. En PC no existe RawBT, asi que ahi va por navegador. El interruptor
-  // sigue disponible en las dos pantallas por si hay que volver atras en pleno servicio.
-  return esAndroid() ? 'rawbt' : 'navegador'
+  return getPrinterSettings().printMode
 }
 
 export function guardarModoImpresion(modo: ModoImpresion) {
-  try {
-    window.localStorage.setItem(CLAVE_MODO, modo)
-  } catch {
-    // Si no se puede guardar, igual funciona: solo no se recuerda al recargar.
-  }
+  const current = getPrinterSettings()
+  savePrinterSettings({ ...current, printMode: modo === 'navegador' ? 'browser' : modo })
 }
