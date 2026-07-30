@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { formatCurrency } from '../lib/format'
 import type { Order } from '../types'
-import { enviarARawBt, modoImpresion, ticketClienteBase64, ticketCocinaBase64 } from '../lib/escpos'
+import { enviarARawBt, esAndroid, modoImpresion, ticketClienteBase64, ticketCocinaBase64 } from '../lib/escpos'
 
 /**
  * Ticket termico compartido por Caja y Cocina.
@@ -198,10 +198,22 @@ export function PrintableTicket({
       onDone()
     }
 
-    // "afterprint" se escucha DESDE YA: en la PC el dialogo se cierra rapido y si el aviso
-    // llega antes de que lo escuchemos, la pantalla se queda trabada mostrando el ticket sin
-    // forma de volver atras. Eso paso.
-    window.addEventListener('afterprint', restaurar)
+    // CUANDO empezar a escuchar el "ya termino" depende del dispositivo, y equivocarse rompe
+    // uno de los dos:
+    //  - Android manda esos avisos APENAS se llama a imprimir, antes de tomar la imagen. Si se
+    //    escuchan de entrada, la app reaparece a tiempo de salir impresa en vez del ticket.
+    //  - La PC los manda cuando el usuario cierra el dialogo. Si se escuchan tarde, el aviso se
+    //    pierde y la pantalla queda trabada mostrando el ticket sin forma de volver.
+    const esperaAvisos = esAndroid() ? 2500 : 0
+
+    const escucharAvisos = () => {
+      window.addEventListener('afterprint', restaurar)
+      window.addEventListener('focus', restaurar)
+    }
+
+    let escuchar: number | undefined
+    if (esperaAvisos === 0) escucharAvisos()
+    else escuchar = window.setTimeout(escucharAvisos, esperaAvisos)
 
     const imprimir = window.setTimeout(() => {
       if (raiz) raiz.style.display = 'none'
@@ -209,18 +221,12 @@ export function PrintableTicket({
       window.print()
     }, 300)
 
-    // El foco, en cambio, se escucha mas tarde: en Android vuelve APENAS se llama a imprimir, y
-    // si lo tomamos como "ya termino" la app reaparece antes de que el sistema tome la imagen.
-    const escuchar = window.setTimeout(() => {
-      window.addEventListener('focus', restaurar)
-    }, 2500)
-
     // Red de seguridad, ahora corta: la pantalla no puede quedarse trabada mas que unos segundos.
     const respaldo = window.setTimeout(restaurar, 15000)
 
     return () => {
       window.clearTimeout(imprimir)
-      window.clearTimeout(escuchar)
+      if (escuchar) window.clearTimeout(escuchar)
       window.clearTimeout(respaldo)
       if (raiz) raiz.style.display = displayRaiz
       if (ticket.current) ticket.current.style.display = 'none'

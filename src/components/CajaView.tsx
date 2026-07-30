@@ -31,6 +31,7 @@ import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
 import { StatusPill, SourceBadge, FulfillmentBadge, PaymentBadge } from './ui/StatusPill'
 import { PrintableTicket } from './OrderTicket'
+import { PrintModeToggle } from './PrintModeToggle'
 
 function formatExtrasList(extras: any[]) {
   if (!extras || extras.length === 0) return ''
@@ -925,11 +926,12 @@ export function CajaView({
           ) : (
             /* Orders Queue / List view */
             <div className="space-y-5">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
                   <h1 className="text-2xl font-black text-ink">Sistema de Pedidos</h1>
                   <p className="text-xs text-muted">Gestion de comandas y estado de entregas en tiempo real.</p>
                 </div>
+                <PrintModeToggle />
               </div>
 
               {pastPendingOrders.length > 0 && (
