@@ -8,6 +8,7 @@ import { Button } from './ui/Button'
 import { Panel } from './ui/Panel'
 import { SourceBadge, FulfillmentBadge, PaymentBadge } from './ui/StatusPill'
 import { PrintableTicket } from './OrderTicket'
+import { PrintModeToggle } from './PrintModeToggle'
 
 function emphasizeText(input: string) {
   return input.toUpperCase()
@@ -157,6 +158,7 @@ export function CocinaView({
                 {notice}
               </div>
             ) : null}
+            <PrintModeToggle />
             {!audioUnlocked ? (
               <Button tone="primary" className="shadow-lg shadow-accent/15 flex items-center gap-2" onClick={handleUnlockAudio}>
                 <BellRing size={16} className="animate-bounce" />

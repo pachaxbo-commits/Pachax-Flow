@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { formatCurrency } from '../lib/format'
 import type { Order } from '../types'
+import { enviarARawBt, modoImpresion, ticketClienteBase64, ticketCocinaBase64 } from '../lib/escpos'
 
 /**
  * Ticket termico compartido por Caja y Cocina.
@@ -160,18 +161,29 @@ export function PrintableTicket({
   useEffect(() => {
     if (!order) return
 
-    // Chrome de Android IGNORA las reglas de "@media print", asi que no se le pide nada:
+    // Camino preferido en las tablets: mandar el ticket como comandos a RawBT. Asi corta el
+    // papel solo, no aparece ningun dialogo y el formato lo controla el sistema. La impresion
+    // del navegador manda una imagen, y por eso no puede cortar.
+    if (modoImpresion() === 'rawbt') {
+      const datos = variant === 'customer' ? ticketClienteBase64(order) : ticketCocinaBase64(order)
+      enviarARawBt(datos)
+      // Se libera enseguida: RawBT se encarga desde aca y la app no tiene nada que esperar.
+      const listo = window.setTimeout(onDone, 1200)
+      return () => window.clearTimeout(listo)
+    }
+
+    // Respaldo (PC, o si se elige a mano): impresion del navegador.
+    //
+    // Chrome de Android ignora las reglas de "@media print", asi que no se le pide nada:
     // se esconde #root y se muestra el ticket con estilo EN LINEA, que es un cambio real del
     // documento. En ese instante la pagina contiene unicamente el ticket.
     //
     // Lo que fallo antes y hay que evitar:
-    //   - visibility: hidden          -> hojas en blanco
+    //   - visibility: hidden           -> hojas en blanco
     //   - imprimir dentro de un iframe -> imprimia la pagina entera
     //   - display:none por CSS print   -> imprimia la pagina entera
     //   - restaurar al recuperar el foco -> en Android el foco vuelve APENAS se llama a
-    //     imprimir, asi que la app reaparecia antes de que el sistema tomara la imagen y
-    //     terminaba imprimiendose la pantalla igual. Por eso los avisos de "ya termino" se
-    //     empiezan a escuchar recien un rato despues de mandar a imprimir.
+    //     imprimir, asi que la app reaparecia antes de que el sistema tomara la imagen.
     const raiz = document.getElementById('root')
     const displayRaiz = raiz?.style.display ?? ''
     let restaurado = false
@@ -192,14 +204,12 @@ export function PrintableTicket({
       window.print()
     }, 300)
 
-    // Recien despues de que el dialogo esta arriba escuchamos el "ya termino". Antes de eso
-    // los eventos que dispara el propio print() nos harian revertir demasiado pronto.
+    // Recien cuando el dialogo ya esta arriba escuchamos el "ya termino".
     const escuchar = window.setTimeout(() => {
       window.addEventListener('afterprint', restaurar)
       window.addEventListener('focus', restaurar)
     }, 2500)
 
-    // Red de seguridad: la app nunca puede quedarse escondida.
     const respaldo = window.setTimeout(restaurar, 60000)
 
     return () => {
@@ -211,12 +221,10 @@ export function PrintableTicket({
       window.removeEventListener('afterprint', restaurar)
       window.removeEventListener('focus', restaurar)
     }
-  }, [order, onDone])
+  }, [order, variant, onDone])
 
   if (!order) return null
 
-  // Va fuera de la app, colgando de <body>, para que al esconder #root quede solo el ticket.
-  // Arranca oculto y se muestra recien en el momento de imprimir.
   return createPortal(
     <div
       ref={ticket}
