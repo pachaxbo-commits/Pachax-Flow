@@ -409,8 +409,11 @@ function App() {
 
   if (auth.status === 'loading' && auth.userEmail === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-pachaxDark text-sm font-semibold text-muted">
-        Cargando PACHAX Comandero...
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 text-slate-100">
+        <h1 className="text-4xl font-serif italic text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-white to-sky-300 animate-pulse tracking-wide mb-3">
+          Pachax Flow
+        </h1>
+        <div className="h-1 w-24 bg-gradient-to-r from-indigo-600 to-sky-400 rounded-full animate-pulse" />
       </div>
     )
   }

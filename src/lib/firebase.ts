@@ -1,4 +1,4 @@
-import { deleteApp, initializeApp, type FirebaseApp } from 'firebase/app'
+import { deleteApp, getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app'
 import {
   browserLocalPersistence,
   connectAuthEmulator,
@@ -22,6 +22,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  getFirestore,
   initializeFirestore,
   memoryLocalCache,
   persistentLocalCache,
@@ -105,23 +106,25 @@ export async function getFirebaseContext(): Promise<FirebaseContext | null> {
         return null
       }
 
-      const app = initializeApp(firebaseConfig)
+      const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
       let db: Firestore
 
       const useEmulator = import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true'
 
       try {
-        db = initializeFirestore(app, {
-          localCache: useEmulator
-            ? memoryLocalCache()
-            : persistentLocalCache({
-                tabManager: persistentMultipleTabManager(),
-              }),
-        })
+        db = getFirestore(app)
       } catch {
-        db = initializeFirestore(app, {
-          localCache: memoryLocalCache(),
-        })
+        try {
+          db = initializeFirestore(app, {
+            localCache: useEmulator
+              ? memoryLocalCache()
+              : persistentLocalCache({
+                  tabManager: persistentMultipleTabManager(),
+                }),
+          })
+        } catch {
+          db = getFirestore(app)
+        }
       }
 
       const auth = getAuth(app)
