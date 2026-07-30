@@ -10,7 +10,8 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "android:open": "cap open android"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",

@@ -1,10 +1,13 @@
 export interface PrinterSettings {
   paperWidth: '58mm' | '80mm'
+  connectionType: 'bluetooth' | 'wifi' | 'rawbt' | 'browser'
+  bluetoothDeviceName: string
+  wifiIpAddress: string
+  wifiPort: number
   autoPrintCustomerReceipt: boolean
   autoPrintKitchenTicket: boolean
   kickCashDrawer: boolean
   copies: number
-  printMode: 'rawbt' | 'browser'
   receiptPrinterName: string
   kitchenPrinterName: string
   printItemNotesLarge: boolean
@@ -15,11 +18,14 @@ const PRINTER_SETTINGS_KEY = 'pachax:printer-settings'
 
 export const DEFAULT_PRINTER_SETTINGS: PrinterSettings = {
   paperWidth: '80mm',
+  connectionType: 'rawbt',
+  bluetoothDeviceName: 'POS-58 / POS-80',
+  wifiIpAddress: '192.168.1.200',
+  wifiPort: 9100,
   autoPrintCustomerReceipt: true,
   autoPrintKitchenTicket: true,
   kickCashDrawer: true,
   copies: 1,
-  printMode: 'rawbt',
   receiptPrinterName: 'Impresora Caja POS',
   kitchenPrinterName: 'Impresora Cocina',
   printItemNotesLarge: true,
