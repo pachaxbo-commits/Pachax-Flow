@@ -5,6 +5,10 @@ export interface PrinterSettings {
   kickCashDrawer: boolean
   copies: number
   printMode: 'rawbt' | 'browser'
+  receiptPrinterName: string
+  kitchenPrinterName: string
+  printItemNotesLarge: boolean
+  groupKitchenItemsByCategory: boolean
 }
 
 const PRINTER_SETTINGS_KEY = 'pachax:printer-settings'
@@ -16,6 +20,10 @@ export const DEFAULT_PRINTER_SETTINGS: PrinterSettings = {
   kickCashDrawer: true,
   copies: 1,
   printMode: 'rawbt',
+  receiptPrinterName: 'Impresora Caja POS',
+  kitchenPrinterName: 'Impresora Cocina',
+  printItemNotesLarge: true,
+  groupKitchenItemsByCategory: true,
 }
 
 export function getPrinterSettings(): PrinterSettings {

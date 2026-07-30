@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Printer, X, Check, FileText, Zap, DollarSign, Copy, ShieldCheck } from 'lucide-react'
+import { Printer, X, Check, FileText, Zap, DollarSign, Copy, ShieldCheck, Tag, SlidersHorizontal } from 'lucide-react'
 import { getPrinterSettings, savePrinterSettings, type PrinterSettings } from '../lib/printerSettings'
 import { enviarARawBt, ticketPruebaBase64 } from '../lib/escpos'
 
@@ -33,8 +33,8 @@ export function PrinterSettingsModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-      <div className="relative w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-800 p-6 sm:p-8 shadow-2xl text-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn overflow-y-auto">
+      <div className="relative w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-800 p-6 sm:p-8 shadow-2xl text-slate-100 my-8">
         {/* Header */}
         <div className="flex items-center justify-between pb-5 border-b border-slate-800">
           <div className="flex items-center gap-3">
@@ -42,7 +42,7 @@ export function PrinterSettingsModal({
               <Printer size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-bold tracking-tight text-white">Ajustes de Impresora Térmica</h2>
+              <h2 className="text-xl font-bold tracking-tight text-white">Ajustes de Impresoras Térmicas</h2>
               <p className="text-xs text-slate-400">Configuración ESC/POS estilo Loyverse POS</p>
             </div>
           </div>
@@ -55,10 +55,39 @@ export function PrinterSettingsModal({
         </div>
 
         {/* Content Options */}
-        <div className="mt-6 space-y-5">
+        <div className="mt-6 space-y-6">
+          {/* Perfiles de Impresora */}
+          <div>
+            <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">
+              <Tag size={14} className="text-indigo-400" /> Perfiles de Impresora (Rutas)
+            </label>
+            <div className="space-y-3">
+              <div>
+                <span className="text-xs font-semibold text-slate-300 block mb-1">Nombre Impresora de Caja (Recibos)</span>
+                <input
+                  type="text"
+                  value={settings.receiptPrinterName}
+                  onChange={(e) => setSettings((s) => ({ ...s, receiptPrinterName: e.target.value }))}
+                  className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none transition"
+                  placeholder="Ej. Impresora Caja POS"
+                />
+              </div>
+              <div>
+                <span className="text-xs font-semibold text-slate-300 block mb-1">Nombre Impresora de Cocina (Comandas)</span>
+                <input
+                  type="text"
+                  value={settings.kitchenPrinterName}
+                  onChange={(e) => setSettings((s) => ({ ...s, kitchenPrinterName: e.target.value }))}
+                  className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none transition"
+                  placeholder="Ej. Impresora Cocina"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Formato de Papel */}
           <div>
-            <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+            <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">
               <FileText size={14} className="text-indigo-400" /> Formato / Ancho del Papel Térmico
             </label>
             <div className="grid grid-cols-2 gap-3">
@@ -90,7 +119,7 @@ export function PrinterSettingsModal({
           </div>
 
           {/* Impresión Automática */}
-          <div className="space-y-3 pt-2">
+          <div className="space-y-3">
             <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
               <Zap size={14} className="text-amber-400" /> Disparadores Automáticos (Auto-Print)
             </label>
@@ -111,7 +140,7 @@ export function PrinterSettingsModal({
             <label className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-800/50 border border-slate-800 cursor-pointer hover:bg-slate-800 transition">
               <div>
                 <span className="text-sm font-semibold text-white block">Auto-imprimir Comanda de Cocina</span>
-                <span className="text-xs text-slate-400">Envía la comanda a la impresora de cocina al solicitar pedido</span>
+                <span className="text-xs text-slate-400">Envía la comanda a cocina automáticamente al solicitar el pedido</span>
               </div>
               <input
                 type="checkbox"
@@ -126,7 +155,7 @@ export function PrinterSettingsModal({
                 <span className="text-sm font-semibold text-white block flex items-center gap-1.5">
                   <DollarSign size={14} className="text-emerald-400" /> Apertura Automática de Gaveta de Dinero
                 </span>
-                <span className="text-xs text-slate-400">Envía pulso ESC/POS para abrir el cajón metálico en cobro efectivo</span>
+                <span className="text-xs text-slate-400">Envía pulso ESC/POS para abrir el cajón metálico en cobros en efectivo</span>
               </div>
               <input
                 type="checkbox"
@@ -137,9 +166,29 @@ export function PrinterSettingsModal({
             </label>
           </div>
 
+          {/* Opciones Adicionales de Formato (Loyverse) */}
+          <div className="space-y-3">
+            <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+              <SlidersHorizontal size={14} className="text-sky-400" /> Opciones de Comanda para Cocina
+            </label>
+
+            <label className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-800/50 border border-slate-800 cursor-pointer hover:bg-slate-800 transition">
+              <div>
+                <span className="text-sm font-semibold text-white block">Observaciones y Notas en Grande</span>
+                <span className="text-xs text-slate-400">Resalta las notas de cocineros con fuente en negrita de tamaño doble</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.printItemNotesLarge}
+                onChange={(e) => setSettings((s) => ({ ...s, printItemNotesLarge: e.target.checked }))}
+                className="h-5 w-5 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500"
+              />
+            </label>
+          </div>
+
           {/* Copias */}
           <div>
-            <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+            <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">
               <Copy size={14} className="text-sky-400" /> Número de Copias por Ticket
             </label>
             <div className="flex items-center gap-3">
