@@ -23,7 +23,7 @@ export function LoginView({
       <div className="relative w-full max-w-sm rounded-3xl bg-slate-900/80 border border-slate-800/80 p-6 sm:p-8 shadow-2xl backdrop-blur-xl transition-all">
         {/* Header con Título Libre Estilo Carta / Elegante con Animación */}
         <div className="text-center mb-6">
-          <h1 className="text-4xl sm:text-5xl font-serif italic tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-white to-sky-300 animate-pulse drop-shadow-sm select-none py-1">
+          <h1 className="text-4xl sm:text-5xl font-serif italic tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-white via-cyan-100 to-sky-400 animate-pulse drop-shadow-md select-none py-1">
             Pachax Flow
           </h1>
         </div>
