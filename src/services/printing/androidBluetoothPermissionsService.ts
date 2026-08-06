@@ -1,17 +1,15 @@
 import { Capacitor } from '@capacitor/core'
 
-export interface BluetoothPermissionState {
+export interface BluetoothDiagnosticState {
   isNativeAndroid: boolean
   isPluginAvailable: boolean
   isBluetoothEnabled: boolean
-  hasPermissions: boolean
-  permissionStatus: 'granted' | 'denied' | 'permanently_denied' | 'unknown'
   message: string
 }
 
 export class AndroidBluetoothPermissionsService {
-  /** Check complete native status of Bluetooth plugin and permissions */
-  static async checkPermissionState(): Promise<BluetoothPermissionState> {
+  /** Check real native availability of BluetoothSerial in window */
+  static async checkDiagnosticState(): Promise<BluetoothDiagnosticState> {
     const isNativeAndroid = Capacitor.getPlatform() === 'android'
     const btSerial = (window as any).bluetoothSerial
     const isPluginAvailable = Boolean(btSerial)
@@ -21,9 +19,7 @@ export class AndroidBluetoothPermissionsService {
         isNativeAndroid: false,
         isPluginAvailable: false,
         isBluetoothEnabled: false,
-        hasPermissions: true,
-        permissionStatus: 'granted',
-        message: 'Ejecutando en entorno Web / Dev (Bridge simulado disponible).',
+        message: 'Ejecutando en entorno Web / Dev (Bridge simulado activo).',
       }
     }
 
@@ -32,13 +28,10 @@ export class AndroidBluetoothPermissionsService {
         isNativeAndroid: true,
         isPluginAvailable: false,
         isBluetoothEnabled: false,
-        hasPermissions: false,
-        permissionStatus: 'denied',
-        message: 'Plugin Nativo cordova-plugin-bluetooth-serial no detectado en el APK.',
+        message: 'Objeto window.bluetoothSerial no inyectado en el WebLayer.',
       }
     }
 
-    // Check if Bluetooth is enabled
     const isBluetoothEnabled = await new Promise<boolean>((resolve) => {
       btSerial.isEnabled(
         () => resolve(true),
@@ -46,49 +39,34 @@ export class AndroidBluetoothPermissionsService {
       )
     })
 
-    // Check runtime permission state via plugin native call if available
-    const hasPermissions = await new Promise<boolean>((resolve) => {
-      if (typeof btSerial.hasPermission === 'function') {
-        btSerial.hasPermission(
-          () => resolve(true),
-          () => resolve(false)
-        )
-      } else {
-        // Fallback check if hasPermission function is absent in older wrapper
-        resolve(isBluetoothEnabled)
-      }
-    })
-
     return {
       isNativeAndroid: true,
       isPluginAvailable: true,
       isBluetoothEnabled,
-      hasPermissions,
-      permissionStatus: hasPermissions ? 'granted' : 'denied',
       message: !isBluetoothEnabled
-        ? 'El Bluetooth está apagado en tu teléfono. Por favor enciéndelo.'
-        : !hasPermissions
-        ? 'Se requieren permisos de Bluetooth Connect y Scan. Haz clic en "Solicitar Permisos".'
-        : 'Bluetooth encendido y permisos concedidos.',
+        ? 'El Bluetooth está apagado. Presiona "Encender Bluetooth" o abre Ajustes.'
+        : 'Plugin nativo inyectado y Bluetooth encendido.',
     }
   }
 
-  /** Trigger native Android runtime permission prompt */
-  static async requestPermissions(): Promise<BluetoothPermissionState> {
+  /** Trigger native Android system dialog to enable Bluetooth */
+  static async enableBluetooth(): Promise<boolean> {
     const btSerial = (window as any).bluetoothSerial
-    if (!btSerial) {
-      return await this.checkPermissionState()
-    }
+    if (!btSerial || typeof btSerial.enable !== 'function') return false
 
-    if (typeof btSerial.requestPermission === 'function') {
-      await new Promise<void>((resolve) => {
-        btSerial.requestPermission(
-          () => resolve(),
-          () => resolve()
-        )
-      })
-    }
+    return new Promise((resolve) => {
+      btSerial.enable(
+        () => resolve(true),
+        () => resolve(false)
+      )
+    })
+  }
 
-    return await this.checkPermissionState()
+  /** Open native Android Bluetooth settings screen */
+  static async openBluetoothSettings(): Promise<void> {
+    const btSerial = (window as any).bluetoothSerial
+    if (btSerial && typeof btSerial.showBluetoothSettings === 'function') {
+      btSerial.showBluetoothSettings()
+    }
   }
 }

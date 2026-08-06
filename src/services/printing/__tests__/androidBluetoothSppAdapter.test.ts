@@ -55,35 +55,35 @@ export async function runAndroidBluetoothSppTestSuite(): Promise<{ passed: numbe
   // --- Test 1: Adapter instantiation & connectionType ---
   try {
     const adapter = new AndroidBluetoothSppAdapter()
-    assert(adapter.connectionType === 'bluetooth_spp', 'Prueba BT-1: Adaptador configurado para bluetooth_spp')
+    assert(adapter.connectionType === 'bluetooth_spp', 'BT-1: Adaptador configurado para bluetooth_spp')
   } catch (e: any) {
-    assert(false, `Prueba BT-1 Fallo: ${e.message}`)
+    assert(false, `BT-1 Fallo: ${e.message}`)
   }
 
   // --- Test 2: Native plugin availability check ---
   try {
     const adapter = new AndroidBluetoothSppAdapter()
     const isAvail = await adapter.isAvailable()
-    assert(typeof isAvail === 'boolean', 'Prueba BT-2: Verificacion de disponibilidad de window.bluetoothSerial')
+    assert(typeof isAvail === 'boolean', 'BT-2: Verificación de presencia del objeto window.bluetoothSerial')
   } catch (e: any) {
-    assert(false, `Prueba BT-2 Fallo: ${e.message}`)
+    assert(false, `BT-2 Fallo: ${e.message}`)
   }
 
   // --- Test 3: Permission State Diagnostic ---
   try {
-    const state = await AndroidBluetoothPermissionsService.checkPermissionState()
-    assert(typeof state.isNativeAndroid === 'boolean' && typeof state.message === 'string', 'Prueba BT-3: Diagnostico de estado de permisos de Android')
+    const state = await AndroidBluetoothPermissionsService.checkDiagnosticState()
+    assert(typeof state.isNativeAndroid === 'boolean' && typeof state.message === 'string', 'BT-3: Diagnóstico de estado nativo de Android')
   } catch (e: any) {
-    assert(false, `Prueba BT-3 Fallo: ${e.message}`)
+    assert(false, `BT-3 Fallo: ${e.message}`)
   }
 
   // --- Test 4: List paired devices ---
   try {
     const adapter = new AndroidBluetoothSppAdapter()
     const devices = await adapter.listPairedDevices()
-    assert(Array.isArray(devices), 'Prueba BT-4: Listado de dispositivos emparejados devuelto como arreglo')
+    assert(Array.isArray(devices), 'BT-4: Listado de dispositivos emparejados devuelto como arreglo')
   } catch (e: any) {
-    assert(false, `Prueba BT-4 Fallo: ${e.message}`)
+    assert(false, `BT-4 Fallo: ${e.message}`)
   }
 
   // --- Test 5: Missing MAC address pre-connection error classification ---
@@ -96,9 +96,9 @@ export async function runAndroidBluetoothSppTestSuite(): Promise<{ passed: numbe
     } catch (err: any) {
       errorClassification = err.classification
     }
-    assert(errorClassification === 'safeToRetry', 'Prueba BT-5: Error de direccion MAC faltante clasificado como safeToRetry')
+    assert(errorClassification === 'safeToRetry', 'BT-5: Error de dirección MAC faltante clasificado como safeToRetry')
   } catch (e: any) {
-    assert(false, `Prueba BT-5 Fallo: ${e.message}`)
+    assert(false, `BT-5 Fallo: ${e.message}`)
   }
 
   // --- Test 6: Chunked byte transmission ---
@@ -108,10 +108,10 @@ export async function runAndroidBluetoothSppTestSuite(): Promise<{ passed: numbe
     const testBytes = new Uint8Array(200) // 200 bytes with chunkSize 64 = 4 chunks
     const result = await adapter.sendBytes({ jobId: 'job-bt-test', bytes: testBytes, printer: samplePrinter })
 
-    assert(result.success === true && result.bytesWritten === 200, 'Prueba BT-6: Transmision dividida por bloques de 64 bytes exitosa')
+    assert(result.success === true && result.bytesWritten === 200, 'BT-6: Transmisión dividida por bloques de 64 bytes exitosa')
     await adapter.disconnect()
   } catch (e: any) {
-    assert(false, `Prueba BT-6 Fallo: ${e.message}`)
+    assert(false, `BT-6 Fallo: ${e.message}`)
   }
 
   // --- Test 7: Binary Uint8Array to ArrayBuffer slice conversion ---
@@ -119,9 +119,9 @@ export async function runAndroidBluetoothSppTestSuite(): Promise<{ passed: numbe
     const sliceBytes = new Uint8Array([0x1b, 0x40, 0x61, 0x01])
     const cleanBuffer = toCleanArrayBuffer(sliceBytes)
 
-    assert(cleanBuffer instanceof ArrayBuffer && cleanBuffer.byteLength === 4, 'Prueba BT-7: Conversion limpia a ArrayBuffer de tamano exacto')
+    assert(cleanBuffer instanceof ArrayBuffer && cleanBuffer.byteLength === 4, 'BT-7: Conversión limpia a ArrayBuffer de tamaño exacto')
   } catch (e: any) {
-    assert(false, `Prueba BT-7 Fallo: ${e.message}`)
+    assert(false, `BT-7 Fallo: ${e.message}`)
   }
 
   // --- Test 8: ESC/POS special character transliteration ---
@@ -129,9 +129,9 @@ export async function runAndroidBluetoothSppTestSuite(): Promise<{ passed: numbe
     const raw = 'Hamburguesa Ñandú con Ají en Mesa 12'
     const clean = transliterateText(raw)
 
-    assert(!clean.includes('ñ') && !clean.includes('í') && clean.includes('Nandu') && clean.includes('Aji'), 'Prueba BT-8: Transliteracion limpia para evitar corrupcion de texto en la impresora')
+    assert(!clean.includes('ñ') && !clean.includes('í') && clean.includes('Nandu') && clean.includes('Aji'), 'BT-8: Transliteración limpia para evitar corrupción de texto en la impresora')
   } catch (e: any) {
-    assert(false, `Prueba BT-8 Fallo: ${e.message}`)
+    assert(false, `BT-8 Fallo: ${e.message}`)
   }
 
   return { passed, failed, results }

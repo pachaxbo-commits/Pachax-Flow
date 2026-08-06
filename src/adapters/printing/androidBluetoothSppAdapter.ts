@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core'
-import { AndroidBluetoothPermissionsService, type BluetoothPermissionState } from '../../services/printing/androidBluetoothPermissionsService'
+import { AndroidBluetoothPermissionsService, type BluetoothDiagnosticState } from '../../services/printing/androidBluetoothPermissionsService'
 import type {
   ErrorClassification,
   PrinterAdapter,
@@ -44,17 +44,22 @@ export class AndroidBluetoothSppAdapter implements PrinterAdapter {
     return this.isPluginAvailable()
   }
 
-  /** Complete Bluetooth Permission and Status Diagnostic */
-  async checkStatusState(): Promise<BluetoothPermissionState> {
-    return await AndroidBluetoothPermissionsService.checkPermissionState()
+  /** Complete Bluetooth Status Diagnostic */
+  async checkDiagnosticState(): Promise<BluetoothDiagnosticState> {
+    return await AndroidBluetoothPermissionsService.checkDiagnosticState()
   }
 
-  async requestPermissions(): Promise<boolean> {
-    const state = await AndroidBluetoothPermissionsService.requestPermissions()
-    return state.hasPermissions
+  /** Open system Bluetooth settings */
+  async openSettings(): Promise<void> {
+    await AndroidBluetoothPermissionsService.openBluetoothSettings()
   }
 
-  /** List paired Bluetooth devices from Android OS Settings */
+  /** Enable Bluetooth via system prompt */
+  async enableBluetooth(): Promise<boolean> {
+    return await AndroidBluetoothPermissionsService.enableBluetooth()
+  }
+
+  /** List paired Bluetooth devices from Android OS Settings via window.bluetoothSerial.list() */
   async listPairedDevices(): Promise<BluetoothPairedDevice[]> {
     if (!this.isNativeAndroid()) return []
 
@@ -78,27 +83,6 @@ export class AndroidBluetoothSppAdapter implements PrinterAdapter {
           resolve(list)
         },
         (err: any) => reject(new Error(err?.message || 'Error al listar dispositivos emparejados'))
-      )
-    })
-  }
-
-  /** Discover unpaired Bluetooth devices if plugin supports discoverUnpaired */
-  async discoverDevices(): Promise<Array<{ id: string; name: string; address?: string }>> {
-    const btSerial = (window as any).bluetoothSerial
-    if (!btSerial || typeof btSerial.discoverUnpaired !== 'function') {
-      const paired = await this.listPairedDevices()
-      return paired.map((p) => ({ id: p.id, name: `${p.name} (Emparejado)`, address: p.address }))
-    }
-
-    return new Promise((resolve) => {
-      btSerial.discoverUnpaired(
-        (devices: any[]) => {
-          resolve((devices || []).map((d) => ({ id: d.address || d.id, name: d.name || 'Dispositivo Descubierto', address: d.address || d.id })))
-        },
-        async () => {
-          const paired = await this.listPairedDevices()
-          resolve(paired.map((p) => ({ id: p.id, name: `${p.name} (Emparejado)`, address: p.address })))
-        }
       )
     })
   }
@@ -160,6 +144,19 @@ export class AndroidBluetoothSppAdapter implements PrinterAdapter {
     this.isConnectedFlag = false
   }
 
+  /** Check active connection status */
+  async isConnected(): Promise<boolean> {
+    const btSerial = (window as any).bluetoothSerial
+    if (!btSerial) return this.isConnectedFlag
+
+    return new Promise<boolean>((resolve) => {
+      btSerial.isConnected(
+        () => resolve(true),
+        () => resolve(false)
+      )
+    })
+  }
+
   /**
    * Transmits raw ESC/POS bytes in chunked ArrayBuffers to prevent buffer overflows on Bluetooth printers.
    */
@@ -214,8 +211,6 @@ export class AndroidBluetoothSppAdapter implements PrinterAdapter {
           await new Promise((r) => setTimeout(r, chunkDelayMs))
         }
       } catch (err: any) {
-        // IF error occurs BEFORE sending chunk 1 (chunksSent === 0) -> safeToRetry
-        // IF error occurs DURING or AFTER chunk 1 (chunksSent > 0) -> unsafeToRetry -> UNKNOWN
         const classification: ErrorClassification = chunksSent === 0 ? 'safeToRetry' : 'unsafeToRetry'
 
         return {

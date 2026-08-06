@@ -14,11 +14,13 @@ import {
   Bluetooth,
   Smartphone,
   Info,
+  Copy,
+  Check,
 } from 'lucide-react'
 import { PrintEngineService } from '../services/printing/printEngineService'
 import { DiagnosticPrinterAdapter, type DiagnosticMockBehavior } from '../services/printing/diagnosticPrinterAdapter'
 import { AndroidBluetoothSppAdapter, type BluetoothPairedDevice } from '../adapters/printing/androidBluetoothSppAdapter'
-import { AndroidBluetoothPermissionsService, type BluetoothPermissionState } from '../services/printing/androidBluetoothPermissionsService'
+import { AndroidBluetoothPermissionsService, type BluetoothDiagnosticState } from '../services/printing/androidBluetoothPermissionsService'
 import { runPrintEngineTestSuite } from '../services/printing/__tests__/printEngine.test'
 import { runAndroidBluetoothSppTestSuite } from '../services/printing/__tests__/androidBluetoothSppAdapter.test'
 import type { PrinterProfile, PrintJob, PrintJobPayload } from '../types/printing'
@@ -28,9 +30,10 @@ export function PrinterDiagnosticView() {
   const [mockBehavior, setMockBehavior] = useState<DiagnosticMockBehavior>('success_transmitted')
   const [pairedDevices, setPairedDevices] = useState<BluetoothPairedDevice[]>([])
   const [selectedMac, setSelectedMac] = useState<string>('')
-  const [permState, setPermState] = useState<BluetoothPermissionState | null>(null)
+  const [diagState, setDiagState] = useState<BluetoothDiagnosticState | null>(null)
   const [chunkSize, setChunkSize] = useState<number>(512)
   const [chunkDelayMs, setChunkDelayMs] = useState<number>(50)
+  const [copied, setCopied] = useState(false)
 
   const [testSuiteOutput, setTestSuiteOutput] = useState<{ passed: number; failed: number; results: string[] } | null>(null)
   const [recentJobs, setRecentJobs] = useState<PrintJob[]>([])
@@ -52,8 +55,8 @@ export function PrinterDiagnosticView() {
   }, [adapterMode, mockBehavior])
 
   const loadBluetoothStatus = async () => {
-    const state = await AndroidBluetoothPermissionsService.checkPermissionState()
-    setPermState(state)
+    const state = await AndroidBluetoothPermissionsService.checkDiagnosticState()
+    setDiagState(state)
 
     try {
       const devices = await sppAdapter.listPairedDevices()
@@ -62,20 +65,42 @@ export function PrinterDiagnosticView() {
         setSelectedMac(devices[0].address)
       }
     } catch (err: any) {
-      setStatusMessage(`Error al listar dispositivos: ${err.message}`)
+      setStatusMessage(`Error al listar dispositivos emparejados: ${err.message}`)
     }
   }
 
-  const handleRequestPermissions = async () => {
-    setStatusMessage('Solicitando permisos dinámicos a Android OS...')
-    const state = await AndroidBluetoothPermissionsService.requestPermissions()
-    setPermState(state)
-    if (state.hasPermissions) {
-      setStatusMessage('¡Permisos de Bluetooth concedidos correctamente!')
+  const handleEnableBluetooth = async () => {
+    setStatusMessage('Solicitando encendido nativo de Bluetooth...')
+    const success = await AndroidBluetoothPermissionsService.enableBluetooth()
+    if (success) {
+      setStatusMessage('Bluetooth encendido correctamente.')
       await loadBluetoothStatus()
     } else {
-      setStatusMessage('Permisos denegados. Si marcaste "No volver a preguntar", debes habilitar Bluetooth en Ajustes de la App.')
+      setStatusMessage('No se pudo encender el Bluetooth o la acción fue cancelada.')
     }
+  }
+
+  const handleOpenSettings = async () => {
+    await AndroidBluetoothPermissionsService.openBluetoothSettings()
+  }
+
+  const handleCopyDiagnosticReport = () => {
+    const report = {
+      timestamp: new Date().toISOString(),
+      platform: sppAdapter.isNativeAndroid() ? 'Android Nativo' : 'Web / Browser',
+      windowBluetoothSerialAvailable: sppAdapter.isPluginAvailable(),
+      bluetoothEnabled: diagState?.isBluetoothEnabled ?? false,
+      pairedDevicesCount: pairedDevices.length,
+      pairedDevices: pairedDevices.map((d) => ({ name: d.name, address: d.address })),
+      selectedMac,
+      chunkSize,
+      chunkDelayMs,
+    }
+
+    navigator.clipboard.writeText(JSON.stringify(report, null, 2))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 3000)
+    setStatusMessage('Reporte de diagnóstico técnico copiado al portapapeles.')
   }
 
   const handleRunTests = async () => {
@@ -271,14 +296,24 @@ export function PrinterDiagnosticView() {
           </div>
         </div>
 
-        <button
-          onClick={handleRunTests}
-          disabled={isTestRunning}
-          className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition disabled:opacity-50"
-        >
-          {isTestRunning ? <RefreshCw className="animate-spin" size={18} /> : <Play size={18} />}
-          Ejecutar Suite Completa (23 Pruebas)
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleCopyDiagnosticReport}
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs shadow-sm transition"
+          >
+            {copied ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}
+            {copied ? '¡Reporte Copiado!' : 'Copiar Diagnóstico'}
+          </button>
+
+          <button
+            onClick={handleRunTests}
+            disabled={isTestRunning}
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition disabled:opacity-50"
+          >
+            {isTestRunning ? <RefreshCw className="animate-spin" size={18} /> : <Play size={18} />}
+            Ejecutar Suite (23 Pruebas)
+          </button>
+        </div>
       </div>
 
       {statusMessage && (
@@ -339,38 +374,52 @@ export function PrinterDiagnosticView() {
               Configuración Bluetooth SPP Nativo en Android
             </div>
 
-            <div className="flex items-center gap-2">
-              {permState && (
+            <div className="flex flex-wrap items-center gap-2">
+              {diagState && (
                 <span
                   className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                    permState.isPluginAvailable ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                    diagState.isPluginAvailable ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
                   }`}
                 >
-                  {permState.isPluginAvailable ? 'Plugin Nativo Detectado' : 'Simulador Web (Sin Plugin)'}
+                  {diagState.isPluginAvailable ? 'Plugin Nativo Inyectado' : 'Simulador Web (Sin Plugin)'}
                 </span>
               )}
               <button
-                onClick={handleRequestPermissions}
+                onClick={handleEnableBluetooth}
                 className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-bold text-xs transition"
               >
-                Solicitar Permisos
+                Encender Bluetooth
+              </button>
+              <button
+                onClick={handleOpenSettings}
+                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition"
+              >
+                Ajustes de Bluetooth
               </button>
             </div>
           </div>
 
-          {permState && (
+          {diagState && (
             <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
               <div className="font-bold text-slate-700 flex items-center gap-1.5">
                 <Info size={16} className="text-blue-600" />
-                Diagnóstico Nativo:
+                Diagnóstico de Runtime:
               </div>
-              <div className="text-slate-600 font-medium">{permState.message}</div>
+              <div className="text-slate-600 font-medium">{diagState.message}</div>
             </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
             <div>
-              <label className="font-bold text-slate-700 block mb-1">Dispositivos Emparejados en Android:</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-bold text-slate-700 block">Dispositivos Emparejados en Android:</label>
+                <button
+                  onClick={loadBluetoothStatus}
+                  className="text-[11px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                >
+                  <RefreshCw size={12} /> Cargar
+                </button>
+              </div>
               <select
                 value={selectedMac}
                 onChange={(e) => setSelectedMac(e.target.value)}
