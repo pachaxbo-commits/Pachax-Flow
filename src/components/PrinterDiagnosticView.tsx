@@ -16,6 +16,8 @@ import {
   Info,
   Copy,
   Check,
+  ExternalLink,
+  XCircle,
 } from 'lucide-react'
 import { PrintEngineService } from '../services/printing/printEngineService'
 import { DiagnosticPrinterAdapter, type DiagnosticMockBehavior } from '../services/printing/diagnosticPrinterAdapter'
@@ -23,6 +25,7 @@ import { AndroidBluetoothSppAdapter, type BluetoothPairedDevice } from '../adapt
 import { AndroidBluetoothPermissionsService, type BluetoothDiagnosticState } from '../services/printing/androidBluetoothPermissionsService'
 import { runPrintEngineTestSuite } from '../services/printing/__tests__/printEngine.test'
 import { runAndroidBluetoothSppTestSuite } from '../services/printing/__tests__/androidBluetoothSppAdapter.test'
+import { runPachaxBluetoothPermissionsTestSuite } from '../services/printing/__tests__/pachaxBluetoothPermissionsPlugin.test'
 import type { PrinterProfile, PrintJob, PrintJobPayload } from '../types/printing'
 
 export function PrinterDiagnosticView() {
@@ -31,6 +34,8 @@ export function PrinterDiagnosticView() {
   const [pairedDevices, setPairedDevices] = useState<BluetoothPairedDevice[]>([])
   const [selectedMac, setSelectedMac] = useState<string>('')
   const [diagState, setDiagState] = useState<BluetoothDiagnosticState | null>(null)
+  const [isConnectedActive, setIsConnectedActive] = useState<boolean>(false)
+  const [lastNativeError, setLastNativeError] = useState<string | null>(null)
   const [chunkSize, setChunkSize] = useState<number>(512)
   const [chunkDelayMs, setChunkDelayMs] = useState<number>(50)
   const [copied, setCopied] = useState(false)
@@ -57,15 +62,34 @@ export function PrinterDiagnosticView() {
   const loadBluetoothStatus = async () => {
     const state = await AndroidBluetoothPermissionsService.checkDiagnosticState()
     setDiagState(state)
+    setLastNativeError(null)
 
     try {
+      const connected = await sppAdapter.isConnected()
+      setIsConnectedActive(connected)
+
       const devices = await sppAdapter.listPairedDevices()
       setPairedDevices(devices)
       if (devices.length > 0 && !selectedMac) {
         setSelectedMac(devices[0].address)
       }
     } catch (err: any) {
+      setLastNativeError(err.message)
       setStatusMessage(`Error al listar dispositivos emparejados: ${err.message}`)
+    }
+  }
+
+  const handleRequestPermissions = async () => {
+    setStatusMessage('Solicitando permiso Dispositivos Cercanos (BLUETOOTH_CONNECT) a Android OS...')
+    const state = await AndroidBluetoothPermissionsService.requestConnectPermission()
+    setDiagState(state)
+    if (state.bluetoothConnectPermission === 'granted' || state.bluetoothConnectPermission === 'notRequired') {
+      setStatusMessage('¡Permiso concedido correctamente!')
+      await loadBluetoothStatus()
+    } else if (state.bluetoothConnectPermission === 'permanentlyDenied') {
+      setStatusMessage('El permiso fue denegado permanentemente. Presiona "Abrir Configuración" para otorgarlo.')
+    } else {
+      setStatusMessage('Permiso denegado por el usuario.')
     }
   }
 
@@ -80,19 +104,27 @@ export function PrinterDiagnosticView() {
     }
   }
 
-  const handleOpenSettings = async () => {
-    await AndroidBluetoothPermissionsService.openBluetoothSettings()
+  const handleOpenAppSettings = async () => {
+    setStatusMessage('Abriendo configuración de permisos de PACHAX Flow...')
+    await AndroidBluetoothPermissionsService.openAppSettings()
   }
 
   const handleCopyDiagnosticReport = () => {
     const report = {
+      appVersion: '0.1.0 (Etapa 4B.2)',
+      bluetoothSerialPluginVersion: 'cordova-plugin-bluetooth-serial@0.4.7',
       timestamp: new Date().toISOString(),
       platform: sppAdapter.isNativeAndroid() ? 'Android Nativo' : 'Web / Browser',
-      windowBluetoothSerialAvailable: sppAdapter.isPluginAvailable(),
+      androidSdkApiLevel: diagState?.apiLevel ?? 0,
+      bluetoothConnectPermission: diagState?.bluetoothConnectPermission ?? 'unknown',
+      bluetoothScanPermission: diagState?.bluetoothScanPermission ?? 'unknown',
       bluetoothEnabled: diagState?.isBluetoothEnabled ?? false,
+      windowBluetoothSerialAvailable: sppAdapter.isPluginAvailable(),
       pairedDevicesCount: pairedDevices.length,
       pairedDevices: pairedDevices.map((d) => ({ name: d.name, address: d.address })),
-      selectedMac,
+      selectedPrinterMac: selectedMac || 'Ninguna',
+      isConnected: isConnectedActive,
+      lastError: lastNativeError || 'Ninguno',
       chunkSize,
       chunkDelayMs,
     }
@@ -100,22 +132,23 @@ export function PrinterDiagnosticView() {
     navigator.clipboard.writeText(JSON.stringify(report, null, 2))
     setCopied(true)
     setTimeout(() => setCopied(false), 3000)
-    setStatusMessage('Reporte de diagnóstico técnico copiado al portapapeles.')
+    setStatusMessage('Reporte de diagnóstico técnico exportado al portapapeles.')
   }
 
   const handleRunTests = async () => {
     setIsTestRunning(true)
-    setStatusMessage('Ejecutando suite completa de 23 pruebas automatizadas...')
+    setStatusMessage('Ejecutando suite completa de 33 pruebas automatizadas...')
     try {
       const coreRes = await runPrintEngineTestSuite()
       const btRes = await runAndroidBluetoothSppTestSuite()
+      const permRes = await runPachaxBluetoothPermissionsTestSuite()
 
       setTestSuiteOutput({
-        passed: coreRes.passed + btRes.passed,
-        failed: coreRes.failed + btRes.failed,
-        results: [...coreRes.results, ...btRes.results],
+        passed: coreRes.passed + btRes.passed + permRes.passed,
+        failed: coreRes.failed + btRes.failed + permRes.failed,
+        results: [...coreRes.results, ...btRes.results, ...permRes.results],
       })
-      setStatusMessage(`Suite completada: ${coreRes.passed + btRes.passed} PASARON / ${coreRes.failed + btRes.failed} FALLARON`)
+      setStatusMessage(`Suite completada: ${coreRes.passed + btRes.passed + permRes.passed} PASARON / ${coreRes.failed + btRes.failed + permRes.failed} FALLARON`)
     } catch (err: any) {
       setStatusMessage(`Error ejecutando suite: ${err.message}`)
     } finally {
@@ -292,7 +325,7 @@ export function PrinterDiagnosticView() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Panel de Diagnóstico — Motor de Impresión</h1>
-            <p className="text-xs text-slate-500 font-medium">Etapa 4B.2 — Bluetooth Classic SPP Nativo en Android</p>
+            <p className="text-xs text-slate-500 font-medium">Etapa 4B.2 — Bluetooth SPP Nativo & Permisos Capacitor</p>
           </div>
         </div>
 
@@ -302,7 +335,7 @@ export function PrinterDiagnosticView() {
             className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs shadow-sm transition"
           >
             {copied ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}
-            {copied ? '¡Reporte Copiado!' : 'Copiar Diagnóstico'}
+            {copied ? '¡Diagnóstico Copiado!' : 'Copiar Diagnóstico'}
           </button>
 
           <button
@@ -311,7 +344,7 @@ export function PrinterDiagnosticView() {
             className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition disabled:opacity-50"
           >
             {isTestRunning ? <RefreshCw className="animate-spin" size={18} /> : <Play size={18} />}
-            Ejecutar Suite (23 Pruebas)
+            Ejecutar Suite (33 Pruebas)
           </button>
         </div>
       </div>
@@ -343,6 +376,76 @@ export function PrinterDiagnosticView() {
         </button>
       </div>
 
+      {/* Structured Diagnostic Summary Cards */}
+      {adapterMode === 'android_bt' && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3 text-center text-xs">
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+            <div className="text-[10px] uppercase font-extrabold text-slate-400">PLATAFORMA</div>
+            <div className="font-extrabold text-slate-800 flex items-center justify-center gap-1">
+              {sppAdapter.isNativeAndroid() ? (
+                <>Android Nativo <CheckCircle2 size={14} className="text-emerald-600" /></>
+              ) : (
+                <>Web / Browser <Info size={14} className="text-amber-600" /></>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+            <div className="text-[10px] uppercase font-extrabold text-slate-400">PLUGIN SPP</div>
+            <div className="font-extrabold text-slate-800 flex items-center justify-center gap-1">
+              {sppAdapter.isPluginAvailable() ? (
+                <>Detectado <CheckCircle2 size={14} className="text-emerald-600" /></>
+              ) : (
+                <>Ausente <XCircle size={14} className="text-rose-600" /></>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+            <div className="text-[10px] uppercase font-extrabold text-slate-400">CONNECT</div>
+            <div className="font-extrabold text-slate-800 flex items-center justify-center gap-1">
+              {diagState?.bluetoothConnectPermission === 'granted' || diagState?.bluetoothConnectPermission === 'notRequired' ? (
+                <>Concedido <CheckCircle2 size={14} className="text-emerald-600" /></>
+              ) : (
+                <>{diagState?.bluetoothConnectPermission.toUpperCase() || 'DENIED'} <AlertTriangle size={14} className="text-amber-600" /></>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+            <div className="text-[10px] uppercase font-extrabold text-slate-400">BLUETOOTH</div>
+            <div className="font-extrabold text-slate-800 flex items-center justify-center gap-1">
+              {diagState?.isBluetoothEnabled ? (
+                <>Encendido <CheckCircle2 size={14} className="text-emerald-600" /></>
+              ) : (
+                <>Apagado <AlertTriangle size={14} className="text-rose-600" /></>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+            <div className="text-[10px] uppercase font-extrabold text-slate-400">EMPAREJADOS</div>
+            <div className="font-extrabold text-blue-600 text-sm">{pairedDevices.length}</div>
+          </div>
+
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1 truncate">
+            <div className="text-[10px] uppercase font-extrabold text-slate-400">IMPRESORA</div>
+            <div className="font-bold text-slate-800 text-[11px] truncate">{selectedMac || 'Sin MAC'}</div>
+          </div>
+
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+            <div className="text-[10px] uppercase font-extrabold text-slate-400">CONEXIÓN</div>
+            <div className="font-extrabold text-slate-800 flex items-center justify-center gap-1">
+              {isConnectedActive ? (
+                <>Activa <CheckCircle2 size={14} className="text-emerald-600" /></>
+              ) : (
+                <>Inactiva <Info size={14} className="text-slate-400" /></>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mode Config Panels */}
       {adapterMode === 'virtual' ? (
         <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
@@ -371,30 +474,27 @@ export function PrinterDiagnosticView() {
           <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-3 gap-3">
             <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
               <Smartphone size={18} className="text-blue-600" />
-              Configuración Bluetooth SPP Nativo en Android
+              Acciones de Permisos y Bluetooth Nativo (SDK API {diagState?.apiLevel || 'N/A'})
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {diagState && (
-                <span
-                  className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                    diagState.isPluginAvailable ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                  }`}
-                >
-                  {diagState.isPluginAvailable ? 'Plugin Nativo Inyectado' : 'Simulador Web (Sin Plugin)'}
-                </span>
-              )}
+              <button
+                onClick={handleRequestPermissions}
+                className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition"
+              >
+                Solicitar Permiso Dispositivos Cercanos
+              </button>
               <button
                 onClick={handleEnableBluetooth}
-                className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-bold text-xs transition"
+                className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-xs transition"
               >
                 Encender Bluetooth
               </button>
               <button
-                onClick={handleOpenSettings}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition"
+                onClick={handleOpenAppSettings}
+                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1 transition"
               >
-                Ajustes de Bluetooth
+                <ExternalLink size={12} /> Abrir Configuración
               </button>
             </div>
           </div>
@@ -403,7 +503,7 @@ export function PrinterDiagnosticView() {
             <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
               <div className="font-bold text-slate-700 flex items-center gap-1.5">
                 <Info size={16} className="text-blue-600" />
-                Diagnóstico de Runtime:
+                Estado del Diagnóstico Nativo:
               </div>
               <div className="text-slate-600 font-medium">{diagState.message}</div>
             </div>
@@ -412,12 +512,12 @@ export function PrinterDiagnosticView() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="font-bold text-slate-700 block">Dispositivos Emparejados en Android:</label>
+                <label className="font-bold text-slate-700 block">Dispositivos Emparejados:</label>
                 <button
                   onClick={loadBluetoothStatus}
                   className="text-[11px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
                 >
-                  <RefreshCw size={12} /> Cargar
+                  <RefreshCw size={12} /> Cargar Dispositivos Emparejados
                 </button>
               </div>
               <select
@@ -436,7 +536,7 @@ export function PrinterDiagnosticView() {
                 )}
               </select>
               <p className="text-[10px] text-slate-400 mt-1">
-                * Primero empareja la impresora en Ajustes &rarr; Bluetooth de Android.
+                * Empareja primero tu impresora en Ajustes &rarr; Bluetooth de Android.
               </p>
             </div>
 

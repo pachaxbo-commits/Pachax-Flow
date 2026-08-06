@@ -49,9 +49,9 @@ export class AndroidBluetoothSppAdapter implements PrinterAdapter {
     return await AndroidBluetoothPermissionsService.checkDiagnosticState()
   }
 
-  /** Open system Bluetooth settings */
+  /** Open system App Settings screen */
   async openSettings(): Promise<void> {
-    await AndroidBluetoothPermissionsService.openBluetoothSettings()
+    await AndroidBluetoothPermissionsService.openAppSettings()
   }
 
   /** Enable Bluetooth via system prompt */
