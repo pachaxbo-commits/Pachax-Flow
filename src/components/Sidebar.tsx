@@ -9,12 +9,13 @@ import {
   Store,
   Printer,
   MapPin,
+  Wallet,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTenantStore } from '../store/tenantStore'
 import type { UserRole } from '../types'
 
-export type ViewType = 'caja' | 'cocina' | 'historial' | 'admin' | 'bot' | 'printer-diagnostic' | 'printer-settings'
+export type ViewType = 'caja' | 'cocina' | 'historial' | 'admin' | 'bot' | 'printer-diagnostic' | 'printer-settings' | 'cash-session'
 
 interface SidebarProps {
   currentView: ViewType
@@ -48,6 +49,7 @@ export function Sidebar({
   // Bot navigation hidden from main menu as requested
   const navItems: { id: ViewType; label: string; icon: typeof UtensilsCrossed; badge?: number }[] = [
     { id: 'caja', label: 'Caja POS', icon: UtensilsCrossed, badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined },
+    { id: 'cash-session', label: 'Caja & Turnos', icon: Wallet },
     { id: 'cocina', label: 'Cocina', icon: ChefHat },
     { id: 'historial', label: 'Historial', icon: History },
     { id: 'admin', label: 'Administración', icon: Settings },

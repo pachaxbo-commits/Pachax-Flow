@@ -25,7 +25,6 @@ export function PrinterSettingsView() {
   const [profiles, setProfiles] = useState<PrinterProfile[]>([])
   const [isEditingModalOpen, setIsEditingModalOpen] = useState(false)
   const [editingProfile, setEditingProfile] = useState<Partial<PrinterProfile> | null>(null)
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<string | null>(null)

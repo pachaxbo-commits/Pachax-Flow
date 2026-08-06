@@ -48,7 +48,7 @@ export class PrintOrchestratorService {
   /**
    * Dispatch Kitchen Command Tickets per Station for a specific Batch Number
    */
-  async printKitchenOrderBatch(order: OrderInput, batchNumber: number, operatorUid: string): Promise<PrintJob[]> {
+  async printKitchenOrderBatch(order: OrderInput, batchNumber: number, _operatorUid: string): Promise<PrintJob[]> {
     if (!this.migration.isNewEngineEnabled()) {
       return [] // Legacy mode fallback
     }
@@ -121,7 +121,7 @@ export class PrintOrchestratorService {
   /**
    * Dispatch Receipt Print Request upon Payment Completion
    */
-  async printOrderReceipt(order: OrderInput, operatorUid: string): Promise<PrintJob | null> {
+  async printOrderReceipt(order: OrderInput, _operatorUid: string, paymentId?: string, financialRevision = 1): Promise<PrintJob | null> {
     if (!this.migration.isNewEngineEnabled()) {
       return null // Legacy mode fallback
     }
@@ -162,11 +162,12 @@ export class PrintOrchestratorService {
       createdIso: new Date().toISOString(),
     }
 
+    const stablePaymentId = paymentId || 'pay-main'
     try {
       return await this.engine.submitPrintRequest({
         targetType: 'receipt',
         orderId: order.id,
-        idempotencyKey: `receipt-${order.id}-pay-${order.grandTotal}`,
+        idempotencyKey: `receipt:${order.id}:${stablePaymentId}:v${financialRevision}`,
         payload,
       })
     } catch (err) {

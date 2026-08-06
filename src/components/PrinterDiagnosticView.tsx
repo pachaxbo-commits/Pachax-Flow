@@ -19,6 +19,8 @@ import {
   Wifi,
   ChevronDown,
   ChevronUp,
+  Smartphone,
+  ExternalLink,
 } from 'lucide-react'
 import { PrintEngineService } from '../services/printing/printEngineService'
 import { DiagnosticPrinterAdapter, type DiagnosticMockBehavior } from '../services/printing/diagnosticPrinterAdapter'
@@ -30,6 +32,7 @@ import { runAndroidBluetoothSppTestSuite } from '../services/printing/__tests__/
 import { runPachaxBluetoothPermissionsTestSuite } from '../services/printing/__tests__/pachaxBluetoothPermissionsPlugin.test'
 import { runAndroidNetworkTcpTestSuite } from '../services/printing/__tests__/androidNetworkTcpPrinterAdapter.test'
 import { runPrintIntegrationTestSuite } from '../services/printing/__tests__/printIntegration.test'
+import { runCashEngineTestSuite } from '../services/cash/__tests__/cashEngine.test'
 import type { PrinterProfile, PrintJob, PrintJobPayload } from '../types/printing'
 
 export function PrinterDiagnosticView() {
@@ -172,21 +175,29 @@ export function PrinterDiagnosticView() {
 
   const handleRunTests = async () => {
     setIsTestRunning(true)
-    setStatusMessage('Ejecutando suite completa de 73 pruebas automatizadas...')
+    setStatusMessage('Ejecutando suite completa de 103 pruebas automatizadas...')
     try {
       const coreRes = await runPrintEngineTestSuite()
       const btRes = await runAndroidBluetoothSppTestSuite()
       const permRes = await runPachaxBluetoothPermissionsTestSuite()
       const tcpRes = await runAndroidNetworkTcpTestSuite()
       const integRes = await runPrintIntegrationTestSuite()
+      const cashRes = await runCashEngineTestSuite()
 
-      const totalPassed = coreRes.passed + btRes.passed + permRes.passed + tcpRes.passed + integRes.passed
-      const totalFailed = coreRes.failed + btRes.failed + permRes.failed + tcpRes.failed + integRes.failed
+      const totalPassed = coreRes.passed + btRes.passed + permRes.passed + tcpRes.passed + integRes.passed + cashRes.passed
+      const totalFailed = coreRes.failed + btRes.failed + permRes.failed + tcpRes.failed + integRes.failed + cashRes.failed
 
       setTestSuiteOutput({
         passed: totalPassed,
         failed: totalFailed,
-        results: [...coreRes.results, ...btRes.results, ...permRes.results, ...tcpRes.results, ...integRes.results],
+        results: [
+          ...coreRes.results,
+          ...btRes.results,
+          ...permRes.results,
+          ...tcpRes.results,
+          ...integRes.results,
+          ...cashRes.results,
+        ],
       })
       setStatusMessage(`Suite completada: ${totalPassed} PASARON / ${totalFailed} FALLARON`)
     } catch (err: any) {
@@ -421,7 +432,7 @@ export function PrinterDiagnosticView() {
             className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition disabled:opacity-50"
           >
             {isTestRunning ? <RefreshCw className="animate-spin" size={18} /> : <Play size={18} />}
-            Ejecutar Suite (73 Pruebas)
+            Ejecutar Suite (103 Pruebas)
           </button>
         </div>
       </div>
@@ -460,6 +471,174 @@ export function PrinterDiagnosticView() {
           <Sliders size={16} /> Simulador Diagnóstico Virtual
         </button>
       </div>
+
+      {/* Bluetooth Diagnostic Panel */}
+      {adapterMode === 'android_bt' && (
+        <div className="space-y-4">
+          {/* Structured Diagnostic Summary Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3 text-center text-xs">
+            <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+              <div className="text-[10px] uppercase font-extrabold text-slate-400">PLATAFORMA</div>
+              <div className="font-extrabold text-slate-800 flex items-center justify-center gap-1">
+                {sppAdapter.isNativeAndroid() ? (
+                  <>Android Nativo <CheckCircle2 size={14} className="text-emerald-600" /></>
+                ) : (
+                  <>Web / Browser <Info size={14} className="text-amber-600" /></>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+              <div className="text-[10px] uppercase font-extrabold text-slate-400">PLUGIN SPP</div>
+              <div className="font-extrabold text-slate-800 flex items-center justify-center gap-1">
+                {sppAdapter.isPluginAvailable() ? (
+                  <>Detectado <CheckCircle2 size={14} className="text-emerald-600" /></>
+                ) : (
+                  <>Ausente <AlertTriangle size={14} className="text-rose-600" /></>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+              <div className="text-[10px] uppercase font-extrabold text-slate-400">CONNECT</div>
+              <div className="font-extrabold text-slate-800 flex items-center justify-center gap-1">
+                {diagState?.bluetoothConnectPermission === 'granted' || diagState?.bluetoothConnectPermission === 'notRequired' ? (
+                  <>Concedido <CheckCircle2 size={14} className="text-emerald-600" /></>
+                ) : (
+                  <>{diagState?.bluetoothConnectPermission.toUpperCase() || 'DENIED'} <AlertTriangle size={14} className="text-amber-600" /></>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+              <div className="text-[10px] uppercase font-extrabold text-slate-400">BLUETOOTH</div>
+              <div className="font-extrabold text-slate-800 flex items-center justify-center gap-1">
+                {diagState?.isBluetoothEnabled ? (
+                  <>Encendido <CheckCircle2 size={14} className="text-emerald-600" /></>
+                ) : (
+                  <>Apagado <AlertTriangle size={14} className="text-rose-600" /></>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+              <div className="text-[10px] uppercase font-extrabold text-slate-400">EMPAREJADOS</div>
+              <div className="font-extrabold text-blue-600 text-sm">{pairedDevices.length}</div>
+            </div>
+
+            <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1 truncate">
+              <div className="text-[10px] uppercase font-extrabold text-slate-400">IMPRESORA</div>
+              <div className="font-bold text-slate-800 text-[11px] truncate">{selectedMac || 'Sin MAC'}</div>
+            </div>
+
+            <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+              <div className="text-[10px] uppercase font-extrabold text-slate-400">CONEXIÓN</div>
+              <div className="font-extrabold text-slate-800 flex items-center justify-center gap-1">
+                {isConnectedActive ? (
+                  <>Activa <CheckCircle2 size={14} className="text-emerald-600" /></>
+                ) : (
+                  <>Inactiva <Info size={14} className="text-slate-400" /></>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-3 gap-3">
+              <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
+                <Smartphone size={18} className="text-blue-600" />
+                Acciones de Permisos y Bluetooth Nativo (SDK API {diagState?.apiLevel || 'N/A'})
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleRequestPermissions}
+                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition"
+                >
+                  Solicitar Permiso Dispositivos Cercanos
+                </button>
+                <button
+                  onClick={handleEnableBluetooth}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-xs transition"
+                >
+                  Encender Bluetooth
+                </button>
+                <button
+                  onClick={handleOpenAppSettings}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1 transition"
+                >
+                  <ExternalLink size={12} /> Abrir Configuración
+                </button>
+              </div>
+            </div>
+
+            {diagState && (
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
+                <div className="font-bold text-slate-700 flex items-center gap-1.5">
+                  <Info size={16} className="text-blue-600" />
+                  Estado del Diagnóstico Nativo:
+                </div>
+                <div className="text-slate-600 font-medium">{diagState.message}</div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700 block">Dispositivos Emparejados:</label>
+                  <button
+                    onClick={loadBluetoothStatus}
+                    className="text-[11px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                  >
+                    <RefreshCw size={12} /> Cargar Dispositivos Emparejados
+                  </button>
+                </div>
+                <select
+                  value={selectedMac}
+                  onChange={(e) => setSelectedMac(e.target.value)}
+                  className="w-full font-semibold border border-slate-200 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-blue-500"
+                >
+                  {pairedDevices.length === 0 ? (
+                    <option value="">No hay dispositivos emparejados</option>
+                  ) : (
+                    pairedDevices.map((d) => (
+                      <option key={d.address} value={d.address}>
+                        {d.name} ({d.address})
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Tamaño de Bloque (Chunk Size):</label>
+                <select
+                  value={chunkSize}
+                  onChange={(e) => setChunkSize(Number(e.target.value))}
+                  className="w-full font-semibold border border-slate-200 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-blue-500"
+                >
+                  <option value={256}>256 Bytes (Muy seguro)</option>
+                  <option value={512}>512 Bytes (Recomendado)</option>
+                  <option value={1024}>1024 Bytes (Rápido)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Demora entre Bloques (Ms):</label>
+                <select
+                  value={chunkDelayMs}
+                  onChange={(e) => setChunkDelayMs(Number(e.target.value))}
+                  className="w-full font-semibold border border-slate-200 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-blue-500"
+                >
+                  <option value={25}>25 ms</option>
+                  <option value={50}>50 ms (Recomendado)</option>
+                  <option value={100}>100 ms</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* LAN Configuration Panel */}
       {adapterMode === 'network_tcp' && (

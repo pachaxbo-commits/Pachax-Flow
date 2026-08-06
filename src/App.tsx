@@ -13,6 +13,7 @@ import { TenantCustomizerModal } from './components/TenantCustomizerModal'
 import { PrinterSettingsModal } from './components/PrinterSettingsModal'
 import { PrinterDiagnosticView } from './components/PrinterDiagnosticView'
 import { PrinterSettingsView } from './components/PrinterSettingsView'
+import { CashSessionView } from './components/CashSessionView'
 import { UnauthorizedView } from './components/UnauthorizedView'
 import { notifyBotOrderConfirmed } from './lib/botApi'
 import { formatCurrency } from './lib/format'
@@ -373,6 +374,7 @@ function MainShell({
             {view === 'bot' && <BotView />}
             {view === 'printer-diagnostic' && <PrinterDiagnosticView />}
             {view === 'printer-settings' && <PrinterSettingsView />}
+            {view === 'cash-session' && <CashSessionView />}
           </div>
         </main>
       </div>
