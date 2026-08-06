@@ -11,6 +11,7 @@ import { RegisterView } from './components/RegisterView'
 import { Sidebar, type ViewType } from './components/Sidebar'
 import { TenantCustomizerModal } from './components/TenantCustomizerModal'
 import { PrinterSettingsModal } from './components/PrinterSettingsModal'
+import { PrinterDiagnosticView } from './components/PrinterDiagnosticView'
 import { UnauthorizedView } from './components/UnauthorizedView'
 import { notifyBotOrderConfirmed } from './lib/botApi'
 import { formatCurrency } from './lib/format'
@@ -369,6 +370,7 @@ function MainShell({
               />
             )}
             {view === 'bot' && <BotView />}
+            {view === 'printer-diagnostic' && <PrinterDiagnosticView />}
           </div>
         </main>
       </div>

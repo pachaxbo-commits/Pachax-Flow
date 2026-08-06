@@ -14,7 +14,7 @@ import { useState } from 'react'
 import { useTenantStore } from '../store/tenantStore'
 import type { UserRole } from '../types'
 
-export type ViewType = 'caja' | 'cocina' | 'historial' | 'admin' | 'bot'
+export type ViewType = 'caja' | 'cocina' | 'historial' | 'admin' | 'bot' | 'printer-diagnostic'
 
 interface SidebarProps {
   currentView: ViewType
@@ -51,6 +51,7 @@ export function Sidebar({
     { id: 'cocina', label: 'Cocina', icon: ChefHat },
     { id: 'historial', label: 'Historial', icon: History },
     { id: 'admin', label: 'Menú & Admin', icon: Settings },
+    { id: 'printer-diagnostic', label: 'Diag. Impresoras', icon: Printer },
   ]
 
   const filteredItems = navItems.filter((item) => availableViews.includes(item.id))
