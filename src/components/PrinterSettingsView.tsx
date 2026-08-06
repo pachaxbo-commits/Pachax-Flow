@@ -9,15 +9,19 @@ import {
   ShieldCheck,
   Info,
   Play,
-  RotateCcw,
 } from 'lucide-react'
 import { PrintEngineService } from '../services/printing/printEngineService'
 import { PrintMigrationService, type PrintingEngineVersion } from '../services/printing/printMigrationService'
 import { AndroidNetworkTcpPrinterAdapter } from '../adapters/printing/androidNetworkTcpPrinterAdapter'
 import { AndroidBluetoothSppAdapter } from '../adapters/printing/androidBluetoothSppAdapter'
+import { PageHeader } from './ui/PageHeader'
 import type { PrinterProfile, PrinterConnectionType } from '../types/printing'
 
-export function PrinterSettingsView() {
+interface PrinterSettingsViewProps {
+  onBack?: () => void
+}
+
+export function PrinterSettingsView({ onBack }: PrinterSettingsViewProps) {
   const engine = PrintEngineService.getInstance()
   const migration = PrintMigrationService.getInstance()
 
@@ -132,46 +136,61 @@ export function PrinterSettingsView() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6 bg-slate-50 min-h-screen">
-      {/* Top Banner & Migration Flag */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="h-12 w-12 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
-            <Printer size={24} />
+    <div className="space-y-4 bg-slate-50 min-h-screen pb-12">
+      <PageHeader
+        title="Impresoras y Estaciones"
+        subtitle="Gestión de impresoras térmicas Bluetooth SPP y Red LAN TCP/IP"
+        onBack={onBack}
+        actions={
+          <button
+            onClick={handleOpenCreateModal}
+            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
+          >
+            <Plus size={16} /> Agregar Impresora
+          </button>
+        }
+      />
+
+      <div className="max-w-7xl mx-auto px-4 space-y-4">
+        {/* Top Banner & Migration Flag */}
+        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
+              <Printer size={20} />
+            </div>
+            <div>
+              <h2 className="text-sm font-extrabold text-slate-900">Motor de Impresión PACHAX</h2>
+              <p className="text-xs text-slate-500 font-medium">Selecciona el modo de servicio de impresión</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-800">Configuración de Impresoras y Estaciones</h1>
-            <p className="text-xs text-slate-500 font-medium">Gestión profesional multi-sucursal y ruteo de comandas</p>
+
+          {/* Feature Flag Switch */}
+          <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+            <button
+              onClick={() => handleToggleEngineVersion('new')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                engineVersion === 'new' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <ShieldCheck size={14} /> Nuevo Motor PACHAX
+            </button>
+            <button
+              onClick={() => handleToggleEngineVersion('legacy')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                engineVersion === 'legacy' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Modo Legacy
+            </button>
           </div>
         </div>
 
-        {/* Feature Flag Switch */}
-        <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-          <button
-            onClick={() => handleToggleEngineVersion('new')}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-              engineVersion === 'new' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            <ShieldCheck size={14} /> Nuevo Motor PACHAX
-          </button>
-          <button
-            onClick={() => handleToggleEngineVersion('legacy')}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-              engineVersion === 'legacy' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            <RotateCcw size={14} /> Modo Legacy
-          </button>
-        </div>
-      </div>
-
-      {statusMessage && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-2xl text-xs font-semibold flex items-center gap-2">
-          <Info size={16} className="text-blue-600 shrink-0" />
-          {statusMessage}
-        </div>
-      )}
+        {statusMessage && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-2xl text-xs font-semibold flex items-center gap-2">
+            <Info size={16} className="text-blue-600 shrink-0" />
+            {statusMessage}
+          </div>
+        )}
 
       {/* Printer List Header */}
       <div className="flex items-center justify-between">
@@ -393,6 +412,7 @@ export function PrinterSettingsView() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

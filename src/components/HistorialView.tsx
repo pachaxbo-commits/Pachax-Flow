@@ -362,51 +362,55 @@ export function HistorialView({
   }
 
   return (
-    <section className="space-y-5">
-      <Panel className="border-white/80 bg-white/68 p-5">
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent">Historial y cierre</p>
-              <h2 className="mt-2 font-serif text-3xl text-ink">Pedidos del Negocio</h2>
-              <p className="mt-1 max-w-3xl text-xs text-muted">
-                Resumen de ventas y arqueo por métodos de pago filtrado por día, semana o mes.
-              </p>
-            </div>
+    <section className="space-y-4">
+      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+            Historial de Ventas y Arqueo
+            <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-200">
+              {summary.orderCount} pedido(s)
+            </span>
+          </h2>
+          <p className="text-xs text-slate-500 font-medium">Consolidado operativo de caja e historial</p>
+        </div>
 
-            {/* Controles de Rango de Tiempo y Fecha */}
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Selector Diario/Semanal/Mensual */}
-              <div className="flex gap-1 bg-panel p-1 rounded-xl border border-line shadow-insetSoft">
-                {[
-                  { id: 'day', label: 'Día' },
-                  { id: 'week', label: 'Semana' },
-                  { id: 'month', label: 'Mes' },
-                ].map((r) => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    className={`px-3 py-1.5 rounded-lg text-xs font-black tracking-wider transition ${
-                      timeRange === r.id
-                        ? 'bg-ink text-white shadow-sm'
-                        : 'text-muted hover:text-ink'
-                    }`}
-                    onClick={() => setTimeRange(r.id as any)}
-                  >
-                    {r.label.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-
-              {/* Selector de Fecha */}
-              <input
-                type="date"
-                value={selectedDayKey}
-                onChange={(event) => setSelectedDayKey(event.target.value)}
-                className="rounded-xl border border-line bg-white px-3 py-2 text-xs font-bold text-ink outline-none focus:border-accent shadow-sm"
-              />
-            </div>
+        {/* Controles de Rango de Tiempo y Fecha */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Selector Diario/Semanal/Mensual */}
+          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+            <button
+              className={`px-3 py-1.5 rounded-lg transition ${timeRange === 'day' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+              onClick={() => setTimeRange('day')}
+            >
+              Día
+            </button>
+            <button
+              className={`px-3 py-1.5 rounded-lg transition ${timeRange === 'week' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+              onClick={() => setTimeRange('week')}
+            >
+              Semana
+            </button>
+            <button
+              className={`px-3 py-1.5 rounded-lg transition ${timeRange === 'month' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+              onClick={() => setTimeRange('month')}
+            >
+              Mes
+            </button>
           </div>
+
+          <select
+            className="border border-slate-200 bg-white rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
+            value={selectedDayKey}
+            onChange={(e) => setSelectedDayKey(e.target.value)}
+          >
+            {dayOptions.map((dayStr) => (
+              <option key={dayStr} value={dayStr}>
+                {dayStr}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
           {/* Accesos Rápidos de Días (solo visible si el rango es diario) */}
           {timeRange === 'day' && (
@@ -489,8 +493,6 @@ export function HistorialView({
               </div>
             </div>
           </div>
-        </div>
-      </Panel>
 
       <div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]">
         <Panel className="border-white/85 bg-white/78 p-5">

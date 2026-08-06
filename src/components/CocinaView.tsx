@@ -5,7 +5,6 @@ import { playKitchenNotification } from '../lib/sound'
 import type { Order, OrderStatus } from '../types'
 import { OrderTimer } from './OrderTimer'
 import { Button } from './ui/Button'
-import { Panel } from './ui/Panel'
 import { SourceBadge, FulfillmentBadge, PaymentBadge } from './ui/StatusPill'
 import { PrintableTicket } from './OrderTicket'
 import { PrintModeToggle } from './PrintModeToggle'
@@ -142,37 +141,44 @@ export function CocinaView({
   }, [orders])
 
   return (
-    <section className="space-y-5">
-      <Panel className="border-white/80 bg-white/68 p-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent">Cocina</p>
-            <h2 className="mt-2 font-serif text-4xl text-ink">Pedidos en preparacion</h2>
-            <p className="mt-2 text-sm leading-6 text-muted">
-              Marca cada pedido como servido, listo para retirar o listo para despacho segun corresponda.
-            </p>
+    <section className="space-y-4">
+      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700">
+            <ChefHat size={22} />
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            {notice ? (
-              <div className="rounded-[1.6rem] border border-accent/15 bg-white px-5 py-4 text-sm font-semibold text-accent shadow-card">
-                {notice}
-              </div>
-            ) : null}
-            <PrintModeToggle />
-            {!audioUnlocked ? (
-              <Button tone="primary" className="shadow-lg shadow-accent/15 flex items-center gap-2" onClick={handleUnlockAudio}>
-                <BellRing size={16} className="animate-bounce" />
-                Activar Sonido
-              </Button>
-            ) : (
-              <div className="text-xs font-semibold text-success flex items-center gap-2 bg-successSoft border border-[#cfe2d6] px-4 py-3 rounded-[1.4rem]">
-                <CheckCheck size={14} />
-                Sonido activo
-              </div>
-            )}
+          <div>
+            <h2 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+              Tablero de Cocina (KDS)
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-bold">
+                {activeOrders.length} activo(s)
+              </span>
+            </h2>
+            <p className="text-xs text-slate-500 font-medium">Control de comanda en tiempo real</p>
           </div>
         </div>
-      </Panel>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {notice && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-1.5 text-xs font-bold text-amber-800 animate-pulse">
+              {notice}
+            </div>
+          )}
+          <PrintModeToggle />
+          {!audioUnlocked ? (
+            <button
+              onClick={handleUnlockAudio}
+              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition"
+            >
+              <BellRing size={14} className="animate-bounce" /> Activar Sonido
+            </button>
+          ) : (
+            <div className="text-xs font-bold text-emerald-800 flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
+              <CheckCheck size={14} className="text-emerald-600" /> Sonido Activo
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
         {activeOrders.map((order) => {
