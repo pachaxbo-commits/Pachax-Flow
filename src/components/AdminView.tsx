@@ -169,10 +169,10 @@ export function AdminView({
       <Panel className="border-white/80 bg-white/68 p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent">Administracion</p>
-            <h2 className="mt-2 font-serif text-4xl text-ink">Menu Burger Lab</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-muted">
-              Crea, ordena, oculta y reactiva categorias o productos. Los cambios se reflejan en Caja y en el bot.
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-600">Administración</p>
+            <h2 className="mt-1 font-bold text-3xl text-slate-800">Menú y Productos</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-500">
+              Crea, edita y organiza las categorías, precios y fotos de tu restaurante en tiempo real.
             </p>
           </div>
           <div className="rounded-[1.5rem] border border-[#f1caca] bg-white p-4 shadow-card">

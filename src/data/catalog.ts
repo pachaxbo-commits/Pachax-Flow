@@ -39,9 +39,9 @@ export const demoQuickExtras = sauceExtras
 
 export const demoProducts: Product[] = [
   {
-    id: 'burger-lab-simple-con-papas',
+    id: 'hamburguesa-simple-con-papas',
     categoryId: 'hamburguesas',
-    name: 'Burger Lab Simple Con Papas',
+    name: 'Hamburguesa Clásica Con Papas',
     description: burgerDescription,
     price: 22,
     image: placeholderImage,
@@ -53,9 +53,9 @@ export const demoProducts: Product[] = [
     options: burgerOptions,
   },
   {
-    id: 'burger-lab-simple-sin-papas',
+    id: 'hamburguesa-simple-sin-papas',
     categoryId: 'hamburguesas',
-    name: 'Burger Lab Simple Sin Papas',
+    name: 'Hamburguesa Clásica Sin Papas',
     description: burgerDescription,
     price: 19,
     image: placeholderImage,
@@ -67,9 +67,9 @@ export const demoProducts: Product[] = [
     options: burgerOptions,
   },
   {
-    id: 'burger-lab-doble-con-papas',
+    id: 'hamburguesa-doble-con-papas',
     categoryId: 'hamburguesas',
-    name: 'Burger Lab DOBLE Con Papas',
+    name: 'Hamburguesa DOBLE Con Papas',
     description: doubleBurgerDescription,
     price: 37,
     image: placeholderImage,
@@ -81,9 +81,9 @@ export const demoProducts: Product[] = [
     options: burgerOptions,
   },
   {
-    id: 'burger-lab-doble-sin-papas',
+    id: 'hamburguesa-doble-sin-papas',
     categoryId: 'hamburguesas',
-    name: 'Burger Lab DOBLE Sin Papas',
+    name: 'Hamburguesa DOBLE Sin Papas',
     description: doubleBurgerDescription,
     price: 34,
     image: placeholderImage,

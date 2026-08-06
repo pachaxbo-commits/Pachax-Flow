@@ -1,17 +1,17 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@1,600;1,700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
-  font-family: Manrope, system-ui, sans-serif;
-  background-color: #070C1A;
-  color: #F8FAFC;
-  --pachax-primary: #0B132B;
-  --pachax-navy: #1C2541;
-  --pachax-accent: #00F0FF;
+  color-scheme: light;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  background-color: #F8FAFC;
+  color: #0F172A;
+  --pachax-primary: #1E40AF;
+  --pachax-blue: #2563EB;
+  --pachax-sky: #0EA5E9;
 }
 
 * {
@@ -25,13 +25,9 @@ html {
 body {
   margin: 0;
   min-width: 320px;
-  background-color: #070C1A;
-  background-image: 
-    radial-gradient(circle at 10% 10%, rgba(0, 240, 255, 0.08), transparent 35%),
-    radial-gradient(circle at 90% 85%, rgba(28, 37, 65, 0.45), transparent 45%),
-    linear-gradient(180deg, #070C1A 0%, #0B132B 100%);
-  background-attachment: fixed;
-  color: #F8FAFC;
+  background-color: #F8FAFC;
+  color: #0F172A;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 }
 
 #root {
@@ -67,42 +63,31 @@ img {
 
 ::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgba(0, 240, 255, 0.25);
+  background: #CBD5E1;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 240, 255, 0.45);
+  background: #94A3B8;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(11, 19, 43, 0.5);
+  background: #F1F5F9;
 }
 
 ::selection {
-  background: rgba(0, 240, 255, 0.3);
-  color: #ffffff;
+  background: rgba(37, 99, 235, 0.2);
+  color: #1E40AF;
 }
 
-/* Glassmorphism Utilities */
-.glass-panel {
-  background: rgba(17, 29, 55, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* Light Card & Panel Styling */
+.panel-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
 }
 
-.glass-card {
-  background: rgba(28, 37, 65, 0.65);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.cyan-glow {
-  box-shadow: 0 0 20px rgba(0, 240, 255, 0.25);
-}
-
-.cyan-border-glow {
-  border-color: rgba(0, 240, 255, 0.5);
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+.brand-gradient-text {
+  background: linear-gradient(135deg, #0F172A 0%, #1E40AF 50%, #0EA5E9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }

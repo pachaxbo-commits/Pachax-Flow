@@ -16,32 +16,32 @@ export function LoginView({
   const [password, setPassword] = useState('')
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center bg-slate-950 px-4 py-6 text-slate-100 font-sans selection:bg-indigo-500/30 selection:text-indigo-200 overflow-hidden">
-      {/* Background Ambient Mesh Glow */}
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[140px] pointer-events-none" />
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-6 text-slate-900 font-sans selection:bg-blue-500/20 selection:text-blue-700 overflow-hidden">
+      {/* Background Soft Glow */}
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-400/10 rounded-full blur-[140px] pointer-events-none" />
 
-      <div className="relative w-full max-w-sm rounded-3xl bg-slate-900/80 border border-slate-800/80 p-6 sm:p-8 shadow-2xl backdrop-blur-xl transition-all">
-        {/* Header con Título Libre Estilo Carta / Elegante con Animación */}
+      <div className="relative w-full max-w-sm rounded-3xl bg-white border border-slate-200 p-6 sm:p-8 shadow-xl backdrop-blur-md transition-all">
+        {/* Header con Título Elegante */}
         <div className="text-center mb-6">
-          <h1 className="text-4xl sm:text-5xl font-serif italic tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-white via-cyan-100 to-sky-400 animate-pulse drop-shadow-md select-none py-1">
+          <h1 className="text-4xl sm:text-5xl font-serif italic tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-blue-700 via-indigo-800 to-slate-900 drop-shadow-sm select-none py-1">
             Pachax Flow
           </h1>
         </div>
 
         <form
-          className="space-y-3.5"
+          className="space-y-4"
           onSubmit={async (event) => {
             event.preventDefault()
             await onSubmit(email, password)
           }}
         >
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
               Correo Electrónico
             </label>
             <input
               required
-              className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-600 focus:bg-white focus:ring-2 focus:ring-blue-600/20"
               placeholder="admin@mi-restaurante.com"
               type="email"
               value={email}
@@ -49,12 +49,12 @@ export function LoginView({
             />
           </div>
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
               Contraseña
             </label>
             <input
               required
-              className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-600 focus:bg-white focus:ring-2 focus:ring-blue-600/20"
               placeholder="••••••••"
               type="password"
               value={password}
@@ -63,7 +63,7 @@ export function LoginView({
           </div>
 
           {error ? (
-            <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-semibold text-rose-400 text-center">
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-600 text-center">
               {error}
             </div>
           ) : null}
@@ -71,7 +71,7 @@ export function LoginView({
           <button
             disabled={isLoading || !email || !password}
             type="submit"
-            className="w-full py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-sky-500 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 hover:opacity-95 transition disabled:opacity-50 mt-2"
+            className="w-full py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-sky-500 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 hover:from-blue-700 hover:to-sky-600 transition disabled:opacity-50 mt-2"
           >
             {isLoading ? <LoaderCircle size={18} className="animate-spin" /> : <LogIn size={18} />}
             {isLoading ? 'Ingresando...' : 'Iniciar Sesión'}
@@ -79,18 +79,18 @@ export function LoginView({
         </form>
 
         {onSwitchToRegister && (
-          <div className="mt-6 pt-4 border-t border-slate-800/80 text-center">
+          <div className="mt-6 pt-4 border-t border-slate-100 text-center">
             <button
               onClick={onSwitchToRegister}
-              className="inline-flex items-center justify-center gap-1.5 text-xs text-indigo-400 font-bold hover:underline"
+              className="inline-flex items-center justify-center gap-1.5 text-xs text-blue-600 font-bold hover:underline"
             >
               <Store size={14} /> ¿Registrar un restaurante nuevo?
             </button>
           </div>
         )}
 
-        <div className="mt-4 flex items-center justify-center gap-1.5 text-[10px] text-slate-500">
-          <ShieldCheck size={13} className="text-indigo-400" /> Sistema Seguro PACHAX Flow
+        <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+          <ShieldCheck size={14} className="text-blue-600" /> PACHAX Flow POS System
         </div>
       </div>
     </div>
