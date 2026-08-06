@@ -13,20 +13,22 @@ import {
   Database,
   Bluetooth,
   Smartphone,
+  Info,
 } from 'lucide-react'
 import { PrintEngineService } from '../services/printing/printEngineService'
 import { DiagnosticPrinterAdapter, type DiagnosticMockBehavior } from '../services/printing/diagnosticPrinterAdapter'
 import { AndroidBluetoothSppAdapter, type BluetoothPairedDevice } from '../adapters/printing/androidBluetoothSppAdapter'
+import { AndroidBluetoothPermissionsService, type BluetoothPermissionState } from '../services/printing/androidBluetoothPermissionsService'
 import { runPrintEngineTestSuite } from '../services/printing/__tests__/printEngine.test'
 import { runAndroidBluetoothSppTestSuite } from '../services/printing/__tests__/androidBluetoothSppAdapter.test'
 import type { PrinterProfile, PrintJob, PrintJobPayload } from '../types/printing'
 
 export function PrinterDiagnosticView() {
-  const [adapterMode, setAdapterMode] = useState<'virtual' | 'android_bt'>('virtual')
+  const [adapterMode, setAdapterMode] = useState<'virtual' | 'android_bt'>('android_bt')
   const [mockBehavior, setMockBehavior] = useState<DiagnosticMockBehavior>('success_transmitted')
   const [pairedDevices, setPairedDevices] = useState<BluetoothPairedDevice[]>([])
   const [selectedMac, setSelectedMac] = useState<string>('')
-  const [btStatus, setBtStatus] = useState<string>('Comprobando estado de Bluetooth...')
+  const [permState, setPermState] = useState<BluetoothPermissionState | null>(null)
   const [chunkSize, setChunkSize] = useState<number>(512)
   const [chunkDelayMs, setChunkDelayMs] = useState<number>(50)
 
@@ -50,8 +52,8 @@ export function PrinterDiagnosticView() {
   }, [adapterMode, mockBehavior])
 
   const loadBluetoothStatus = async () => {
-    const status = await sppAdapter.checkStatus()
-    setBtStatus(status.message)
+    const state = await AndroidBluetoothPermissionsService.checkPermissionState()
+    setPermState(state)
 
     try {
       const devices = await sppAdapter.listPairedDevices()
@@ -60,13 +62,25 @@ export function PrinterDiagnosticView() {
         setSelectedMac(devices[0].address)
       }
     } catch (err: any) {
-      setBtStatus(`Error al listar dispositivos: ${err.message}`)
+      setStatusMessage(`Error al listar dispositivos: ${err.message}`)
+    }
+  }
+
+  const handleRequestPermissions = async () => {
+    setStatusMessage('Solicitando permisos dinámicos a Android OS...')
+    const state = await AndroidBluetoothPermissionsService.requestPermissions()
+    setPermState(state)
+    if (state.hasPermissions) {
+      setStatusMessage('¡Permisos de Bluetooth concedidos correctamente!')
+      await loadBluetoothStatus()
+    } else {
+      setStatusMessage('Permisos denegados. Si marcaste "No volver a preguntar", debes habilitar Bluetooth en Ajustes de la App.')
     }
   }
 
   const handleRunTests = async () => {
     setIsTestRunning(true)
-    setStatusMessage('Ejecutando suite completa de 20 pruebas automatizadas...')
+    setStatusMessage('Ejecutando suite completa de 23 pruebas automatizadas...')
     try {
       const coreRes = await runPrintEngineTestSuite()
       const btRes = await runAndroidBluetoothSppTestSuite()
@@ -263,7 +277,7 @@ export function PrinterDiagnosticView() {
           className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition disabled:opacity-50"
         >
           {isTestRunning ? <RefreshCw className="animate-spin" size={18} /> : <Play size={18} />}
-          Ejecutar Suite Completa (20 Pruebas)
+          Ejecutar Suite Completa (23 Pruebas)
         </button>
       </div>
 
@@ -277,20 +291,20 @@ export function PrinterDiagnosticView() {
       {/* Mode Selection Tabs */}
       <div className="flex bg-white p-2 rounded-2xl border border-slate-200 gap-2">
         <button
-          onClick={() => setAdapterMode('virtual')}
-          className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition ${
-            adapterMode === 'virtual' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
-          }`}
-        >
-          <Sliders size={16} /> Simulador Diagnóstico Virtual (Web / Dev)
-        </button>
-        <button
           onClick={() => setAdapterMode('android_bt')}
           className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition ${
             adapterMode === 'android_bt' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
           }`}
         >
           <Bluetooth size={16} /> Bluetooth Classic SPP Nativo (Android APK)
+        </button>
+        <button
+          onClick={() => setAdapterMode('virtual')}
+          className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition ${
+            adapterMode === 'virtual' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <Sliders size={16} /> Simulador Diagnóstico Virtual (Web / Dev)
         </button>
       </div>
 
@@ -319,27 +333,44 @@ export function PrinterDiagnosticView() {
       ) : (
         /* Android Bluetooth Native Config Panel */
         <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-3 gap-3">
             <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
               <Smartphone size={18} className="text-blue-600" />
               Configuración Bluetooth SPP Nativo en Android
             </div>
-            <button
-              onClick={loadBluetoothStatus}
-              className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
-            >
-              <RefreshCw size={14} /> Escanear Dispositivos
-            </button>
+
+            <div className="flex items-center gap-2">
+              {permState && (
+                <span
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                    permState.isPluginAvailable ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  {permState.isPluginAvailable ? 'Plugin Nativo Detectado' : 'Simulador Web (Sin Plugin)'}
+                </span>
+              )}
+              <button
+                onClick={handleRequestPermissions}
+                className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-bold text-xs transition"
+              >
+                Solicitar Permisos
+              </button>
+            </div>
           </div>
 
-          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
-            <div className="font-bold text-slate-700">Estado de Bluetooth Nativo:</div>
-            <div className="text-slate-600 font-medium">{btStatus}</div>
-          </div>
+          {permState && (
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
+              <div className="font-bold text-slate-700 flex items-center gap-1.5">
+                <Info size={16} className="text-blue-600" />
+                Diagnóstico Nativo:
+              </div>
+              <div className="text-slate-600 font-medium">{permState.message}</div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
             <div>
-              <label className="font-bold text-slate-700 block mb-1">Dispositivo Bluetooth Emparejado:</label>
+              <label className="font-bold text-slate-700 block mb-1">Dispositivos Emparejados en Android:</label>
               <select
                 value={selectedMac}
                 onChange={(e) => setSelectedMac(e.target.value)}
@@ -355,6 +386,9 @@ export function PrinterDiagnosticView() {
                   ))
                 )}
               </select>
+              <p className="text-[10px] text-slate-400 mt-1">
+                * Primero empareja la impresora en Ajustes &rarr; Bluetooth de Android.
+              </p>
             </div>
 
             <div>
@@ -509,7 +543,7 @@ export function PrinterDiagnosticView() {
                 <div><strong className="text-slate-700">ID:</strong> {selectedJob.id}</div>
                 <div><strong className="text-slate-700">IdempotencyKey:</strong> {selectedJob.idempotencyKey}</div>
                 <div><strong className="text-slate-700">Estado:</strong> <span className="font-bold uppercase text-blue-600">{selectedJob.status}</span></div>
-                <div><strong className="text-slate-700">Conexion:</strong> {selectedJob.connectionType}</div>
+                <div><strong className="text-slate-700">Conexión:</strong> {selectedJob.connectionType}</div>
                 <div><strong className="text-slate-700">Es Copia:</strong> {selectedJob.payload.isCopy ? 'SÍ (COPIA)' : 'NO'}</div>
                 {selectedJob.lastError && <div className="text-rose-600"><strong className="text-rose-800">Error:</strong> {selectedJob.lastError}</div>}
               </div>

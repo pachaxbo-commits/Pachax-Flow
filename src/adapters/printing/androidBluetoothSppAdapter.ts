@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core'
+import { AndroidBluetoothPermissionsService, type BluetoothPermissionState } from '../../services/printing/androidBluetoothPermissionsService'
 import type {
   ErrorClassification,
   PrinterAdapter,
@@ -15,11 +16,9 @@ export interface BluetoothPairedDevice {
   class?: number
 }
 
-export interface BluetoothPermissionStatus {
-  available: boolean
-  enabled: boolean
-  granted: boolean
-  message: string
+/** Convert Uint8Array to clean standalone ArrayBuffer for native BluetoothSerial.write() */
+export function toCleanArrayBuffer(chunk: Uint8Array): ArrayBuffer {
+  return chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength) as ArrayBuffer
 }
 
 export class AndroidBluetoothSppAdapter implements PrinterAdapter {
@@ -31,53 +30,28 @@ export class AndroidBluetoothSppAdapter implements PrinterAdapter {
     return this.connectedDeviceAddress
   }
 
-  /** Check if app is running in Android Capacitor native container */
   isNativeAndroid(): boolean {
     return Capacitor.getPlatform() === 'android'
   }
 
-  /** Check if Bluetooth Classic hardware is available */
+  /** Checks whether bluetoothSerial native plugin object is available in window */
+  isPluginAvailable(): boolean {
+    return Boolean((window as any).bluetoothSerial)
+  }
+
   async isAvailable(): Promise<boolean> {
     if (!this.isNativeAndroid()) return false
-    const nav = window.navigator as any
-    if (nav && nav.bluetooth) return true
-    const btSerial = (window as any).bluetoothSerial
-    return Boolean(btSerial)
+    return this.isPluginAvailable()
   }
 
-  /** Check Bluetooth permissions and active status */
-  async checkStatus(): Promise<BluetoothPermissionStatus> {
-    if (!this.isNativeAndroid()) {
-      return {
-        available: false,
-        enabled: false,
-        granted: false,
-        message: 'Esta funcion requiere ejecutar la app dentro del APK nativo en Android.',
-      }
-    }
-
-    const btSerial = (window as any).bluetoothSerial
-    if (!btSerial) {
-      return {
-        available: true,
-        enabled: false,
-        granted: true,
-        message: 'Plugin Bluetooth Serial listo para conectar.',
-      }
-    }
-
-    return new Promise((resolve) => {
-      btSerial.isEnabled(
-        () => resolve({ available: true, enabled: true, granted: true, message: 'Bluetooth encendido y listo.' }),
-        () => resolve({ available: true, enabled: false, granted: true, message: 'Bluetooth desactivado en el dispositivo. Por favor enciéndelo.' })
-      )
-    })
+  /** Complete Bluetooth Permission and Status Diagnostic */
+  async checkStatusState(): Promise<BluetoothPermissionState> {
+    return await AndroidBluetoothPermissionsService.checkPermissionState()
   }
 
-  /** Request Bluetooth permissions dynamically */
   async requestPermissions(): Promise<boolean> {
-    const status = await this.checkStatus()
-    return status.granted
+    const state = await AndroidBluetoothPermissionsService.requestPermissions()
+    return state.hasPermissions
   }
 
   /** List paired Bluetooth devices from Android OS Settings */
@@ -87,8 +61,8 @@ export class AndroidBluetoothSppAdapter implements PrinterAdapter {
     const btSerial = (window as any).bluetoothSerial
     if (!btSerial) {
       return [
-        { id: '00:11:22:33:44:55', name: 'POS-58 (Bluetooth)', address: '00:11:22:33:44:55' },
-        { id: 'AA:BB:CC:DD:EE:FF', name: 'POS-80 (Bluetooth)', address: 'AA:BB:CC:DD:EE:FF' },
+        { id: '00:11:22:33:44:55', name: 'POS-58 (Emparejado Dev)', address: '00:11:22:33:44:55' },
+        { id: 'AA:BB:CC:DD:EE:FF', name: 'POS-80 (Emparejado Dev)', address: 'AA:BB:CC:DD:EE:FF' },
       ]
     }
 
@@ -108,17 +82,32 @@ export class AndroidBluetoothSppAdapter implements PrinterAdapter {
     })
   }
 
-  /** Scan / discover Bluetooth devices */
+  /** Discover unpaired Bluetooth devices if plugin supports discoverUnpaired */
   async discoverDevices(): Promise<Array<{ id: string; name: string; address?: string }>> {
-    const paired = await this.listPairedDevices()
-    return paired.map((p) => ({ id: p.id, name: p.name, address: p.address }))
+    const btSerial = (window as any).bluetoothSerial
+    if (!btSerial || typeof btSerial.discoverUnpaired !== 'function') {
+      const paired = await this.listPairedDevices()
+      return paired.map((p) => ({ id: p.id, name: `${p.name} (Emparejado)`, address: p.address }))
+    }
+
+    return new Promise((resolve) => {
+      btSerial.discoverUnpaired(
+        (devices: any[]) => {
+          resolve((devices || []).map((d) => ({ id: d.address || d.id, name: d.name || 'Dispositivo Descubierto', address: d.address || d.id })))
+        },
+        async () => {
+          const paired = await this.listPairedDevices()
+          resolve(paired.map((p) => ({ id: p.id, name: `${p.name} (Emparejado)`, address: p.address })))
+        }
+      )
+    })
   }
 
-  /** Connect to Bluetooth thermal printer via MAC address or identifier */
+  /** Connect to Bluetooth thermal printer via MAC address */
   async connect(printer: PrinterProfile): Promise<void> {
     const targetAddress = printer.macAddress || printer.ipAddress
     if (!targetAddress) {
-      const err: any = new Error('[AndroidBluetoothSppAdapter] Falta la direccion MAC o ID de la impresora')
+      const err: any = new Error('[AndroidBluetoothSppAdapter] Falta la dirección MAC de la impresora')
       err.classification = 'safeToRetry' as ErrorClassification
       throw err
     }
@@ -133,10 +122,10 @@ export class AndroidBluetoothSppAdapter implements PrinterAdapter {
 
     return new Promise((resolve, reject) => {
       const timeoutTimer = setTimeout(() => {
-        const err: any = new Error(`[AndroidBluetoothSppAdapter] Timeout conectando a ${targetAddress}`)
+        const err: any = new Error(`[AndroidBluetoothSppAdapter] Timeout (6s) conectando a ${targetAddress}`)
         err.classification = 'safeToRetry' as ErrorClassification
         reject(err)
-      }, printer.capabilities.connectionTimeoutMs || 8000)
+      }, printer.capabilities.connectionTimeoutMs || 6000)
 
       btSerial.connect(
         targetAddress,
@@ -172,8 +161,7 @@ export class AndroidBluetoothSppAdapter implements PrinterAdapter {
   }
 
   /**
-   * Transmits raw bytes in chunked blocks to prevent buffer overflows on cheap Bluetooth printers.
-   * Classifies pre-chunk vs mid-chunk errors accurately.
+   * Transmits raw ESC/POS bytes in chunked ArrayBuffers to prevent buffer overflows on Bluetooth printers.
    */
   async sendBytes(payload: PrintTransportPayload): Promise<PrintResult> {
     const { bytes, printer } = payload
@@ -193,6 +181,7 @@ export class AndroidBluetoothSppAdapter implements PrinterAdapter {
 
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i]
+      const arrayBufferToWrite = toCleanArrayBuffer(chunk)
 
       try {
         if (btSerial) {
@@ -202,7 +191,7 @@ export class AndroidBluetoothSppAdapter implements PrinterAdapter {
             }, printer.capabilities.writeTimeoutMs || 5000)
 
             btSerial.write(
-              chunk.buffer,
+              arrayBufferToWrite,
               () => {
                 clearTimeout(timeoutTimer)
                 resolve()
