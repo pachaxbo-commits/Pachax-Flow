@@ -33,6 +33,7 @@ import {
   type Firestore,
 } from 'firebase/firestore'
 import type { RestaurantAccount, RestaurantBranding, RestaurantMember, UserRole } from '../types'
+import { TenantContextService } from '../services/tenantService'
 
 interface FirebaseWebConfig {
   apiKey: string
@@ -141,6 +142,8 @@ export async function getFirebaseContext(): Promise<FirebaseContext | null> {
       } catch {
         await setPersistence(auth, inMemoryPersistence)
       }
+
+      TenantContextService.setContext(restaurantId, 'main', auth.currentUser?.uid)
 
       return {
         app,

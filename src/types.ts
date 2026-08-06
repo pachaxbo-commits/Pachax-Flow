@@ -1,11 +1,30 @@
 export type CategoryId = string
 
-export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'ready_for_pickup' | 'ready_for_dispatch' | 'out_for_delivery' | 'delivered' | 'cancelled'
+export type OrderStatus =
+  | 'pending'
+  | 'preparing'
+  | 'ready'
+  | 'ready_for_pickup'
+  | 'ready_for_dispatch'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'cancelled'
+
 export type PaymentMethod = 'cash' | 'qr' | 'mixed'
 export type OrderSource = 'local' | 'whatsapp'
 export type FulfillmentType = 'table' | 'pickup' | 'delivery'
 export type ProductAvailability = 'available' | 'soldout'
-export type UserRole = 'admin' | 'caja' | 'cocina' | 'pedidos'
+export type UserRole =
+  | 'superadmin'
+  | 'owner'
+  | 'admin'
+  | 'manager'
+  | 'caja'
+  | 'cocina'
+  | 'pedidos'
+  | 'delivery'
+  | 'accountant'
+  | 'readonly'
 
 export type RepositoryConnectionMode = 'connected' | 'connecting' | 'local' | 'offline'
 
@@ -16,6 +35,82 @@ export interface RepositoryStatus {
   source: 'firebase' | 'local'
   hasPendingWrites: boolean
   isOnline: boolean
+}
+
+/** Base interface for all tenant-scoped entities supporting versioning & soft deletes */
+export interface TenantScopedEntity {
+  schemaVersion: number
+  restaurantId: string
+  branchId: string
+  createdAt: string
+  updatedAt?: string
+  createdBy?: string
+  updatedBy?: string
+  deletedAt?: string
+  deletedBy?: string
+  isDeleted?: boolean
+}
+
+export interface Branch {
+  id: string
+  restaurantId: string
+  name: string
+  code: string
+  address?: string
+  phone?: string
+  isActive: boolean
+  isMain: boolean
+  createdAt: string
+}
+
+export type Permission =
+  | 'orders.create'
+  | 'orders.edit'
+  | 'orders.cancel'
+  | 'orders.applyDiscount'
+  | 'orders.reopen'
+  | 'orders.viewAll'
+  | 'payments.create'
+  | 'payments.refund'
+  | 'cash.open'
+  | 'cash.close'
+  | 'catalog.create'
+  | 'catalog.edit'
+  | 'catalog.delete'
+  | 'inventory.view'
+  | 'reports.view'
+  | 'users.create'
+  | 'settings.manage'
+  | 'printers.manage'
+  | 'branches.manage'
+
+export type PlanFeature =
+  | 'pos'
+  | 'tables'
+  | 'delivery'
+  | 'kitchenDisplay'
+  | 'thermalPrinting'
+  | 'advancedPrinting'
+  | 'cashSessions'
+  | 'inventory'
+  | 'reports'
+  | 'advancedReports'
+  | 'multiBranch'
+  | 'customRoles'
+  | 'auditLogs'
+  | 'customBranding'
+  | 'offlineMode'
+
+export interface RestaurantEntitlements {
+  planId: string
+  featureOverrides: Partial<Record<PlanFeature, boolean>>
+  limitOverrides: {
+    branches?: number | null
+    users?: number | null
+    printers?: number | null
+    products?: number | null
+    monthlyOrders?: number | null
+  }
 }
 
 export interface RestaurantBranding {
@@ -36,6 +131,7 @@ export interface RestaurantAccount {
   createdAt: string
   plan: 'basic' | 'pro' | 'enterprise'
   branding: RestaurantBranding
+  schemaVersion?: number
 }
 
 export interface RestaurantMember {
@@ -44,8 +140,10 @@ export interface RestaurantMember {
   displayName: string
   role: UserRole
   active: boolean
+  permissions?: Permission[]
   createdAt?: string
   restaurantId?: string
+  branchId?: string
 }
 
 export interface ProductExtra {
@@ -59,7 +157,7 @@ export interface ProductOption {
   label: string
 }
 
-export interface CatalogCategory {
+export interface CatalogCategory extends Partial<TenantScopedEntity> {
   id: string
   name: string
   subtitle?: string
@@ -69,7 +167,7 @@ export interface CatalogCategory {
   isVisible: boolean
 }
 
-export interface Product {
+export interface Product extends Partial<TenantScopedEntity> {
   id: string
   categoryId: CategoryId
   name: string
@@ -139,9 +237,11 @@ export interface OrderItem {
   lineTotal: number
 }
 
-export interface Order {
+export interface Order extends Partial<TenantScopedEntity> {
+  /** Internal unique UUID */
   id: string
   sequence: number
+  /** User-visible order/ticket number (customizable per tenant/branch) */
   displayNumber: string
   createdAt: string
   readyAt?: string
