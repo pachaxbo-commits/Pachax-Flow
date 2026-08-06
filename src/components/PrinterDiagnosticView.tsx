@@ -29,6 +29,7 @@ import { runPrintEngineTestSuite } from '../services/printing/__tests__/printEng
 import { runAndroidBluetoothSppTestSuite } from '../services/printing/__tests__/androidBluetoothSppAdapter.test'
 import { runPachaxBluetoothPermissionsTestSuite } from '../services/printing/__tests__/pachaxBluetoothPermissionsPlugin.test'
 import { runAndroidNetworkTcpTestSuite } from '../services/printing/__tests__/androidNetworkTcpPrinterAdapter.test'
+import { runPrintIntegrationTestSuite } from '../services/printing/__tests__/printIntegration.test'
 import type { PrinterProfile, PrintJob, PrintJobPayload } from '../types/printing'
 
 export function PrinterDiagnosticView() {
@@ -171,19 +172,23 @@ export function PrinterDiagnosticView() {
 
   const handleRunTests = async () => {
     setIsTestRunning(true)
-    setStatusMessage('Ejecutando suite completa de 53 pruebas automatizadas...')
+    setStatusMessage('Ejecutando suite completa de 73 pruebas automatizadas...')
     try {
       const coreRes = await runPrintEngineTestSuite()
       const btRes = await runAndroidBluetoothSppTestSuite()
       const permRes = await runPachaxBluetoothPermissionsTestSuite()
       const tcpRes = await runAndroidNetworkTcpTestSuite()
+      const integRes = await runPrintIntegrationTestSuite()
+
+      const totalPassed = coreRes.passed + btRes.passed + permRes.passed + tcpRes.passed + integRes.passed
+      const totalFailed = coreRes.failed + btRes.failed + permRes.failed + tcpRes.failed + integRes.failed
 
       setTestSuiteOutput({
-        passed: coreRes.passed + btRes.passed + permRes.passed + tcpRes.passed,
-        failed: coreRes.failed + btRes.failed + permRes.failed + tcpRes.failed,
-        results: [...coreRes.results, ...btRes.results, ...permRes.results, ...tcpRes.results],
+        passed: totalPassed,
+        failed: totalFailed,
+        results: [...coreRes.results, ...btRes.results, ...permRes.results, ...tcpRes.results, ...integRes.results],
       })
-      setStatusMessage(`Suite completada: ${coreRes.passed + btRes.passed + permRes.passed + tcpRes.passed} PASARON / ${coreRes.failed + btRes.failed + permRes.failed + tcpRes.failed} FALLARON`)
+      setStatusMessage(`Suite completada: ${totalPassed} PASARON / ${totalFailed} FALLARON`)
     } catch (err: any) {
       setStatusMessage(`Error ejecutando suite: ${err.message}`)
     } finally {
@@ -416,7 +421,7 @@ export function PrinterDiagnosticView() {
             className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition disabled:opacity-50"
           >
             {isTestRunning ? <RefreshCw className="animate-spin" size={18} /> : <Play size={18} />}
-            Ejecutar Suite (53 Pruebas)
+            Ejecutar Suite (73 Pruebas)
           </button>
         </div>
       </div>

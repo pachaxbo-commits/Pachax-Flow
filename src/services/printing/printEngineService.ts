@@ -49,6 +49,10 @@ export class PrintEngineService {
     return this.printers.get(id)
   }
 
+  listPrinterProfiles(): PrinterProfile[] {
+    return Array.from(this.printers.values())
+  }
+
   /** Resolves destination printer for target or station */
   resolveDestinationPrinters(targetType: PrintJobTarget, stationId?: string): { primary: PrinterProfile; backup?: PrinterProfile } {
     if (stationId && this.stations.has(stationId)) {

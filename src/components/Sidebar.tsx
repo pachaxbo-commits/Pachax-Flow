@@ -14,7 +14,7 @@ import { useState } from 'react'
 import { useTenantStore } from '../store/tenantStore'
 import type { UserRole } from '../types'
 
-export type ViewType = 'caja' | 'cocina' | 'historial' | 'admin' | 'bot' | 'printer-diagnostic'
+export type ViewType = 'caja' | 'cocina' | 'historial' | 'admin' | 'bot' | 'printer-diagnostic' | 'printer-settings'
 
 interface SidebarProps {
   currentView: ViewType
@@ -50,7 +50,8 @@ export function Sidebar({
     { id: 'caja', label: 'Caja POS', icon: UtensilsCrossed, badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined },
     { id: 'cocina', label: 'Cocina', icon: ChefHat },
     { id: 'historial', label: 'Historial', icon: History },
-    { id: 'admin', label: 'Menú & Admin', icon: Settings },
+    { id: 'admin', label: 'Administración', icon: Settings },
+    { id: 'printer-settings', label: 'Impresoras', icon: Printer },
     { id: 'printer-diagnostic', label: 'Diag. Impresoras', icon: Printer },
   ]
 
