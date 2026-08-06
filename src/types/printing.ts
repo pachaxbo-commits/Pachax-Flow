@@ -4,6 +4,7 @@ export type PrinterConnectionType =
   | 'bluetooth_spp'
   | 'bluetooth_le'
   | 'web_bluetooth'
+  | 'network_tcp'
   | 'lan_tcp'
   | 'usb_serial'
   | 'rawbt_intent'
@@ -87,6 +88,7 @@ export interface PrinterProfile extends Partial<TenantScopedEntity> {
   macAddress?: string
   ipAddress?: string
   ipPort?: number
+  port?: number
   usbVendorId?: string
   usbProductId?: string
   copies: number

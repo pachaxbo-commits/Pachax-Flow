@@ -12,32 +12,44 @@ import {
   Sliders,
   Database,
   Bluetooth,
-  Smartphone,
   Info,
   Copy,
   Check,
-  ExternalLink,
-  XCircle,
+  Globe,
+  Wifi,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import { PrintEngineService } from '../services/printing/printEngineService'
 import { DiagnosticPrinterAdapter, type DiagnosticMockBehavior } from '../services/printing/diagnosticPrinterAdapter'
 import { AndroidBluetoothSppAdapter, type BluetoothPairedDevice } from '../adapters/printing/androidBluetoothSppAdapter'
+import { AndroidNetworkTcpPrinterAdapter, isValidIpOrHost, isValidPort } from '../adapters/printing/androidNetworkTcpPrinterAdapter'
 import { AndroidBluetoothPermissionsService, type BluetoothDiagnosticState } from '../services/printing/androidBluetoothPermissionsService'
 import { runPrintEngineTestSuite } from '../services/printing/__tests__/printEngine.test'
 import { runAndroidBluetoothSppTestSuite } from '../services/printing/__tests__/androidBluetoothSppAdapter.test'
 import { runPachaxBluetoothPermissionsTestSuite } from '../services/printing/__tests__/pachaxBluetoothPermissionsPlugin.test'
+import { runAndroidNetworkTcpTestSuite } from '../services/printing/__tests__/androidNetworkTcpPrinterAdapter.test'
 import type { PrinterProfile, PrintJob, PrintJobPayload } from '../types/printing'
 
 export function PrinterDiagnosticView() {
-  const [adapterMode, setAdapterMode] = useState<'virtual' | 'android_bt'>('android_bt')
-  const [mockBehavior, setMockBehavior] = useState<DiagnosticMockBehavior>('success_transmitted')
+  const [adapterMode, setAdapterMode] = useState<'network_tcp' | 'android_bt' | 'virtual'>('network_tcp')
+  const [mockBehavior] = useState<DiagnosticMockBehavior>('success_transmitted')
   const [pairedDevices, setPairedDevices] = useState<BluetoothPairedDevice[]>([])
   const [selectedMac, setSelectedMac] = useState<string>('')
   const [diagState, setDiagState] = useState<BluetoothDiagnosticState | null>(null)
   const [isConnectedActive, setIsConnectedActive] = useState<boolean>(false)
   const [lastNativeError, setLastNativeError] = useState<string | null>(null)
-  const [chunkSize, setChunkSize] = useState<number>(512)
-  const [chunkDelayMs, setChunkDelayMs] = useState<number>(50)
+
+  // LAN configuration inputs
+  const [lanIp, setLanIp] = useState<string>('192.168.1.150')
+  const [lanPort, setLanPort] = useState<number>(9100)
+  const [isAdvancedLanOpen, setIsAdvancedLanOpen] = useState<boolean>(false)
+  const [isTestingConnection, setIsTestingConnection] = useState<boolean>(false)
+  const [lanTestResult, setLanTestResult] = useState<string | null>(null)
+
+  const [chunkSize, setChunkSize] = useState<number>(1024)
+  const [chunkDelayMs, setChunkDelayMs] = useState<number>(10)
+  const [connectionTimeoutMs, setConnectionTimeoutMs] = useState<number>(5000)
   const [copied, setCopied] = useState(false)
 
   const [testSuiteOutput, setTestSuiteOutput] = useState<{ passed: number; failed: number; results: string[] } | null>(null)
@@ -48,11 +60,14 @@ export function PrinterDiagnosticView() {
 
   const engine = PrintEngineService.getInstance()
   const sppAdapter = new AndroidBluetoothSppAdapter()
+  const tcpAdapter = new AndroidNetworkTcpPrinterAdapter()
 
   useEffect(() => {
     if (adapterMode === 'virtual') {
       const adapter = new DiagnosticPrinterAdapter(mockBehavior)
       engine.registerAdapter(adapter)
+    } else if (adapterMode === 'network_tcp') {
+      engine.registerAdapter(tcpAdapter)
     } else {
       engine.registerAdapter(sppAdapter)
       loadBluetoothStatus()
@@ -76,6 +91,23 @@ export function PrinterDiagnosticView() {
     } catch (err: any) {
       setLastNativeError(err.message)
       setStatusMessage(`Error al listar dispositivos emparejados: ${err.message}`)
+    }
+  }
+
+  const handleTestLanConnection = async () => {
+    setIsTestingConnection(true)
+    setLanTestResult(null)
+    setStatusMessage(`Probando socket TCP contra ${lanIp}:${lanPort}...`)
+
+    const res = await tcpAdapter.testConnection(lanIp, lanPort, connectionTimeoutMs)
+    setIsTestingConnection(false)
+
+    if (res.connected) {
+      setLanTestResult('🟢 CONECTADA: Socket TCP abierto exitosamente')
+      setStatusMessage('🟢 Conexión exitosa. La impresora responde en la red local.')
+    } else {
+      setLanTestResult(`🔴 FALLÓ (${res.errorType || 'error'}): ${res.message}`)
+      setStatusMessage(`🔴 No se pudo conectar: ${res.message}`)
     }
   }
 
@@ -111,22 +143,24 @@ export function PrinterDiagnosticView() {
 
   const handleCopyDiagnosticReport = () => {
     const report = {
-      appVersion: '0.1.0 (Etapa 4B.2)',
-      bluetoothSerialPluginVersion: 'cordova-plugin-bluetooth-serial@0.4.7',
+      appVersion: '0.1.0 (Etapa 4B.3 LAN/IP)',
       timestamp: new Date().toISOString(),
-      platform: sppAdapter.isNativeAndroid() ? 'Android Nativo' : 'Web / Browser',
+      platform: tcpAdapter.isNativeAndroid() ? 'Android Nativo' : 'Web / Browser',
+      adapterMode,
+      lanIp,
+      lanPort,
+      isIpValid: isValidIpOrHost(lanIp),
+      isPortValid: isValidPort(lanPort),
+      bluetoothSerialPluginVersion: 'cordova-plugin-bluetooth-serial@0.4.7',
       androidSdkApiLevel: diagState?.apiLevel ?? 0,
       bluetoothConnectPermission: diagState?.bluetoothConnectPermission ?? 'unknown',
-      bluetoothScanPermission: diagState?.bluetoothScanPermission ?? 'unknown',
       bluetoothEnabled: diagState?.isBluetoothEnabled ?? false,
-      windowBluetoothSerialAvailable: sppAdapter.isPluginAvailable(),
       pairedDevicesCount: pairedDevices.length,
-      pairedDevices: pairedDevices.map((d) => ({ name: d.name, address: d.address })),
       selectedPrinterMac: selectedMac || 'Ninguna',
-      isConnected: isConnectedActive,
-      lastError: lastNativeError || 'Ninguno',
       chunkSize,
       chunkDelayMs,
+      connectionTimeoutMs,
+      lastError: lastNativeError || 'Ninguno',
     }
 
     navigator.clipboard.writeText(JSON.stringify(report, null, 2))
@@ -137,18 +171,19 @@ export function PrinterDiagnosticView() {
 
   const handleRunTests = async () => {
     setIsTestRunning(true)
-    setStatusMessage('Ejecutando suite completa de 33 pruebas automatizadas...')
+    setStatusMessage('Ejecutando suite completa de 53 pruebas automatizadas...')
     try {
       const coreRes = await runPrintEngineTestSuite()
       const btRes = await runAndroidBluetoothSppTestSuite()
       const permRes = await runPachaxBluetoothPermissionsTestSuite()
+      const tcpRes = await runAndroidNetworkTcpTestSuite()
 
       setTestSuiteOutput({
-        passed: coreRes.passed + btRes.passed + permRes.passed,
-        failed: coreRes.failed + btRes.failed + permRes.failed,
-        results: [...coreRes.results, ...btRes.results, ...permRes.results],
+        passed: coreRes.passed + btRes.passed + permRes.passed + tcpRes.passed,
+        failed: coreRes.failed + btRes.failed + permRes.failed + tcpRes.failed,
+        results: [...coreRes.results, ...btRes.results, ...permRes.results, ...tcpRes.results],
       })
-      setStatusMessage(`Suite completada: ${coreRes.passed + btRes.passed + permRes.passed} PASARON / ${coreRes.failed + btRes.failed + permRes.failed} FALLARON`)
+      setStatusMessage(`Suite completada: ${coreRes.passed + btRes.passed + permRes.passed + tcpRes.passed} PASARON / ${coreRes.failed + btRes.failed + permRes.failed + tcpRes.failed} FALLARON`)
     } catch (err: any) {
       setStatusMessage(`Error ejecutando suite: ${err.message}`)
     } finally {
@@ -157,6 +192,43 @@ export function PrinterDiagnosticView() {
   }
 
   const getActivePrinterProfile = (): PrinterProfile => {
+    if (adapterMode === 'network_tcp') {
+      return {
+        id: `lan-${lanIp}:${lanPort}`,
+        restaurantId: 'principal',
+        branchId: 'main',
+        name: `Impresora Red LAN (${lanIp}:${lanPort})`,
+        role: 'kitchen',
+        connectionType: 'network_tcp',
+        paperWidth: '80mm',
+        ipAddress: lanIp.trim(),
+        port: lanPort,
+        copies: 1,
+        autoPrintOnOrderCreated: true,
+        autoPrintOnOrderPaid: true,
+        kickDrawerOnPrint: false,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        capabilities: {
+          supportsCashDrawerKick: true,
+          supportsPaperCut: true,
+          supportsBeep: true,
+          supportsBarcode: true,
+          supportsQrCode: true,
+          supportsImages: true,
+          supportsRealtimeStatus: false,
+          columnsPerLine: 48,
+          codePage: 'CP850',
+          encoding: 'utf-8',
+          chunkSize,
+          chunkDelayMs,
+          connectionTimeoutMs,
+          writeTimeoutMs: 5000,
+          feedLinesEnd: 3,
+        },
+      }
+    }
+
     return {
       id: adapterMode === 'android_bt' ? `bt-${selectedMac || 'default'}` : 'default-diagnostic',
       restaurantId: 'principal',
@@ -185,7 +257,7 @@ export function PrinterDiagnosticView() {
         encoding: 'utf-8',
         chunkSize,
         chunkDelayMs,
-        connectionTimeoutMs: 6000,
+        connectionTimeoutMs,
         writeTimeoutMs: 5000,
         feedLinesEnd: 3,
       },
@@ -227,7 +299,7 @@ export function PrinterDiagnosticView() {
       const activePrinter = getActivePrinterProfile()
       engine.registerPrinterProfile(activePrinter)
 
-      setStatusMessage(`Enviando recibo vía ${adapterMode === 'android_bt' ? 'Bluetooth SPP' : 'Virtual'}...`)
+      setStatusMessage(`Enviando recibo vía ${adapterMode.toUpperCase()}...`)
       const job = await engine.submitPrintRequest({
         targetType: 'receipt',
         payload: samplePayload,
@@ -325,7 +397,7 @@ export function PrinterDiagnosticView() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Panel de Diagnóstico — Motor de Impresión</h1>
-            <p className="text-xs text-slate-500 font-medium">Etapa 4B.2 — Bluetooth SPP Nativo & Permisos Capacitor</p>
+            <p className="text-xs text-slate-500 font-medium">Etapa 4B.3 — Impresión por Red LAN / IP Socket TCP Nativo</p>
           </div>
         </div>
 
@@ -344,7 +416,7 @@ export function PrinterDiagnosticView() {
             className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition disabled:opacity-50"
           >
             {isTestRunning ? <RefreshCw className="animate-spin" size={18} /> : <Play size={18} />}
-            Ejecutar Suite (33 Pruebas)
+            Ejecutar Suite (53 Pruebas)
           </button>
         </div>
       </div>
@@ -356,15 +428,23 @@ export function PrinterDiagnosticView() {
         </div>
       )}
 
-      {/* Mode Selection Tabs */}
+      {/* Connection Type Tabs */}
       <div className="flex bg-white p-2 rounded-2xl border border-slate-200 gap-2">
+        <button
+          onClick={() => setAdapterMode('network_tcp')}
+          className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition ${
+            adapterMode === 'network_tcp' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <Globe size={16} /> Red LAN / IP (Socket TCP Nativo)
+        </button>
         <button
           onClick={() => setAdapterMode('android_bt')}
           className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition ${
             adapterMode === 'android_bt' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
           }`}
         >
-          <Bluetooth size={16} /> Bluetooth Classic SPP Nativo (Android APK)
+          <Bluetooth size={16} /> Bluetooth Classic SPP Nativo
         </button>
         <button
           onClick={() => setAdapterMode('virtual')}
@@ -372,199 +452,122 @@ export function PrinterDiagnosticView() {
             adapterMode === 'virtual' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
           }`}
         >
-          <Sliders size={16} /> Simulador Diagnóstico Virtual (Web / Dev)
+          <Sliders size={16} /> Simulador Diagnóstico Virtual
         </button>
       </div>
 
-      {/* Structured Diagnostic Summary Cards */}
-      {adapterMode === 'android_bt' && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3 text-center text-xs">
-          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
-            <div className="text-[10px] uppercase font-extrabold text-slate-400">PLATAFORMA</div>
-            <div className="font-extrabold text-slate-800 flex items-center justify-center gap-1">
-              {sppAdapter.isNativeAndroid() ? (
-                <>Android Nativo <CheckCircle2 size={14} className="text-emerald-600" /></>
-              ) : (
-                <>Web / Browser <Info size={14} className="text-amber-600" /></>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
-            <div className="text-[10px] uppercase font-extrabold text-slate-400">PLUGIN SPP</div>
-            <div className="font-extrabold text-slate-800 flex items-center justify-center gap-1">
-              {sppAdapter.isPluginAvailable() ? (
-                <>Detectado <CheckCircle2 size={14} className="text-emerald-600" /></>
-              ) : (
-                <>Ausente <XCircle size={14} className="text-rose-600" /></>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
-            <div className="text-[10px] uppercase font-extrabold text-slate-400">CONNECT</div>
-            <div className="font-extrabold text-slate-800 flex items-center justify-center gap-1">
-              {diagState?.bluetoothConnectPermission === 'granted' || diagState?.bluetoothConnectPermission === 'notRequired' ? (
-                <>Concedido <CheckCircle2 size={14} className="text-emerald-600" /></>
-              ) : (
-                <>{diagState?.bluetoothConnectPermission.toUpperCase() || 'DENIED'} <AlertTriangle size={14} className="text-amber-600" /></>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
-            <div className="text-[10px] uppercase font-extrabold text-slate-400">BLUETOOTH</div>
-            <div className="font-extrabold text-slate-800 flex items-center justify-center gap-1">
-              {diagState?.isBluetoothEnabled ? (
-                <>Encendido <CheckCircle2 size={14} className="text-emerald-600" /></>
-              ) : (
-                <>Apagado <AlertTriangle size={14} className="text-rose-600" /></>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
-            <div className="text-[10px] uppercase font-extrabold text-slate-400">EMPAREJADOS</div>
-            <div className="font-extrabold text-blue-600 text-sm">{pairedDevices.length}</div>
-          </div>
-
-          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1 truncate">
-            <div className="text-[10px] uppercase font-extrabold text-slate-400">IMPRESORA</div>
-            <div className="font-bold text-slate-800 text-[11px] truncate">{selectedMac || 'Sin MAC'}</div>
-          </div>
-
-          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-1">
-            <div className="text-[10px] uppercase font-extrabold text-slate-400">CONEXIÓN</div>
-            <div className="font-extrabold text-slate-800 flex items-center justify-center gap-1">
-              {isConnectedActive ? (
-                <>Activa <CheckCircle2 size={14} className="text-emerald-600" /></>
-              ) : (
-                <>Inactiva <Info size={14} className="text-slate-400" /></>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Mode Config Panels */}
-      {adapterMode === 'virtual' ? (
+      {/* LAN Configuration Panel */}
+      {adapterMode === 'network_tcp' && (
         <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
-            <Sliders size={18} className="text-blue-600" />
-            Comportamiento Simulado
-          </div>
-          <p className="text-xs text-slate-500">Selecciona el tipo de respuesta del hardware para probar la cola:</p>
-          <select
-            value={mockBehavior}
-            onChange={(e) => setMockBehavior(e.target.value as DiagnosticMockBehavior)}
-            className="w-full text-xs font-semibold border border-slate-200 rounded-xl p-3 bg-slate-50 text-slate-800 focus:outline-none focus:border-blue-500"
-          >
-            <option value="success_transmitted">Transmisión Exitosa (Transmitted)</option>
-            <option value="success_confirmed">Confirmación Hardware Real (Confirmed)</option>
-            <option value="error_pre_transmit">Error Pre-Transmisión (Safe to Retry)</option>
-            <option value="error_during_transmit">Error Durante Transmisión (Unsafe &rarr; Unknown)</option>
-            <option value="timeout">Timeout de Escritura (Unsafe &rarr; Unknown)</option>
-            <option value="ambiguous_unknown">Estado Ambiguo de Salida (Unknown)</option>
-            <option value="printer_unavailable">Impresora No Disponible (Failed)</option>
-          </select>
-        </div>
-      ) : (
-        /* Android Bluetooth Native Config Panel */
-        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-3 gap-3">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
-              <Smartphone size={18} className="text-blue-600" />
-              Acciones de Permisos y Bluetooth Nativo (SDK API {diagState?.apiLevel || 'N/A'})
+              <Wifi size={18} className="text-blue-600" />
+              Configuración de Impresora de Red TCP/IP (Puerto 9100)
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={handleRequestPermissions}
-                className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition"
-              >
-                Solicitar Permiso Dispositivos Cercanos
-              </button>
-              <button
-                onClick={handleEnableBluetooth}
-                className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-xs transition"
-              >
-                Encender Bluetooth
-              </button>
-              <button
-                onClick={handleOpenAppSettings}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1 transition"
-              >
-                <ExternalLink size={12} /> Abrir Configuración
-              </button>
-            </div>
+            <button
+              onClick={handleTestLanConnection}
+              disabled={isTestingConnection}
+              className="px-4 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-bold text-xs flex items-center gap-2 transition disabled:opacity-50"
+            >
+              {isTestingConnection ? <RefreshCw className="animate-spin" size={14} /> : <Wifi size={14} />}
+              Probar Conexión TCP
+            </button>
           </div>
 
-          {diagState && (
-            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
-              <div className="font-bold text-slate-700 flex items-center gap-1.5">
-                <Info size={16} className="text-blue-600" />
-                Estado del Diagnóstico Nativo:
-              </div>
-              <div className="text-slate-600 font-medium">{diagState.message}</div>
+          {lanTestResult && (
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 font-mono text-xs font-semibold">
+              {lanTestResult}
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="font-bold text-slate-700 block">Dispositivos Emparejados:</label>
-                <button
-                  onClick={loadBluetoothStatus}
-                  className="text-[11px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+              <label className="font-bold text-slate-700 block mb-1">Dirección IP o Hostname:</label>
+              <input
+                type="text"
+                value={lanIp}
+                onChange={(e) => setLanIp(e.target.value)}
+                placeholder="Ej. 192.168.1.150"
+                className={`w-full font-mono font-semibold border rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none ${
+                  isValidIpOrHost(lanIp) ? 'border-slate-200 focus:border-blue-500' : 'border-rose-300 bg-rose-50/30'
+                }`}
+              />
+              {!isValidIpOrHost(lanIp) && (
+                <p className="text-[10px] text-rose-500 font-semibold mt-1">Ingresa una IPv4 válida (ej. 192.168.1.150) o Hostname.</p>
+              )}
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">Puerto TCP RAW (Predeterminado 9100):</label>
+              <input
+                type="number"
+                value={lanPort}
+                onChange={(e) => setLanPort(Number(e.target.value))}
+                placeholder="9100"
+                className={`w-full font-mono font-semibold border rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none ${
+                  isValidPort(lanPort) ? 'border-slate-200 focus:border-blue-500' : 'border-rose-300 bg-rose-50/30'
+                }`}
+              />
+            </div>
+
+            <div className="flex flex-col justify-end">
+              <button
+                onClick={() => setIsAdvancedLanOpen(!isAdvancedLanOpen)}
+                className="py-2.5 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs flex items-center justify-between hover:bg-slate-50 transition"
+              >
+                <span>Parámetros Avanzados TCP</span>
+                {isAdvancedLanOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Advanced Collapsible Settings */}
+          {isAdvancedLanOpen && (
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs pt-3">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Tamaño de Bloque (Chunk Size):</label>
+                <select
+                  value={chunkSize}
+                  onChange={(e) => setChunkSize(Number(e.target.value))}
+                  className="w-full font-semibold border border-slate-200 rounded-xl p-2 bg-white text-slate-800"
                 >
-                  <RefreshCw size={12} /> Cargar Dispositivos Emparejados
-                </button>
+                  <option value={512}>512 Bytes</option>
+                  <option value={1024}>1024 Bytes (Recomendado LAN)</option>
+                  <option value={2048}>2048 Bytes (Rápido LAN)</option>
+                </select>
               </div>
-              <select
-                value={selectedMac}
-                onChange={(e) => setSelectedMac(e.target.value)}
-                className="w-full font-semibold border border-slate-200 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-blue-500"
-              >
-                {pairedDevices.length === 0 ? (
-                  <option value="">No hay dispositivos emparejados</option>
-                ) : (
-                  pairedDevices.map((d) => (
-                    <option key={d.address} value={d.address}>
-                      {d.name} ({d.address})
-                    </option>
-                  ))
-                )}
-              </select>
-              <p className="text-[10px] text-slate-400 mt-1">
-                * Empareja primero tu impresora en Ajustes &rarr; Bluetooth de Android.
-              </p>
-            </div>
 
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Tamaño de Bloque (Chunk Size):</label>
-              <select
-                value={chunkSize}
-                onChange={(e) => setChunkSize(Number(e.target.value))}
-                className="w-full font-semibold border border-slate-200 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-blue-500"
-              >
-                <option value={256}>256 Bytes (Muy seguro)</option>
-                <option value={512}>512 Bytes (Recomendado)</option>
-                <option value={1024}>1024 Bytes (Rápido)</option>
-              </select>
-            </div>
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Demora entre Bloques (Ms):</label>
+                <select
+                  value={chunkDelayMs}
+                  onChange={(e) => setChunkDelayMs(Number(e.target.value))}
+                  className="w-full font-semibold border border-slate-200 rounded-xl p-2 bg-white text-slate-800"
+                >
+                  <option value={10}>10 ms (Rápido LAN)</option>
+                  <option value={25}>25 ms</option>
+                  <option value={50}>50 ms</option>
+                </select>
+              </div>
 
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Demora entre Bloques (Ms):</label>
-              <select
-                value={chunkDelayMs}
-                onChange={(e) => setChunkDelayMs(Number(e.target.value))}
-                className="w-full font-semibold border border-slate-200 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-blue-500"
-              >
-                <option value={25}>25 ms</option>
-                <option value={50}>50 ms (Recomendado)</option>
-                <option value={100}>100 ms</option>
-              </select>
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Timeout de Enlace (Ms):</label>
+                <select
+                  value={connectionTimeoutMs}
+                  onChange={(e) => setConnectionTimeoutMs(Number(e.target.value))}
+                  className="w-full font-semibold border border-slate-200 rounded-xl p-2 bg-white text-slate-800"
+                >
+                  <option value={3000}>3000 ms (Rápido)</option>
+                  <option value={5000}>5000 ms (Recomendado)</option>
+                  <option value={8000}>8000 ms</option>
+                </select>
+              </div>
             </div>
+          )}
+
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] text-amber-800 font-medium flex items-center gap-2">
+            <Info size={16} className="text-amber-600 shrink-0" />
+            <span>Se recomienda configurar una IP fija o reserva DHCP en el router para evitar cambios de IP en la impresora.</span>
           </div>
         </div>
       )}
@@ -573,7 +576,7 @@ export function PrinterDiagnosticView() {
       <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-3">
         <div className="text-slate-800 font-bold text-sm mb-1 flex items-center gap-2">
           <FileText size={18} className="text-blue-600" />
-          Disparadores de Impresión ({adapterMode === 'android_bt' ? 'Bluetooth Nativo Real' : 'Virtual Simulado'})
+          Disparadores de Impresión ({adapterMode.toUpperCase()})
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
