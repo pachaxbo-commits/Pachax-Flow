@@ -1,255 +1,223 @@
-# ARQUITECTURA DEL SUBSISTEMA DE IMPRESIÓN TÉRMICA PACHAX FLOW
+# ARQUITECTURA DEL SUBSISTEMA DE IMPRESIÓN TÉRMICA PACHAX FLOW (REVISIÓN 2)
 
-- **Documento de Diseño Técnico (Etapa 4A)**
-- **Versión**: 1.0.0
+- **Documento de Diseño Técnico Refinado (Etapa 4A)**
+- **Versión**: 2.0.0
 - **Fecha**: 2026-08-06
 
 ---
 
-## 1. VISIÓN GENERAL Y OBJETIVOS
+## 1. MODELO REVISADO DE `PrintJob` Y PAYLOAD INMUTABLE
 
-El subsistema de impresión de PACHAX Flow es una infraestructura desacoplada, multi-impresora e idempotente orientada a la emisión de comandas de cocina y recibos de venta en entornos de restauración de alto volumen.
+La UI nunca envía objetos mutables `Order`. Cada trabajo encapsula un payload inmutable versionado con `payloadSchemaVersion` y `templateVersion`.
 
-### Principio Fundamental de Diseño
-> **Regla de Aislamiento Visual**: Ningún componente de la interfaz de usuario (`CajaView`, `CocinaView`, `OrderTicket`, etc.) genera secuencias de bytes ESC/POS ni interactúa directamente con dispositivos o APIs del navegador o sistema nativo. 
-> Toda solicitud de impresión debe canalizarse obligatoriamente a través del motor central `PrintEngineService`.
+```typescript
+export interface PrintJobPayload {
+  payloadSchemaVersion: number // e.g. 1
+  templateVersion: string       // e.g. "v1.2-58mm"
+  restaurantName: string
+  branchName: string
+  branchAddress?: string
+  branchPhone?: string
+  orderId?: string
+  sequenceNumber?: number
+  displayNumber?: string
+  orderSource?: string
+  fulfillmentType?: string
+  tableInfo?: string
+  customerName?: string
+  customerPhone?: string
+  deliveryAddress?: string
+  items: PrintableItemPayload[]
+  subtotal: number
+  discountTotal: number
+  taxTotal: number
+  deliveryFee: number
+  grandTotal: number
+  paymentMethod?: string
+  cashReceived?: number
+  changeAmount?: number
+  isCopy: boolean               // Marca visual de COPIA
+  reprintReason?: string
+  reprintCount?: number
+  customMessage?: string
+  copies: number
+  createdIso: string
+}
+
+export interface PrintJob extends Partial<TenantScopedEntity> {
+  id: string
+  jobId: string
+  idempotencyKey: string       // Clave inmutable por tipo de documento
+  restaurantId: string
+  branchId: string
+  terminalId: string           // Terminal responsable de la emisión
+  targetType: PrintJobTarget
+  stationId?: string
+  printerProfileId: string
+  backupPrinterProfileId?: string
+  connectionType: PrinterConnectionType
+  status: PrintJobStatus
+  payloadSchemaVersion: number
+  templateVersion: string
+  payload: PrintJobPayload
+  attempts: number
+  maxAttempts: number
+  lockedByTerminalId?: string
+  lockedAtIso?: string
+  leaseExpiresAtIso?: string   // Evita condiciones de carrera entre pestañas/workers
+  lastError?: string
+  rawBytesBase64?: string
+  queuedAtIso: string
+  startedAtIso?: string
+  transmittedAtIso?: string
+  confirmedAtIso?: string
+  failedAtIso?: string
+}
+```
 
 ---
 
-## 2. SEPARACIÓN DE RESPONSABILIDADES POR CAPAS
+## 2. ESTADOS DEFINITIVOS DEL CICLO DE VIDA DE IMPRESIÓN
+
+Debido a que ESC/POS en hardware térmico Bluetooth/LAN/RawBT opera principalmente con comunicación unidireccional sin ACK físico de papel expulsado, el sistema adopta los siguientes estados explícitos:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ 1. CAPA DE INTERFAZ DE USUARIO (UI Layer)                   │
-│    - Botones de cobro, impresión de comanda, modal de config │
-│    - Invoca ÚNICAMENTE PrintEngineService.submitJob()       │
-└──────────────────────────────┬──────────────────────────────┘
-                               │ (SubmitPrintRequestInput)
-┌──────────────────────────────▼──────────────────────────────┐
-│ 2. MOTOR CENTRAL DE IMPRESIÓN (PrintEngineService)           │
-│    - Orquestación de cola idempotente                        │
-│    - Enrutamiento por rol de impresora (Caja vs Cocina)     │
-│    - Gestión de reintentos, backoff y ciclo de vida         │
-└──────────────────────────────┬──────────────────────────────┘
-                               │ (PrintJob + PrinterProfile)
-┌──────────────────────────────▼──────────────────────────────┐
-│ 3. FORMATEADOR & ENGINE ESC/POS (EscPosFormatter)           │
-│    - Generación de comandos binarios (corte, gaveta, texto) │
-│    - Renderizado responsivo para papel de 58mm y 80mm        │
-└──────────────────────────────┬──────────────────────────────┘
-                               │ (PrintTransportPayload: Uint8Array)
-┌──────────────────────────────▼──────────────────────────────┐
-│ 4. ADAPTADORES DE TRANSPORTE (PrinterAdapters)               │
-│    ├─ WebBluetoothAdapter (Web Bluetooth API)               │
-│    ├─ AndroidBluetoothAdapter (Capacitor Native Serial)     │
-│    ├─ NetworkTcpAdapter (LAN/IP Socket TCP 9100)            │
-│    ├─ WebUsbSerialAdapter (WebUSB / Web Serial API)         │
-│    └─ RawBtIntentAdapter (App RawBT Android Intent)         │
+│ 1. QUEUED        - Encolado en almacenamiento duradero      │
+│ 2. ROUTING       - Determinando estación e impresoras        │
+│ 3. FORMATTING    - Renderizando bytes binarios ESC/POS      │
+│ 4. PROCESSING   - Asignado a la terminal (Lock activo)       │
+│ 5. CONNECTING    - Abriendo socket/canal de transporte       │
+│ 6. TRANSMITTING  - Transmitiendo paquetes de bytes          │
+│ 7. TRANSMITTED   - Bytes enviados al buffer de la impresora │
+│ 8. CONFIRMED     - Confirmado solo con ACK real de hardware  │
+│ 9. UNKNOWN       - Resultado ambiguo (Cierre app/caida red) │
+│10. RETRYING      - Esperando backoff tras fallo temporal    │
+│11. FAILED        - Max intentos o error no recuperable      │
+│12. CANCELLED     - Anulado manualmente por operador         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Tabla de Responsabilidades
-
-| Capa | Componentes | Responsabilidad Exclusiva |
-| :--- | :--- | :--- |
-| **UI** | `CajaView`, `CocinaView`, `PrinterSettingsModal` | Capturar acciones del usuario, mostrar estados (`queued`, `printing`, `failed`) y disparar solicitudes abstractas. Prohibido manipular bytes. |
-| **Servicios Core** | `PrintEngineService`, `PrintQueueManager` | Gestionar la cola persistente, validar la clave de idempotencia (`idempotencyKey`), coordinar reintentos y persistir estados de trabajo. |
-| **Formateador** | `EscPosFormatter`, `ReceiptTemplate`, `KitchenTicketTemplate` | Transformar objetos `Order` o reportes en secuencias `Uint8Array` binarias formateadas según las capacidades de la impresora (58mm/80mm). |
-| **Repositorios** | `PrinterProfileRepository`, `PrintJobRepository` | Persistir perfiles de impresoras y trabajos en `IndexedDB` / `localStorage` / `Firestore`. |
-| **Adaptadores** | `PrinterAdapter` (Bluetooth, LAN, USB, RawBT) | Establecer la conexión física o socket de red y transmitir los bytes binarios al hardware. |
-| **Plugins Nativos** | Capacitor Bluetooth Serial Plugin | Proporcionar acceso nativo al hardware Bluetooth SPP en dispositivos Android. |
+> **Regla de Estado Ambiguo (`UNKNOWN`)**: Si el canal de transmisión se corta durante `TRANSMITTING` o si la aplicación se reinicia inmediatamente después de `TRANSMITTED` sin poder consultar el hardware, el trabajo entra en estado `UNKNOWN`. **Queda prohibida la reimpresión automática en estado `UNKNOWN`** para evitar la emisión de comprobantes duplicados. La UI desplegará una alerta para resolución manual por el operador.
 
 ---
 
-## 3. MODELOS DE DOMINIO
+## 3. MODELO DE ALMACENAMIENTO DESACOPLADO (`PrintJobStorage`)
 
-### A. Perfil de Impresora (`PrinterProfile`)
-Representa la configuración física y lógica de una impresora en una sucursal.
+El gestor de cola no depende directamente de `IndexedDB`. Consume una interfaz abstracta:
 
 ```typescript
-export interface PrinterProfile {
+export interface PrintJobStorage {
+  save(job: PrintJob): Promise<void>
+  get(jobId: string): Promise<PrintJob | null>
+  listRecoverable(terminalId: string): Promise<PrintJob[]>
+  update(jobId: string, changes: Partial<PrintJob>): Promise<void>
+  remove(jobId: string): Promise<void>
+  purgeCompletedOlderThan(cutoffIso: string): Promise<number>
+}
+```
+
+### Implementaciones por Plataforma
+- **Web SPA**: `IndexedDbPrintJobStorage` (Almacenamiento en IndexedDB con fallback a localStorage).
+- **Android Nativo**: `NativeSqlitePrintJobStorage` (SQLite duradero mediante almacenamiento nativo en Android).
+
+---
+
+## 4. ESTRATEGIA DE BLOQUEO Y PROPIEDAD POR TERMINAL
+
+Para evitar carreras de impresión entre múltiples pestañas del navegador, workers o instancias nativas:
+
+1. **Terminal ID Único**: Cada dispositivo/pestaña genera o lee un `terminalId` persistente (`uuidv4`).
+2. **Mecanismo de Arriendo (Lease Locking)**:
+   - Al procesar un trabajo en cola, la terminal actualiza:
+     - `lockedByTerminalId = currentTerminalId`
+     - `lockedAtIso = now()`
+     - `leaseExpiresAtIso = now() + 15 segundos`
+3. **Liberación por Expiración**: Si una terminal se cuelga durante la transmisión, otra terminal o proceso solo podrá tomar el trabajo si `leaseExpiresAtIso < now()`.
+
+---
+
+## 5. ENRUTAMIENTO CON ESTACIONES E IMPRESORAS DE RESPALDO
+
+El enrutamiento no es estático ni se limita a roles genéricos. Incorpora **Estaciones de Preparación** (`KitchenStation`):
+
+```typescript
+export interface KitchenStation {
   id: string
   restaurantId: string
   branchId: string
   name: string
-  role: 'receipt' | 'kitchen' | 'bar' | 'despacho' | 'general'
-  targetCategories?: string[] // Categorías asignadas a esta impresora
-  connectionType: 'bluetooth' | 'lan_ip' | 'usb' | 'rawbt' | 'browser' | 'pdf'
-  paperWidth: '58mm' | '80mm'
-  macAddress?: string
-  ipAddress?: string
-  ipPort?: number
-  copies: number
-  autoPrintOnOrderCreated: boolean
-  autoPrintOnOrderPaid: boolean
-  kickDrawerOnPrint: boolean
-  capabilities: PrinterCapability
+  primaryPrinterId: string
+  backupPrinterId?: string
+  assignedCategoryIds: string[]
   isActive: boolean
-  createdAt: string
 }
 ```
 
-### B. Capacidades de la Impresora (`PrinterCapability`)
-Define las funciones de hardware soportadas por el dispositivo.
-
-```typescript
-export interface PrinterCapability {
-  supportsCashDrawerKick: boolean
-  supportsPaperCut: boolean
-  supportsBeep: boolean
-  supportsBarcode: boolean
-  supportsQrCode: boolean
-  supportsImages: boolean
-  maxColumns: number // 32 para 58mm, 48 para 80mm
-  supportedCodePages: string[]
-}
-```
-
-### C. Trabajo de Impresión (`PrintJob`)
-Entidad persistente que representa la orden de impresión en la cola.
-
-```typescript
-export interface PrintJob extends TenantScopedEntity {
-  id: string
-  jobId: string
-  idempotencyKey: string // Clave única de deduplicación
-  orderId?: string
-  orderDisplayNumber?: string
-  targetType: 'receipt' | 'kitchen_ticket' | 'bar_ticket' | 'cash_report' | 'test'
-  printerProfileId: string
-  printerName: string
-  connectionType: PrinterConnectionType
-  status: PrintJobStatus
-  attempts: number
-  maxAttempts: number
-  lastError?: string
-  rawBytesBase64?: string
-  queuedAt: string
-  startedAt?: string
-  completedAt?: string
-  failedAt?: string
-}
-```
+### Algoritmo de Fallback de Impresora
+1. El motor consulta la estación asociada a los productos del pedido.
+2. Intenta transmitir a la `primaryPrinterId`.
+3. Si la impresora principal genera error no recuperable de conexión o agota sus reintentos, el trabajo conmuta automáticamente a la `backupPrinterId` (impresora de respaldo) y registra la incidencia.
+4. Si ninguna impresora está disponible, el trabajo se marca como `FAILED` con notificación audible y visual en la pantalla del comandero.
 
 ---
 
-## 4. CICLO DE VIDA DE UN TRABAJO DE IMPRESIÓN
+## 6. POLÍTICA DE IDEMPOTENCIA Y REIMPRESIONES
+
+### Claves de Idempotencia por Documento
+- **Recibo de Venta**: `receipt:{orderId}:{paymentVersion}`
+- **Comanda de Cocina**: `kitchen:{orderId}:{stationId}:{batchNumber}`
+- **Cancelaciones**: `cancellation:{orderId}:{itemId}:{cancellationVersion}`
+- **Reimpresión Autorizada**: `reprint:{originalJobId}:{reprintRequestId}`
+
+### Reglas de Reimpresión
+Toda reimpresión genera un **nuevo trabajo de impresión independiente** que no se ve bloqueado por la clave de idempotencia original. Requiere:
+1. Permiso explícito de usuario (`orders.viewAll` / `orders.edit`).
+2. Usuario solicitante registrado (`requestedByUid`).
+3. Motivo obligatorio (`reprintReason`).
+4. Indicador visual destacado en la plantilla: **`*** REIMPRESIÓN - COPIA #N ***`**.
+5. Registro de auditoría guardado en Firestore.
+
+---
+
+## 7. APERTURA INDEPENDIENTE DE GAVETA DE DINERO
+
+La apertura de la gaveta de dinero (pulso electromagnético `ESC p 0 25 250`) puede ejecutarse de dos formas:
+1. **Asociada al Pago**: Gatillada automáticamente por el perfil de la impresora principal si `kickDrawerOnPrint === true`.
+2. **Acción Independiente**: Invocada vía `kickCashDrawer({ userUid, terminalId, reason })`. Requiere permiso `cash.open`, registra el motivo y la hora en el registro de caja sin emitir papel.
+
+---
+
+## 8. PRIVACIDAD, RETENCIÓN DE DATOS Y LIMPIEZA
+
+Para proteger la privacidad de los clientes (datos PII como teléfono y dirección) y evitar el crecimiento desmedido del almacenamiento local:
+
+1. **Minimización**: Al completar exitosamente un trabajo (`TRANSMITTED` / `CONFIRMED`), los bytes binarios `rawBytesBase64` son eliminados inmediatamente de la cola local.
+2. **Purga Automática**: `purgeCompletedOlderThan(cutoffIso)` purga diariamente trabajos completados o cancelados con más de 7 días de antigüedad.
+3. **Auditoría Liviana en Firestore**: Solo se sincroniza el registro meta del trabajo (`jobId`, `status`, `targetType`, `terminalId`, `completedAt`) sin retener información de clientes ni datos sensibles.
+
+---
+
+## 9. ADAPTADORES SEPARADOS POR PLATAFORMA Y PROTOCOLO
 
 ```
- [Solicitud UI]
-       │
-       ▼
-  ┌───────────┐       Deduplicación exitosa
-  │  QUEUED   ├────────────────────────────────────┐ (Trabajo ya procesado)
-  └─────┬─────┘                                    │
-        │                                          ▼
-        ▼                                   ┌─────────────┐
-  ┌───────────┐                             │  COMPLETED  │
-  │  ROUTING  │ (Identifica impresora)      └─────────────┘
-  └─────┬─────┘                                    ▲
-        │                                          │
-        ▼                                          │ Transmisión exitosa
-  ┌───────────┐                                    │
-  │FORMATTING │ (Genera binario ESC/POS)           │
-  └─────┬─────┘                                    │
-        │                                          │
-        ▼                                          │
-  ┌───────────┐      Error de Conexión             │
-  │CONNECTING ├─────────────────────┐              │
-  └─────┬─────┘                     │              │
-        │ Conexión OK               ▼              │
-        ▼                     ┌───────────┐        │
-  ┌───────────┐               │ RETRYING  │        │
-  │ PRINTING  ├──────────────►└─────┬─────┘        │
-  └─────┬─────┘ Error Transmisión   │              │
-        │                           │              │
-        │ Transmisión OK            │ Reintento    │
-        └───────────────────────────┼──────────────┘
-                                    │ Max reintentos superado
-                                    ▼
-                              ┌───────────┐
-                              │  FAILED   │
-                              └───────────┘
+                     ┌───────────────────────────────┐
+                     │     PrinterAdapter Interface  │
+                     └───────────────┬───────────────┘
+                                     │
+     ┌──────────────────┬────────────┴───────┬──────────────────┐
+     ▼                  ▼                    ▼                  ▼
+┌──────────────┐ ┌──────────────┐ ┌────────────────────┐ ┌──────────────┐
+│WebBluetooth  │ │AndroidSpp    │ │AndroidTcpSocket    │ │RawBtIntent   │
+│Adapter       │ │Adapter       │ │Adapter             │ │Adapter       │
+│(Web Bluetooth│ │(Bluetooth    │ │(Socket TCP Direct  │ │(Intent Android│
+│API Chrome)   │ │Classic SPP)  │ │Puerto 9100 Java)   │ │App External) │
+└──────────────┘ └──────────────┘ └────────────────────┘ └──────────────┘
 ```
 
 ---
 
-## 5. ESTRATEGIA DE IDEMPOTENCIA Y DEDUPLICACIÓN
+## 10. RIESGOS TÉCNICOS RESIDUALES
 
-Para evitar la doble emisión accidental de comandas o recibos en momentos de inestabilidad de red o toques repetidos en pantalla:
-
-1. **Estructura de `idempotencyKey`**:
-   - Para recibos de pedido: `receipt:{orderId}:{paymentVersion}`
-   - Para comandas de cocina: `kitchen:{orderId}:{itemCount}`
-   - Para reportes de caja: `cash_report:{branchId}:{dateKey}`
-2. **Evaluación de Idempotencia**:
-   - Antes de encolar un trabajo, `PrintQueueManager` consulta en el repositorio persistente si existe un trabajo con la misma `idempotencyKey` en estado `completed` o `printing`.
-   - Si ya existe y fue completado, se descarta la duplicidad retornando el trabajo existente sin re-imprimir.
-
----
-
-## 6. COLA PERSISTENTE Y RECUPERACIÓN TRAS REINICIO
-
-1. **Almacenamiento Local Duradero**:
-   - La cola de trabajos se almacena en `IndexedDB` (respaldada en `localStorage` como fallback) mediante `PrintJobRepository`.
-2. **Recuperación al Iniciar la App**:
-   - Al iniciar la aplicación, `PrintEngineService.bootstrap()` escanea los trabajos almacenados en estado `queued`, `connecting` o `retrying`.
-   - Trabajos interrumpidos por un cierre de la app son reanudados automáticamente tras validar la conexión con las impresoras configuradas.
-
----
-
-## 7. ESTRATEGIA DE REINTENTOS Y MANEJO DE ERRORES
-
-- **Reintentos con Expansión Exponencial (Exponential Backoff)**:
-  - Intento 1: Inmediato (0s)
-  - Intento 2: Espera 3 segundos
-  - Intento 3: Espera 10 segundos
-  - MaxIntentos: 3 por defecto (configurable por perfil de impresora).
-- **Categorización de Errores**:
-  - *Errores Recuperables* (Bluetooth fuera de rango, impresora ocupada): Pasan a estado `retrying`.
-  - *Errores No Recuperables* (Servicio Bluetooth no soportado, IP inexistente): Pasan inmediatamente a estado `failed` con mensaje visible para el usuario.
-
----
-
-## 8. COMPATIBILIDAD PLATAFORMA (ANDROID VS WEB)
-
-| Funcionalidad | Web (Navegador) | Android Nativo (APK Capacitor) |
-| :--- | :--- | :--- |
-| **Bluetooth SPP** | Web Bluetooth API (`navigator.bluetooth`) | Plugin Nativo Capacitor Serial Bluetooth |
-| **Impresión IP / LAN** | Redirección por Proxy Web / App RawBT | Socket TCP directo en Kotlin/Java (Puerto 9100) |
-| **Impresión USB** | Web Serial / WebUSB API | USB Host Manager Nativo en Android |
-| **Modo Fallback** | Impresión por diálogo del navegador | Envío por Intent de Android a RawBT / Print Service |
-
----
-
-## 9. MATRIZ DE ESTRUCTURA DE ARCHIVOS PROPUESTA
-
-```
-src/
-├── types/
-│   └── printing.ts                    # Interfaces de dominio del subsistema de impresión
-├── services/printing/
-│   ├── printEngineService.ts          # Motor central de orquestación y colas
-│   ├── printQueueManager.ts           # Gestor de cola persistente e idempotencia
-│   ├── escPosFormatter.ts             # Generador binario de comandos ESC/POS
-│   └── templates/
-│       ├── receiptTemplate.ts         # Plantilla binaria de recibo de caja
-│       └── kitchenTicketTemplate.ts   # Plantilla binaria de comanda de cocina
-├── adapters/printing/
-│   ├── printerAdapter.interface.ts    # Interfaz base de adaptadores
-│   ├── webBluetoothAdapter.ts         # Adaptador Web Bluetooth API
-│   ├── androidBluetoothAdapter.ts     # Adaptador Nativo Capacitor Android
-│   ├── networkTcpAdapter.ts           # Adaptador IP/LAN Socket TCP 9100
-│   └── rawBtAdapter.ts                # Adaptador Intent RawBT Android
-└── store/
-    ├── printerProfileStore.ts         # Almacén de perfiles de impresoras de la sucursal
-    └── printJobRepository.ts          # Repositorio de trabajos de impresión
-```
-
----
-
-## 10. JUSTIFICACIÓN DE DECISIONES DE ARQUITECTURA
-
-1. **Desacoplamiento Total de la UI**: La interfaz solo conoce `SubmitPrintRequestInput`. Esto permite cambiar de impresora física, tecnología de comunicación o agregar soporte para nuevas marcas sin tocar una sola línea de código visual.
-2. **Cola Asíncrona e Idempotente**: Garantiza que el cobro en caja responda al instante (sub-100ms) sin bloquear la interfaz esperando la transmisión de la impresora.
-3. **Arquitectura Plug-and-Play por Adaptadores**: La interfaz `PrinterAdapter` permite alternar entre Web Bluetooth, Bluetooth Nativo Android o Red IP transparente según la plataforma donde se ejecute la aplicación.
+1. **Limitaciones del Navegador Web en Vercel para Sockets TCP**: Los navegadores web estándar no permiten abrir conexiones Socket TCP raw (puerto 9100) directamente a impresoras de red por restricciones de sandbox. En entorno Web, la impresión LAN requiere un agente proxy local o el uso de la app Android Nativa/RawBT.
+2. **Perdida de Conexión Bluetooth SPP durante Transmisión**: Si el celular se aleja de la impresora Bluetooth durante la transmisión, el estado quedará en `UNKNOWN`. La UI solicitará confirmación visual al operador antes de re-emitir.
