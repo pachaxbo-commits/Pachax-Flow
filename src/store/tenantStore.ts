@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { TenantContextService } from '../services/tenantService'
+import { getRoleDefaultPermissions, hasPermission } from '../services/permissionService'
 import type { Branch, Permission, UserRole } from '../types'
 
 interface TenantState {
@@ -7,13 +8,14 @@ interface TenantState {
   activeBranchId: string
   activeBranchName: string
   availableBranches: Branch[]
+  userRole: UserRole | null
   userPermissions: Permission[]
 }
 
-const defaultMainBranch: Branch = {
+const defaultPrimaryBranch: Branch = {
   id: 'main',
   restaurantId: 'principal',
-  name: 'Sucursal Principal',
+  name: 'Sucursal Central',
   code: 'SUC-01',
   isActive: true,
   isMain: true,
@@ -22,30 +24,11 @@ const defaultMainBranch: Branch = {
 
 let state: TenantState = {
   activeRestaurantId: 'principal',
-  activeBranchId: 'main',
-  activeBranchName: 'Sucursal Principal',
-  availableBranches: [defaultMainBranch],
-  userPermissions: [
-    'orders.create',
-    'orders.edit',
-    'orders.cancel',
-    'orders.applyDiscount',
-    'orders.reopen',
-    'orders.viewAll',
-    'payments.create',
-    'payments.refund',
-    'cash.open',
-    'cash.close',
-    'catalog.create',
-    'catalog.edit',
-    'catalog.delete',
-    'inventory.view',
-    'reports.view',
-    'users.create',
-    'settings.manage',
-    'printers.manage',
-    'branches.manage',
-  ],
+  activeBranchId: defaultPrimaryBranch.id,
+  activeBranchName: defaultPrimaryBranch.name,
+  availableBranches: [defaultPrimaryBranch],
+  userRole: 'admin',
+  userPermissions: getRoleDefaultPermissions('admin'),
 }
 
 const listeners = new Set<() => void>()
@@ -68,19 +51,39 @@ export function useTenantStore() {
 
   return {
     ...current,
-    setTenant(restaurantId: string, branchId: string = 'main', userUid: string | null = null, userRole?: UserRole) {
-      TenantContextService.setContext(restaurantId, branchId, userUid, userRole)
+    setTenant(
+      restaurantId: string,
+      branchId?: string,
+      userUid: string | null = null,
+      userRole: UserRole = 'admin',
+      branches?: Branch[],
+      customPermissions?: Permission[]
+    ) {
+      const branchesList = branches && branches.length > 0 ? branches : [defaultPrimaryBranch]
+      const activeBranch = branchId
+        ? branchesList.find((b) => b.id === branchId) || branchesList[0]
+        : TenantContextService.resolvePrimaryBranch(branchesList) || branchesList[0]
+
+      TenantContextService.setContext(restaurantId, activeBranch.id, userUid, userRole)
+
+      const permissions = customPermissions && customPermissions.length > 0
+        ? customPermissions
+        : getRoleDefaultPermissions(userRole)
+
       state = {
-        ...state,
         activeRestaurantId: restaurantId,
-        activeBranchId: branchId,
+        activeBranchId: activeBranch.id,
+        activeBranchName: activeBranch.name,
+        availableBranches: branchesList,
+        userRole,
+        userPermissions: permissions,
       }
       emit()
     },
     switchBranch(branchId: string) {
       const branch = state.availableBranches.find((b) => b.id === branchId)
       if (branch) {
-        TenantContextService.setContext(state.activeRestaurantId, branch.id)
+        TenantContextService.setBranch(branch)
         state = {
           ...state,
           activeBranchId: branch.id,
@@ -90,7 +93,7 @@ export function useTenantStore() {
       }
     },
     hasPermission(permission: Permission): boolean {
-      return state.userPermissions.includes(permission)
+      return hasPermission(state.userRole, permission, state.userPermissions)
     },
   }
 }

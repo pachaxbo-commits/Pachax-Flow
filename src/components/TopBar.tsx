@@ -1,5 +1,6 @@
-import { Archive, ChefHat, CreditCard, LayoutGrid, Menu, ReceiptText, Settings2, X } from 'lucide-react'
+import { Archive, ChefHat, CreditCard, LayoutGrid, MapPin, Menu, ReceiptText, Settings2, X } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
+import { useTenantStore } from '../store/tenantStore'
 import type { UserRole } from '../types'
 
 type View = 'caja' | 'cocina' | 'historial' | 'admin' | 'bot'
@@ -34,6 +35,7 @@ export function TopBar({
   pendingOrdersCount?: number
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const tenant = useTenantStore()
 
   return (
     <aside
@@ -50,6 +52,9 @@ export function TopBar({
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-widest text-blue-600">PACHAX Flow</p>
             <h1 className="font-bold text-base text-slate-800">Sistema POS</h1>
+            <p className="text-[10px] font-semibold text-slate-500 flex items-center gap-1">
+              <MapPin size={10} className="text-blue-500" /> {tenant.activeBranchName}
+            </p>
           </div>
         </div>
 
@@ -73,6 +78,9 @@ export function TopBar({
             <div className={collapsed ? 'hidden' : ''}>
               <p className="text-[10px] font-extrabold uppercase tracking-widest text-blue-600">PACHAX Flow</p>
               <h1 className="mt-0.5 font-bold text-base text-slate-800">Sistema POS</h1>
+              <p className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 mt-0.5">
+                <MapPin size={10} className="text-blue-500 shrink-0" /> {tenant.activeBranchName}
+              </p>
             </div>
           </div>
         </div>

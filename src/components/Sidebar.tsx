@@ -8,8 +8,10 @@ import {
   ChevronRight,
   Store,
   Printer,
+  MapPin,
 } from 'lucide-react'
 import { useState } from 'react'
+import { useTenantStore } from '../store/tenantStore'
 import type { UserRole } from '../types'
 
 export type ViewType = 'caja' | 'cocina' | 'historial' | 'admin' | 'bot'
@@ -41,6 +43,7 @@ export function Sidebar({
   onOpenPrinterSettings,
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(true)
+  const tenant = useTenantStore()
 
   // Bot navigation hidden from main menu as requested
   const navItems: { id: ViewType; label: string; icon: typeof UtensilsCrossed; badge?: number }[] = [
@@ -77,6 +80,10 @@ export function Sidebar({
                     PACHAX Flow
                   </div>
                   <div className="text-xs font-bold text-slate-800 truncate">{restaurantName}</div>
+                  <div className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 mt-0.5">
+                    <MapPin size={10} className="text-blue-500 shrink-0" />
+                    <span className="truncate">{tenant.activeBranchName}</span>
+                  </div>
                 </div>
               )}
             </div>

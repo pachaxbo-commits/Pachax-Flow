@@ -290,6 +290,11 @@ service cloud.firestore {
       allow delete: if hasRole(restaurantId, ['admin']) && request.auth.uid != uid;
     }
 
+    match /restaurants/{restaurantId}/branches/{branchId} {
+      allow read: if isActiveMember(restaurantId);
+      allow create, update, delete: if hasRole(restaurantId, ['admin']);
+    }
+
     match /restaurants/{restaurantId}/catalog/{catalogId}/categories/{categoryId} {
       allow read: if isActiveMember(restaurantId);
       allow create, update: if hasRole(restaurantId, ['admin']) && isValidCategoryData();
