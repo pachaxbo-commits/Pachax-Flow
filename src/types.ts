@@ -228,13 +228,35 @@ export interface PaymentSummary {
   change: number
 }
 
-export interface OrderItem {
-  id: string
+/** Immutable snapshot of a sold item capturing exact prices, names, and modifier costs at purchase time */
+export interface OrderItemSnapshot {
+  productId?: string
   name: string
+  printName?: string
+  categoryName?: string
   basePrice: number
   quantity: number
   modifiers: CartItemModifier
+  extrasTotal?: number
+  unitPriceWithModifiers?: number
   lineTotal: number
+  discountAmount?: number
+  taxAmount?: number
+}
+
+/** Immutable financial snapshot attached to every historical order */
+export interface OrderFinancialSnapshot {
+  snapshottedAt: string
+  productSubtotal: number
+  discountTotal: number
+  taxTotal: number
+  deliveryFee: number
+  grandTotal: number
+  currency: string
+}
+
+export interface OrderItem extends OrderItemSnapshot {
+  id: string
 }
 
 export interface Order extends Partial<TenantScopedEntity> {
@@ -279,6 +301,8 @@ export interface Order extends Partial<TenantScopedEntity> {
   createdBy?: string
   dayKey?: string
   whatsappChatId?: string
+  /** Frozen historical financial snapshot */
+  financialSnapshot?: OrderFinancialSnapshot
 }
 
 export interface CreateOrderInput {
@@ -297,6 +321,7 @@ export interface CreateOrderInput {
   createdBy?: string
   suppressWhatsappDispatchNotice?: boolean
   forceWhatsappDispatchNotice?: boolean
+  financialSnapshot?: OrderFinancialSnapshot
 }
 
 export interface ConfirmPaymentInput {

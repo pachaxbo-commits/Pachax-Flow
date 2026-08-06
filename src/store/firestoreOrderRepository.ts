@@ -19,7 +19,8 @@ import {
 } from 'firebase/firestore'
 import { getFirebaseContext } from '../lib/firebase'
 import { syncServerClock } from '../lib/serverClock'
-import type { AppState, ConfirmPaymentInput, CreateOrderInput, FulfillmentType, Order, OrderStatus, RepositoryStatus } from '../types'
+import type { AppState, ConfirmPaymentInput, CreateOrderInput, FulfillmentType, Order, OrderFinancialSnapshot, OrderStatus, RepositoryStatus } from '../types'
+import { TenantContextService } from '../services/tenantService'
 import { buildDefaultState, createRepositoryStatus, normalizeOrder, updateOrderStatus, updateOrderCancelStatus, updateOrderPayment, updateOrderFields, deleteOrderFromState } from './orderRepository'
 
 type Listener = () => void
@@ -225,28 +226,48 @@ export class FirestoreOrderRepository {
           })
         }
 
+        const tenantCtx = TenantContextService.getContext()
+        const nowIso = new Date().toISOString()
+        const financialSnapshot: OrderFinancialSnapshot = order.financialSnapshot || {
+          snapshottedAt: nowIso,
+          productSubtotal: order.items.reduce((sum, item) => sum + (item.lineTotal || item.basePrice * item.quantity), 0),
+          discountTotal: 0,
+          taxTotal: 0,
+          deliveryFee: 0,
+          grandTotal: order.total,
+          currency: 'BOB',
+        }
+
         transaction.set(orderRef, {
-        id: orderRef.id,
-        sequence: nextSequence,
-        displayNumber: nextDisplayNumber,
-        createdAt: serverTimestamp(),
-        status: 'pending',
-        items: order.items,
-        total: order.total,
-        payment: order.payment,
-        paymentStatus: order.paymentStatus,
-        paymentMethod: order.paymentMethod,
-        expectedPaymentMethod: order.expectedPaymentMethod ?? null,
-        orderSource: order.orderSource,
-        fulfillmentType: order.fulfillmentType,
-        tableInfo: order.tableInfo ?? '',
-        customerName: order.customerName ?? '',
-        customerPhone: order.customerPhone ?? '',
-        deliveryAddress: order.deliveryAddress ?? '',
-        suppressWhatsappDispatchNotice: order.suppressWhatsappDispatchNotice ?? false,
-        forceWhatsappDispatchNotice: order.forceWhatsappDispatchNotice ?? false,
-        createdBy: order.createdBy ?? '',
-        updatedAt: serverTimestamp(),
+          id: orderRef.id,
+          schemaVersion: 1,
+          restaurantId: firebase.restaurantId,
+          branchId: tenantCtx.branchId || 'main',
+          sequence: nextSequence,
+          displayNumber: nextDisplayNumber,
+          createdAt: serverTimestamp(),
+          status: 'pending',
+          items: order.items.map((item) => ({
+            ...item,
+            lineTotal: item.lineTotal || item.basePrice * item.quantity,
+          })),
+          total: order.total,
+          financialSnapshot,
+          payment: order.payment,
+          paymentStatus: order.paymentStatus,
+          paymentMethod: order.paymentMethod,
+          expectedPaymentMethod: order.expectedPaymentMethod ?? null,
+          orderSource: order.orderSource,
+          fulfillmentType: order.fulfillmentType,
+          tableInfo: order.tableInfo ?? '',
+          customerName: order.customerName ?? '',
+          customerPhone: order.customerPhone ?? '',
+          deliveryAddress: order.deliveryAddress ?? '',
+          suppressWhatsappDispatchNotice: order.suppressWhatsappDispatchNotice ?? false,
+          forceWhatsappDispatchNotice: order.forceWhatsappDispatchNotice ?? false,
+          createdBy: order.createdBy ?? tenantCtx.userUid ?? '',
+          updatedAt: serverTimestamp(),
+          isDeleted: false,
         })
 
         return nextDisplayNumber
