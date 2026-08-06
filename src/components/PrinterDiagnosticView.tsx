@@ -11,14 +11,25 @@ import {
   ShieldAlert,
   Sliders,
   Database,
+  Bluetooth,
+  Smartphone,
 } from 'lucide-react'
 import { PrintEngineService } from '../services/printing/printEngineService'
 import { DiagnosticPrinterAdapter, type DiagnosticMockBehavior } from '../services/printing/diagnosticPrinterAdapter'
+import { AndroidBluetoothSppAdapter, type BluetoothPairedDevice } from '../adapters/printing/androidBluetoothSppAdapter'
 import { runPrintEngineTestSuite } from '../services/printing/__tests__/printEngine.test'
-import type { PrintJob, PrintJobPayload } from '../types/printing'
+import { runAndroidBluetoothSppTestSuite } from '../services/printing/__tests__/androidBluetoothSppAdapter.test'
+import type { PrinterProfile, PrintJob, PrintJobPayload } from '../types/printing'
 
 export function PrinterDiagnosticView() {
+  const [adapterMode, setAdapterMode] = useState<'virtual' | 'android_bt'>('virtual')
   const [mockBehavior, setMockBehavior] = useState<DiagnosticMockBehavior>('success_transmitted')
+  const [pairedDevices, setPairedDevices] = useState<BluetoothPairedDevice[]>([])
+  const [selectedMac, setSelectedMac] = useState<string>('')
+  const [btStatus, setBtStatus] = useState<string>('Comprobando estado de Bluetooth...')
+  const [chunkSize, setChunkSize] = useState<number>(512)
+  const [chunkDelayMs, setChunkDelayMs] = useState<number>(50)
+
   const [testSuiteOutput, setTestSuiteOutput] = useState<{ passed: number; failed: number; results: string[] } | null>(null)
   const [recentJobs, setRecentJobs] = useState<PrintJob[]>([])
   const [selectedJob, setSelectedJob] = useState<PrintJob | null>(null)
@@ -26,24 +37,86 @@ export function PrinterDiagnosticView() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
 
   const engine = PrintEngineService.getInstance()
+  const sppAdapter = new AndroidBluetoothSppAdapter()
 
   useEffect(() => {
-    // Update adapter behavior when user changes select
-    const adapter = new DiagnosticPrinterAdapter(mockBehavior)
-    engine.registerAdapter(adapter)
-  }, [mockBehavior])
+    if (adapterMode === 'virtual') {
+      const adapter = new DiagnosticPrinterAdapter(mockBehavior)
+      engine.registerAdapter(adapter)
+    } else {
+      engine.registerAdapter(sppAdapter)
+      loadBluetoothStatus()
+    }
+  }, [adapterMode, mockBehavior])
+
+  const loadBluetoothStatus = async () => {
+    const status = await sppAdapter.checkStatus()
+    setBtStatus(status.message)
+
+    try {
+      const devices = await sppAdapter.listPairedDevices()
+      setPairedDevices(devices)
+      if (devices.length > 0 && !selectedMac) {
+        setSelectedMac(devices[0].address)
+      }
+    } catch (err: any) {
+      setBtStatus(`Error al listar dispositivos: ${err.message}`)
+    }
+  }
 
   const handleRunTests = async () => {
     setIsTestRunning(true)
-    setStatusMessage('Ejecutando suite de 15 pruebas automatizadas...')
+    setStatusMessage('Ejecutando suite completa de 20 pruebas automatizadas...')
     try {
-      const res = await runPrintEngineTestSuite()
-      setTestSuiteOutput(res)
-      setStatusMessage(`Suite completada: ${res.passed} PASARON / ${res.failed} FALLARON`)
+      const coreRes = await runPrintEngineTestSuite()
+      const btRes = await runAndroidBluetoothSppTestSuite()
+
+      setTestSuiteOutput({
+        passed: coreRes.passed + btRes.passed,
+        failed: coreRes.failed + btRes.failed,
+        results: [...coreRes.results, ...btRes.results],
+      })
+      setStatusMessage(`Suite completada: ${coreRes.passed + btRes.passed} PASARON / ${coreRes.failed + btRes.failed} FALLARON`)
     } catch (err: any) {
       setStatusMessage(`Error ejecutando suite: ${err.message}`)
     } finally {
       setIsTestRunning(false)
+    }
+  }
+
+  const getActivePrinterProfile = (): PrinterProfile => {
+    return {
+      id: adapterMode === 'android_bt' ? `bt-${selectedMac || 'default'}` : 'default-diagnostic',
+      restaurantId: 'principal',
+      branchId: 'main',
+      name: adapterMode === 'android_bt' ? `Impresora Bluetooth (${selectedMac || 'Sin MAC'})` : 'Impresora Diagnóstico Virtual',
+      role: 'receipt',
+      connectionType: adapterMode === 'android_bt' ? 'bluetooth_spp' : 'virtual_pdf',
+      paperWidth: '80mm',
+      macAddress: selectedMac || '00:11:22:33:44:55',
+      copies: 1,
+      autoPrintOnOrderCreated: true,
+      autoPrintOnOrderPaid: true,
+      kickDrawerOnPrint: true,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      capabilities: {
+        supportsCashDrawerKick: true,
+        supportsPaperCut: true,
+        supportsBeep: true,
+        supportsBarcode: true,
+        supportsQrCode: true,
+        supportsImages: true,
+        supportsRealtimeStatus: false,
+        columnsPerLine: 48,
+        codePage: 'CP850',
+        encoding: 'utf-8',
+        chunkSize,
+        chunkDelayMs,
+        connectionTimeoutMs: 6000,
+        writeTimeoutMs: 5000,
+        feedLinesEnd: 3,
+      },
     }
   }
 
@@ -79,15 +152,19 @@ export function PrinterDiagnosticView() {
 
   const handleCreateTestReceipt = async () => {
     try {
-      setStatusMessage('Enviando recibo de prueba...')
+      const activePrinter = getActivePrinterProfile()
+      engine.registerPrinterProfile(activePrinter)
+
+      setStatusMessage(`Enviando recibo vía ${adapterMode === 'android_bt' ? 'Bluetooth SPP' : 'Virtual'}...`)
       const job = await engine.submitPrintRequest({
         targetType: 'receipt',
         payload: samplePayload,
         idempotencyKey: `test-receipt-${Date.now()}`,
+        printerProfileId: activePrinter.id,
       })
       setRecentJobs((prev) => [job, ...prev])
       setSelectedJob(job)
-      setStatusMessage(`Recibo encolado en estado: ${job.status.toUpperCase()}`)
+      setStatusMessage(`Recibo enviado. Estado final: ${job.status.toUpperCase()}`)
     } catch (err: any) {
       setStatusMessage(`Error: ${err.message}`)
     }
@@ -95,15 +172,19 @@ export function PrinterDiagnosticView() {
 
   const handleCreateKitchenTicket = async () => {
     try {
+      const activePrinter = getActivePrinterProfile()
+      engine.registerPrinterProfile(activePrinter)
+
       setStatusMessage('Enviando comanda de cocina...')
       const job = await engine.submitPrintRequest({
         targetType: 'kitchen_ticket',
         payload: samplePayload,
         idempotencyKey: `test-kitchen-${Date.now()}`,
+        printerProfileId: activePrinter.id,
       })
       setRecentJobs((prev) => [job, ...prev])
       setSelectedJob(job)
-      setStatusMessage(`Comanda encolada en estado: ${job.status.toUpperCase()}`)
+      setStatusMessage(`Comanda procesada. Estado final: ${job.status.toUpperCase()}`)
     } catch (err: any) {
       setStatusMessage(`Error: ${err.message}`)
     }
@@ -172,7 +253,7 @@ export function PrinterDiagnosticView() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Panel de Diagnóstico — Motor de Impresión</h1>
-            <p className="text-xs text-slate-500 font-medium">Etapa 4B.1 — Verificación aislada del núcleo y colas duraderas</p>
+            <p className="text-xs text-slate-500 font-medium">Etapa 4B.2 — Bluetooth Classic SPP Nativo en Android</p>
           </div>
         </div>
 
@@ -182,25 +263,45 @@ export function PrinterDiagnosticView() {
           className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition disabled:opacity-50"
         >
           {isTestRunning ? <RefreshCw className="animate-spin" size={18} /> : <Play size={18} />}
-          Ejecutar Suite (15 Pruebas)
+          Ejecutar Suite Completa (20 Pruebas)
         </button>
       </div>
 
       {statusMessage && (
         <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-2xl text-xs font-semibold flex items-center gap-2">
-          <Zap size={16} className="text-blue-600" />
+          <Zap size={16} className="text-blue-600 shrink-0" />
           {statusMessage}
         </div>
       )}
 
-      {/* Simulator Control Card */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Mode Selection Tabs */}
+      <div className="flex bg-white p-2 rounded-2xl border border-slate-200 gap-2">
+        <button
+          onClick={() => setAdapterMode('virtual')}
+          className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition ${
+            adapterMode === 'virtual' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <Sliders size={16} /> Simulador Diagnóstico Virtual (Web / Dev)
+        </button>
+        <button
+          onClick={() => setAdapterMode('android_bt')}
+          className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition ${
+            adapterMode === 'android_bt' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <Bluetooth size={16} /> Bluetooth Classic SPP Nativo (Android APK)
+        </button>
+      </div>
+
+      {/* Mode Config Panels */}
+      {adapterMode === 'virtual' ? (
         <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
             <Sliders size={18} className="text-blue-600" />
             Comportamiento Simulado
           </div>
-          <p className="text-xs text-slate-500">Selecciona el tipo de respuesta del hardware para probar el comportamiento de la cola:</p>
+          <p className="text-xs text-slate-500">Selecciona el tipo de respuesta del hardware para probar la cola:</p>
           <select
             value={mockBehavior}
             onChange={(e) => setMockBehavior(e.target.value as DiagnosticMockBehavior)}
@@ -215,33 +316,101 @@ export function PrinterDiagnosticView() {
             <option value="printer_unavailable">Impresora No Disponible (Failed)</option>
           </select>
         </div>
+      ) : (
+        /* Android Bluetooth Native Config Panel */
+        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
+              <Smartphone size={18} className="text-blue-600" />
+              Configuración Bluetooth SPP Nativo en Android
+            </div>
+            <button
+              onClick={loadBluetoothStatus}
+              className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+            >
+              <RefreshCw size={14} /> Escanear Dispositivos
+            </button>
+          </div>
 
-        {/* Action Triggers */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-3 md:col-span-2 flex flex-col justify-center">
-          <div className="text-slate-800 font-bold text-sm mb-1 flex items-center gap-2">
-            <FileText size={18} className="text-blue-600" />
-            Disparadores de Impresión Abstracta (Sin UI Acoplada)
+          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
+            <div className="font-bold text-slate-700">Estado de Bluetooth Nativo:</div>
+            <div className="text-slate-600 font-medium">{btStatus}</div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <button
-              onClick={handleCreateTestReceipt}
-              className="px-4 py-3 rounded-2xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center gap-2 transition"
-            >
-              <FileText size={16} /> Emitir Recibo (80mm)
-            </button>
-            <button
-              onClick={handleCreateKitchenTicket}
-              className="px-4 py-3 rounded-2xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center justify-center gap-2 transition"
-            >
-              <Printer size={16} /> Comanda Cocina
-            </button>
-            <button
-              onClick={handleDrawerKick}
-              className="px-4 py-3 rounded-2xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center gap-2 transition"
-            >
-              <Zap size={16} /> Abrir Gaveta
-            </button>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">Dispositivo Bluetooth Emparejado:</label>
+              <select
+                value={selectedMac}
+                onChange={(e) => setSelectedMac(e.target.value)}
+                className="w-full font-semibold border border-slate-200 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-blue-500"
+              >
+                {pairedDevices.length === 0 ? (
+                  <option value="">No hay dispositivos emparejados</option>
+                ) : (
+                  pairedDevices.map((d) => (
+                    <option key={d.address} value={d.address}>
+                      {d.name} ({d.address})
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">Tamaño de Bloque (Chunk Size):</label>
+              <select
+                value={chunkSize}
+                onChange={(e) => setChunkSize(Number(e.target.value))}
+                className="w-full font-semibold border border-slate-200 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-blue-500"
+              >
+                <option value={256}>256 Bytes (Muy seguro)</option>
+                <option value={512}>512 Bytes (Recomendado)</option>
+                <option value={1024}>1024 Bytes (Rápido)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">Demora entre Bloques (Ms):</label>
+              <select
+                value={chunkDelayMs}
+                onChange={(e) => setChunkDelayMs(Number(e.target.value))}
+                className="w-full font-semibold border border-slate-200 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-blue-500"
+              >
+                <option value={25}>25 ms</option>
+                <option value={50}>50 ms (Recomendado)</option>
+                <option value={100}>100 ms</option>
+              </select>
+            </div>
           </div>
+        </div>
+      )}
+
+      {/* Action Triggers */}
+      <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+        <div className="text-slate-800 font-bold text-sm mb-1 flex items-center gap-2">
+          <FileText size={18} className="text-blue-600" />
+          Disparadores de Impresión ({adapterMode === 'android_bt' ? 'Bluetooth Nativo Real' : 'Virtual Simulado'})
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button
+            onClick={handleCreateTestReceipt}
+            className="px-4 py-3 rounded-2xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center gap-2 transition"
+          >
+            <FileText size={16} /> Emitir Recibo (80mm)
+          </button>
+          <button
+            onClick={handleCreateKitchenTicket}
+            className="px-4 py-3 rounded-2xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center justify-center gap-2 transition"
+          >
+            <Printer size={16} /> Comanda Cocina
+          </button>
+          <button
+            onClick={handleDrawerKick}
+            className="px-4 py-3 rounded-2xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center gap-2 transition"
+          >
+            <Zap size={16} /> Abrir Gaveta
+          </button>
         </div>
       </div>
 
@@ -251,7 +420,7 @@ export function PrinterDiagnosticView() {
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <h2 className="font-bold text-sm text-slate-800 flex items-center gap-2">
               <CheckCircle2 size={18} className="text-emerald-600" />
-              Resultados de la Suite de Verificación de Arquitectura
+              Resultados de la Suite Completa de Verificación de Impresión
             </h2>
             <span className="text-xs font-extrabold px-3 py-1 bg-slate-100 rounded-full text-slate-700">
               {testSuiteOutput.passed} Aprobadas / {testSuiteOutput.failed} Fallidas
@@ -340,6 +509,7 @@ export function PrinterDiagnosticView() {
                 <div><strong className="text-slate-700">ID:</strong> {selectedJob.id}</div>
                 <div><strong className="text-slate-700">IdempotencyKey:</strong> {selectedJob.idempotencyKey}</div>
                 <div><strong className="text-slate-700">Estado:</strong> <span className="font-bold uppercase text-blue-600">{selectedJob.status}</span></div>
+                <div><strong className="text-slate-700">Conexion:</strong> {selectedJob.connectionType}</div>
                 <div><strong className="text-slate-700">Es Copia:</strong> {selectedJob.payload.isCopy ? 'SÍ (COPIA)' : 'NO'}</div>
                 {selectedJob.lastError && <div className="text-rose-600"><strong className="text-rose-800">Error:</strong> {selectedJob.lastError}</div>}
               </div>
