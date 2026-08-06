@@ -28,12 +28,18 @@ export type PrintJobStatus =
   | 'processing'
   | 'connecting'
   | 'transmitting'
+  | 'retrying'
+  | 'unknown'
+  // Terminal states:
   | 'transmitted'
   | 'confirmed'
-  | 'unknown'
-  | 'retrying'
+  | 'resolved'
   | 'failed'
   | 'cancelled'
+
+export type ManualResolutionType = 'printed' | 'not_printed' | 'reprint_requested'
+
+export type ErrorClassification = 'safeToRetry' | 'unsafeToRetry' | 'requiresOperatorDecision'
 
 export interface PrinterCapability {
   supportsCashDrawerKick: boolean
@@ -43,7 +49,7 @@ export interface PrinterCapability {
   supportsQrCode: boolean
   supportsImages: boolean
   supportsRealtimeStatus: boolean
-  columnsPerLine: number // 32 for 58mm, 48 for 80mm
+  columnsPerLine: number
   codePage: string
   encoding: string
   chunkSize: number
@@ -51,7 +57,10 @@ export interface PrinterCapability {
   connectionTimeoutMs: number
   writeTimeoutMs: number
   cutSequenceHex?: string
-  drawerSequenceHex?: string
+  drawerPin?: 'pin2' | 'pin5'
+  drawerOnTimeMs?: number
+  drawerOffTimeMs?: number
+  customDrawerSequenceHex?: string
   feedLinesEnd: number
   imageMaxWidthPx?: number
 }
@@ -136,6 +145,13 @@ export interface PrintJobPayload {
   createdIso: string
 }
 
+export interface PrintJobResolution {
+  type: ManualResolutionType
+  resolvedByUid: string
+  resolvedAtIso: string
+  reason?: string
+}
+
 export interface PrintJob extends Partial<TenantScopedEntity> {
   id: string
   jobId: string
@@ -143,26 +159,31 @@ export interface PrintJob extends Partial<TenantScopedEntity> {
   restaurantId: string
   branchId: string
   terminalId: string
+  processorInstanceId?: string
   targetType: PrintJobTarget
   stationId?: string
   printerProfileId: string
   backupPrinterProfileId?: string
   connectionType: PrinterConnectionType
   status: PrintJobStatus
+  lastErrorClassification?: ErrorClassification
   payloadSchemaVersion: number
   templateVersion: string
   payload: PrintJobPayload
+  sanitizedPayload?: Partial<PrintJobPayload>
   attempts: number
   maxAttempts: number
-  lockedByTerminalId?: string
+  lockedByInstanceId?: string
   lockedAtIso?: string
   leaseExpiresAtIso?: string
   lastError?: string
   rawBytesBase64?: string
+  resolution?: PrintJobResolution
   queuedAtIso: string
   startedAtIso?: string
   transmittedAtIso?: string
   confirmedAtIso?: string
+  resolvedAtIso?: string
   failedAtIso?: string
 }
 
@@ -185,6 +206,7 @@ export interface PrintResult {
   success: boolean
   bytesWritten?: number
   hardwareConfirmed?: boolean
+  errorClassification?: ErrorClassification
   errorMessage?: string
   errorCode?: string
 }
@@ -213,6 +235,7 @@ export interface RequestReprintInput {
   requestedByUid: string
   reason: string
   terminalId: string
+  targetReceiptType?: 'receipt' | 'kitchen_ticket'
 }
 
 export interface IndependentDrawerKickInput {

@@ -74,6 +74,7 @@ export type Permission =
   | 'payments.refund'
   | 'cash.open'
   | 'cash.close'
+  | 'cash.openDrawer'
   | 'catalog.create'
   | 'catalog.edit'
   | 'catalog.delete'
@@ -83,6 +84,10 @@ export type Permission =
   | 'settings.manage'
   | 'printers.manage'
   | 'branches.manage'
+  | 'printing.manage'
+  | 'printing.reprint'
+  | 'printing.reprintReceipt'
+  | 'printing.reprintKitchen'
 
 export type PlanFeature =
   | 'pos'

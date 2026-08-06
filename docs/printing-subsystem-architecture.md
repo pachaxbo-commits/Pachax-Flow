@@ -1,223 +1,131 @@
-# ARQUITECTURA DEL SUBSISTEMA DE IMPRESIÓN TÉRMICA PACHAX FLOW (REVISIÓN 2)
+# ARQUITECTURA DEL SUBSISTEMA DE IMPRESIÓN TÉRMICA PACHAX FLOW (REVISIÓN 3)
 
 - **Documento de Diseño Técnico Refinado (Etapa 4A)**
-- **Versión**: 2.0.0
+- **Versión**: 3.0.0
 - **Fecha**: 2026-08-06
 
 ---
 
-## 1. MODELO REVISADO DE `PrintJob` Y PAYLOAD INMUTABLE
+## 1. ESTADOS DEFINITIVOS Y RESOLUCIÓN MANUAL (`PrintJobStatus`)
 
-La UI nunca envía objetos mutables `Order`. Cada trabajo encapsula un payload inmutable versionado con `payloadSchemaVersion` y `templateVersion`.
-
-```typescript
-export interface PrintJobPayload {
-  payloadSchemaVersion: number // e.g. 1
-  templateVersion: string       // e.g. "v1.2-58mm"
-  restaurantName: string
-  branchName: string
-  branchAddress?: string
-  branchPhone?: string
-  orderId?: string
-  sequenceNumber?: number
-  displayNumber?: string
-  orderSource?: string
-  fulfillmentType?: string
-  tableInfo?: string
-  customerName?: string
-  customerPhone?: string
-  deliveryAddress?: string
-  items: PrintableItemPayload[]
-  subtotal: number
-  discountTotal: number
-  taxTotal: number
-  deliveryFee: number
-  grandTotal: number
-  paymentMethod?: string
-  cashReceived?: number
-  changeAmount?: number
-  isCopy: boolean               // Marca visual de COPIA
-  reprintReason?: string
-  reprintCount?: number
-  customMessage?: string
-  copies: number
-  createdIso: string
-}
-
-export interface PrintJob extends Partial<TenantScopedEntity> {
-  id: string
-  jobId: string
-  idempotencyKey: string       // Clave inmutable por tipo de documento
-  restaurantId: string
-  branchId: string
-  terminalId: string           // Terminal responsable de la emisión
-  targetType: PrintJobTarget
-  stationId?: string
-  printerProfileId: string
-  backupPrinterProfileId?: string
-  connectionType: PrinterConnectionType
-  status: PrintJobStatus
-  payloadSchemaVersion: number
-  templateVersion: string
-  payload: PrintJobPayload
-  attempts: number
-  maxAttempts: number
-  lockedByTerminalId?: string
-  lockedAtIso?: string
-  leaseExpiresAtIso?: string   // Evita condiciones de carrera entre pestañas/workers
-  lastError?: string
-  rawBytesBase64?: string
-  queuedAtIso: string
-  startedAtIso?: string
-  transmittedAtIso?: string
-  confirmedAtIso?: string
-  failedAtIso?: string
-}
-```
-
----
-
-## 2. ESTADOS DEFINITIVOS DEL CICLO DE VIDA DE IMPRESIÓN
-
-Debido a que ESC/POS en hardware térmico Bluetooth/LAN/RawBT opera principalmente con comunicación unidireccional sin ACK físico de papel expulsado, el sistema adopta los siguientes estados explícitos:
+Los estados del trabajo de impresión quedan divididos formalmente en estados de procesamiento y **estados terminales**:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ 1. QUEUED        - Encolado en almacenamiento duradero      │
-│ 2. ROUTING       - Determinando estación e impresoras        │
-│ 3. FORMATTING    - Renderizando bytes binarios ESC/POS      │
-│ 4. PROCESSING   - Asignado a la terminal (Lock activo)       │
-│ 5. CONNECTING    - Abriendo socket/canal de transporte       │
-│ 6. TRANSMITTING  - Transmitiendo paquetes de bytes          │
-│ 7. TRANSMITTED   - Bytes enviados al buffer de la impresora │
-│ 8. CONFIRMED     - Confirmado solo con ACK real de hardware  │
-│ 9. UNKNOWN       - Resultado ambiguo (Cierre app/caida red) │
-│10. RETRYING      - Esperando backoff tras fallo temporal    │
-│11. FAILED        - Max intentos o error no recuperable      │
-│12. CANCELLED     - Anulado manualmente por operador         │
+│ ESTADOS DE PROCESAMIENTO:                                   │
+│  - queued       - Encolado duradero                         │
+│  - routing      - Determinando estación e impresoras        │
+│  - formatting   - Generando bytes binarios ESC/POS          │
+│  - processing   - Asignado con lease lock a una instancia   │
+│  - connecting   - Abriendo canal/socket de hardware          │
+│  - transmitting - Escribiendo bytes al buffer de salida     │
+│  - retrying     - En espera de reintento por backoff        │
+│  - unknown      - Estado ambiguo (Desconexión/Cierre)       │
+├─────────────────────────────────────────────────────────────┤
+│ ESTADOS TERMINALES DEFINITIVOS:                             │
+│  - transmitted  - Transmisión exitosa sin ACK físico        │
+│  - confirmed    - Confirmación devuelta por ACK real HW     │
+│  - resolved     - Resuelto manualmente tras estar en unknown│
+│  - failed       - Fallo permanente tras max intentos        │
+│  - cancelled    - Anulado manualmente por operador          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-> **Regla de Estado Ambiguo (`UNKNOWN`)**: Si el canal de transmisión se corta durante `TRANSMITTING` o si la aplicación se reinicia inmediatamente después de `TRANSMITTED` sin poder consultar el hardware, el trabajo entra en estado `UNKNOWN`. **Queda prohibida la reimpresión automática en estado `UNKNOWN`** para evitar la emisión de comprobantes duplicados. La UI desplegará una alerta para resolución manual por el operador.
-
----
-
-## 3. MODELO DE ALMACENAMIENTO DESACOPLADO (`PrintJobStorage`)
-
-El gestor de cola no depende directamente de `IndexedDB`. Consume una interfaz abstracta:
-
+### Estructura de Resolución Manual (`PrintJobResolution`)
+Cuando un trabajo cae en estado `unknown`, el operador debe resolver el estado ambiguo mediante la UI, registrando:
 ```typescript
-export interface PrintJobStorage {
-  save(job: PrintJob): Promise<void>
-  get(jobId: string): Promise<PrintJob | null>
-  listRecoverable(terminalId: string): Promise<PrintJob[]>
-  update(jobId: string, changes: Partial<PrintJob>): Promise<void>
-  remove(jobId: string): Promise<void>
-  purgeCompletedOlderThan(cutoffIso: string): Promise<number>
+export interface PrintJobResolution {
+  type: 'printed' | 'not_printed' | 'reprint_requested'
+  resolvedByUid: string
+  resolvedAtIso: string
+  reason?: string
 }
 ```
-
-### Implementaciones por Plataforma
-- **Web SPA**: `IndexedDbPrintJobStorage` (Almacenamiento en IndexedDB con fallback a localStorage).
-- **Android Nativo**: `NativeSqlitePrintJobStorage` (SQLite duradero mediante almacenamiento nativo en Android).
+Al resolverlo manualmente, el trabajo pasa a estado terminal **`resolved`** con su objeto `resolution` adjunto para auditoría.
 
 ---
 
-## 4. ESTRATEGIA DE BLOQUEO Y PROPIEDAD POR TERMINAL
+## 2. CLASIFICACIÓN DE ERRORES Y REGLAS DE REINTENTO / FAILOVER SEGURO
 
-Para evitar carreras de impresión entre múltiples pestañas del navegador, workers o instancias nativas:
+Los errores se clasifican en tres categorías estrictas (`ErrorClassification`):
 
-1. **Terminal ID Único**: Cada dispositivo/pestaña genera o lee un `terminalId` persistente (`uuidv4`).
-2. **Mecanismo de Arriendo (Lease Locking)**:
-   - Al procesar un trabajo en cola, la terminal actualiza:
-     - `lockedByTerminalId = currentTerminalId`
-     - `lockedAtIso = now()`
-     - `leaseExpiresAtIso = now() + 15 segundos`
-3. **Liberación por Expiración**: Si una terminal se cuelga durante la transmisión, otra terminal o proceso solo podrá tomar el trabajo si `leaseExpiresAtIso < now()`.
-
----
-
-## 5. ENRUTAMIENTO CON ESTACIONES E IMPRESORAS DE RESPALDO
-
-El enrutamiento no es estático ni se limita a roles genéricos. Incorpora **Estaciones de Preparación** (`KitchenStation`):
-
-```typescript
-export interface KitchenStation {
-  id: string
-  restaurantId: string
-  branchId: string
-  name: string
-  primaryPrinterId: string
-  backupPrinterId?: string
-  assignedCategoryIds: string[]
-  isActive: boolean
-}
-```
-
-### Algoritmo de Fallback de Impresora
-1. El motor consulta la estación asociada a los productos del pedido.
-2. Intenta transmitir a la `primaryPrinterId`.
-3. Si la impresora principal genera error no recuperable de conexión o agota sus reintentos, el trabajo conmuta automáticamente a la `backupPrinterId` (impresora de respaldo) y registra la incidencia.
-4. Si ninguna impresora está disponible, el trabajo se marca como `FAILED` con notificación audible y visual en la pantalla del comandero.
+1. **`safeToRetry`**: Ocurre **antes** de comenzar la transmisión de bytes (socket no abierto, impresora no encontrada, permiso denegado en SO).
+   - **Regla**: Es seguro ejecutar un reintento automático o hacer failover automático a la impresora de respaldo (`backupPrinterId`).
+2. **`unsafeToRetry`**: Ocurre **durante** la escritura de bytes (conexión perdida en medio de la transmisión de la comanda).
+   - **Regla**: **Queda prohibido el failover automático o reintento automático silencioso** para evitar duplicados o impresión parcial. El trabajo pasa inmediatamente al estado `unknown`.
+3. **`requiresOperatorDecision`**: Respuesta ambigua del sistema o del controlador de hardware.
+   - **Regla**: Pasa a estado `unknown` requiriendo intervención y confirmación visual del operador.
 
 ---
 
-## 6. POLÍTICA DE IDEMPOTENCIA Y REIMPRESIONES
+## 3. POLÍTICA REVISADA DE PAYLOAD Y REIMPRESIONES OFFLINE
 
-### Claves de Idempotencia por Documento
-- **Recibo de Venta**: `receipt:{orderId}:{paymentVersion}`
-- **Comanda de Cocina**: `kitchen:{orderId}:{stationId}:{batchNumber}`
-- **Cancelaciones**: `cancellation:{orderId}:{itemId}:{cancellationVersion}`
-- **Reimpresión Autorizada**: `reprint:{originalJobId}:{reprintRequestId}`
+Para permitir reimpresiones inmediatas en caso de pérdida de conexión a internet o falla temporal del servidor backend:
 
-### Reglas de Reimpresión
-Toda reimpresión genera un **nuevo trabajo de impresión independiente** que no se ve bloqueado por la clave de idempotencia original. Requiere:
-1. Permiso explícito de usuario (`orders.viewAll` / `orders.edit`).
-2. Usuario solicitante registrado (`requestedByUid`).
-3. Motivo obligatorio (`reprintReason`).
-4. Indicador visual destacado en la plantilla: **`*** REIMPRESIÓN - COPIA #N ***`**.
-5. Registro de auditoría guardado en Firestore.
+1. **Minimización de Datos Sensibles**:
+   - `rawBytesBase64`: Se purga poco después de completar la transmisión para liberar almacenamiento (puede re-generarse en cualquier momento).
+   - Datos personales PII (teléfono o dirección): Se conservan sanitizados en la terminal local durante el periodo de retención.
+2. **Retención Local del Payload**:
+   - El payload inmutable `PrintJobPayload` se almacena localmente en `IndexedDbPrintJobStorage` / `NativeSqlitePrintJobStorage` durante **7 días**.
+3. **Reimpresión Offline**:
+   - Una reimpresión solicitada durante el periodo de retención se procesa directamente utilizando el payload local sanitizado, **sin depender de internet**.
+   - Transcurrido el periodo de retención local, las reimpresiones históricas se reconstruirán directamente desde el snapshot inmutable del pedido guardado en la base de datos central.
 
 ---
 
-## 7. APERTURA INDEPENDIENTE DE GAVETA DE DINERO
+## 4. ALMACENAMIENTO TRANSPARENTE SIN FALLBACK SILENCIOSO EN `localStorage`
 
-La apertura de la gaveta de dinero (pulso electromagnético `ESC p 0 25 250`) puede ejecutarse de dos formas:
-1. **Asociada al Pago**: Gatillada automáticamente por el perfil de la impresora principal si `kickDrawerOnPrint === true`.
-2. **Acción Independiente**: Invocada vía `kickCashDrawer({ userUid, terminalId, reason })`. Requiere permiso `cash.open`, registra el motivo y la hora en el registro de caja sin emitir papel.
-
----
-
-## 8. PRIVACIDAD, RETENCIÓN DE DATOS Y LIMPIEZA
-
-Para proteger la privacidad de los clientes (datos PII como teléfono y dirección) y evitar el crecimiento desmedido del almacenamiento local:
-
-1. **Minimización**: Al completar exitosamente un trabajo (`TRANSMITTED` / `CONFIRMED`), los bytes binarios `rawBytesBase64` son eliminados inmediatamente de la cola local.
-2. **Purga Automática**: `purgeCompletedOlderThan(cutoffIso)` purga diariamente trabajos completados o cancelados con más de 7 días de antigüedad.
-3. **Auditoría Liviana en Firestore**: Solo se sincroniza el registro meta del trabajo (`jobId`, `status`, `targetType`, `terminalId`, `completedAt`) sin retener información de clientes ni datos sensibles.
+- **En Entorno Web (SPA)**:
+  - `IndexedDB` es el almacenamiento obligatorio para la cola duradera.
+  - Si `IndexedDB` no está disponible (ej. navegador ultra-restringido en modo privado), **NO se utiliza `localStorage` como fallback silencioso**.
+  - La aplicación despliega una advertencia gráfica de degradación: *"Persistencia de impresión no disponible. Las comandas no se recuperarán al reiniciar el navegador"*, permitiendo únicamente impresión inmediata en vivo.
+- **En Entorno Android Nativo (APK)**:
+  - La meta de producción es `NativeSqlitePrintJobStorage` (SQLite duradero nativo).
+  - `IndexedDB` opera únicamente como puente documentado durante la fase inicial de desarrollo.
 
 ---
 
-## 9. ADAPTADORES SEPARADOS POR PLATAFORMA Y PROTOCOLO
+## 5. LEASE LOCKING RENOVABLE Y SEPARACIÓN TERMINAL VS INSTANCIA
 
-```
-                     ┌───────────────────────────────┐
-                     │     PrinterAdapter Interface  │
-                     └───────────────┬───────────────┘
-                                     │
-     ┌──────────────────┬────────────┴───────┬──────────────────┐
-     ▼                  ▼                    ▼                  ▼
-┌──────────────┐ ┌──────────────┐ ┌────────────────────┐ ┌──────────────┐
-│WebBluetooth  │ │AndroidSpp    │ │AndroidTcpSocket    │ │RawBtIntent   │
-│Adapter       │ │Adapter       │ │Adapter             │ │Adapter       │
-│(Web Bluetooth│ │(Bluetooth    │ │(Socket TCP Direct  │ │(Intent Android│
-│API Chrome)   │ │Classic SPP)  │ │Puerto 9100 Java)   │ │App External) │
-└──────────────┘ └──────────────┘ └────────────────────┘ └──────────────┘
-```
+Para gestionar el procesamiento exclusivo sin carreras entre pestañas o workers:
+
+- **`terminalId`**: Identificador persistente del dispositivo físico registrado (ej. `POS-CAJA-01`).
+- **`processorInstanceId`**: Identificador de la pestaña o worker actual (ej. `tab-uuid-8812`).
+- **`lockedByInstanceId`**: Instancia que posee el control del trabajo.
+- **Renovación Dinámica (Heartbeat)**:
+  - El arriendo inicial se fija en 15 segundos.
+  - Durante la renderización o transmisión de archivos grandes, la instancia renueva periódicamente el arriendo (`renewLease()`).
+  - Al completar la transmisión, la instancia libera explícitamente el trabajo.
+  - **Expiración de Lease**: Si una instancia colapsa y el lease expira, otra instancia solo podrá tomar el trabajo si este **no ha entrado en fase de transmisión** (`transmitting`).
 
 ---
 
-## 10. RIESGOS TÉCNICOS RESIDUALES
+## 6. PERMISOS ESPECÍFICOS DE IMPRESIÓN
 
-1. **Limitaciones del Navegador Web en Vercel para Sockets TCP**: Los navegadores web estándar no permiten abrir conexiones Socket TCP raw (puerto 9100) directamente a impresoras de red por restricciones de sandbox. En entorno Web, la impresión LAN requiere un agente proxy local o el uso de la app Android Nativa/RawBT.
-2. **Perdida de Conexión Bluetooth SPP durante Transmisión**: Si el celular se aleja de la impresora Bluetooth durante la transmisión, el estado quedará en `UNKNOWN`. La UI solicitará confirmación visual al operador antes de re-emitir.
+Se introducen permisos granulares dedicados para auditoría y control de acceso:
+
+- `printing.manage`: Configuración de perfiles de impresoras y estaciones de cocina.
+- `printing.reprint`: Autorización general de reimpresiones.
+- `printing.reprintReceipt`: Autorización para reimprimir comprobantes de venta.
+- `printing.reprintKitchen`: Autorización para reimprimir comandas de cocina/bar.
+- `cash.openDrawer`: Permiso para accionar la apertura independiente de la gaveta de dinero.
+
+---
+
+## 7. CONFIGURACIÓN PERSONALIZADA DE GAVETA DE DINERO
+
+El pulso electromagnético es configurable por cada perfil de impresora (`PrinterCapability`):
+
+- **Pin de Salida**: `drawerPin: 'pin2' | 'pin5'` (Pin 2 o Pin 5 del conector RJ11/RJ12).
+- **Tiempos de Pulso**: `drawerOnTimeMs` ($t_1$) y `drawerOffTimeMs` ($t_2$).
+- **Secuencia Hexadecimal Personalizada**: `customDrawerSequenceHex` opcional para impresoras no estándar.
+- **Acción Independiente**: `kickCashDrawer()` registra `userUid`, `terminalId` y `reason`, activando el pulso sin gastar ni emitir papel.
+
+---
+
+## 8. CONSOLIDACIÓN FINAL Y AUSENCIA DE CONTRADICCIONES
+
+- Todos los contratos en `src/types/printing.ts` coinciden con los estados terminales (`transmitted`, `confirmed`, `resolved`, `failed`, `cancelled`).
+- Se ha eliminado cualquier mención informal a estados inexistentes.
+- La conmutación por error (`backupPrinterId`) está condicionada a `safeToRetry`.
+- La retención local del payload garantiza la operabilidad offline sin depender de la nube.
